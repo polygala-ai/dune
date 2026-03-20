@@ -594,4 +594,10 @@ function initSchema(db: Database.Database) {
     // Column already exists — ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 1`)
+  } catch {
+    // Column already exists — ignore
+  }
+
 }

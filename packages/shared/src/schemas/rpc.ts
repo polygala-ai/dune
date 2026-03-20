@@ -125,6 +125,7 @@ export interface ClientMethods {
     hostOperatorApprovalMode: HostOperatorApprovalModeType
     hostOperatorApps: string[]
     hostOperatorPaths: string[]
+    keepAlive: boolean
     avatarColor: string
   }>; result: Agent }
   'agents.delete':              { params: { id: string }; result: { ok: boolean } }

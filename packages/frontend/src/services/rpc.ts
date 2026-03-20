@@ -323,6 +323,7 @@ export const getChannelSubscribers = (channelId: string) => call<string[]>('chan
 
 export const listAgents = () => call<Agent[]>('agents.list')
 export const createAgent = (data: CreateAgent) => call<Agent>('agents.create', data)
+export const getAgent = (id: string) => call<Agent>('agents.get', { id })
 export const startAgent = (id: string) => call('agents.start', { id })
 export const stopAgent = (id: string) => call('agents.stop', { id })
 export const interruptAgent = (id: string) => call('agents.interrupt', { id })
@@ -341,6 +342,7 @@ export const updateAgent = (
     hostOperatorApprovalMode: Agent['hostOperatorApprovalMode']
     hostOperatorApps: Agent['hostOperatorApps']
     hostOperatorPaths: Agent['hostOperatorPaths']
+    keepAlive: boolean
     avatarColor: string
   }>,
 ) => call<Agent>('agents.update', { id, ...data })

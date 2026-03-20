@@ -318,6 +318,7 @@ h('agents.update', async (params) => {
   if ('role' in body) nextBody.role = normalizeAgentRole(body.role)
   if ('workMode' in body) nextBody.workMode = normalizeAgentWorkMode(body.workMode)
   if ('modelIdOverride' in body) nextBody.modelIdOverride = normalizeClaudeModelId(body.modelIdOverride)
+  if ('keepAlive' in body) nextBody.keepAlive = !!body.keepAlive
 
   const agent = agentStore.updateAgent(id as string, nextBody as any)
   if (!agent) throw new Error('not_found')

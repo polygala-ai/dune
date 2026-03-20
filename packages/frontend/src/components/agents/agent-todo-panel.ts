@@ -9,6 +9,7 @@ export class AgentTodoPanel extends LitElement {
   @property({ type: String }) agentId = ''
   @litState() private todos: Todo[] = []
   @litState() private loading = true
+  @litState() private keepAlive = true
   @litState() private newTitle = ''
   @litState() private newDueIn = '' // minutes from now
   @litState() private editingId: string | null = null
@@ -33,6 +34,45 @@ export class AgentTodoPanel extends LitElement {
       color: var(--text-secondary);
       letter-spacing: 0.04em;
       text-transform: uppercase;
+    }
+
+    .keep-alive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-track {
+      width: 28px;
+      height: 16px;
+      border-radius: 8px;
+      background: var(--border-color, #334155);
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .toggle-track.on {
+      background: var(--accent);
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+    }
+
+    .toggle-track.on::after {
+      transform: translateX(12px);
     }
 
     .add-form {
@@ -262,11 +302,27 @@ export class AgentTodoPanel extends LitElement {
     if (!this.agentId) return
     this.loading = true
     try {
-      this.todos = await api.listTodos(this.agentId)
+      const [todos, agent] = await Promise.all([
+        api.listTodos(this.agentId),
+        api.getAgent(this.agentId),
+      ])
+      this.todos = todos
+      this.keepAlive = agent.keepAlive
     } catch {
       this.todos = []
     } finally {
       this.loading = false
+    }
+  }
+
+  private async toggleKeepAlive() {
+    const next = !this.keepAlive
+    this.keepAlive = next
+    try {
+      await api.updateAgent(this.agentId, { keepAlive: next })
+    } catch (err) {
+      console.error('Failed to toggle keepAlive:', err)
+      this.keepAlive = !next // revert on error
     }
   }
 
@@ -358,6 +414,10 @@ export class AgentTodoPanel extends LitElement {
     return html`
       <div class="todo-header">
         <h3>Todos</h3>
+        <label class="keep-alive-toggle" title="When enabled, the system sends periodic todo reminders to keep this agent active">
+          <span>Keep Alive</span>
+          <div class="toggle-track ${this.keepAlive ? 'on' : ''}" @click=${this.toggleKeepAlive}></div>
+        </label>
       </div>
 
       <div class="add-form">
