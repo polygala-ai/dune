@@ -123,7 +123,7 @@ func screenCaptureGranted() -> Bool {
     return true
 }
 
-func overviewWindows(bundleId: String?) -> [[String: Any]] {
+func overviewWindowsViaCG(bundleId: String?) -> [[String: Any]] {
     guard let rawList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
         return []
     }
@@ -164,6 +164,93 @@ func overviewWindows(bundleId: String?) -> [[String: Any]] {
             } ?? NSNull(),
         ]
     }
+}
+
+func overviewWindowsViaAppleScript(bundleId: String) -> [[String: Any]] {
+    guard let app = appForBundleId(bundleId) else { return [] }
+    let appName = app.localizedName ?? bundleId
+
+    // Use the app's own scripting dictionary to query windows.
+    // Bounds format from AppleScript is {left, top, right, bottom}.
+    let script = """
+    tell application "\(appName)"
+        set output to ""
+        repeat with w in every window
+            set wName to name of w
+            set wBounds to bounds of w
+            set output to output & wName & ":::" & (item 1 of wBounds) & ":::" & (item 2 of wBounds) & ":::" & (item 3 of wBounds) & ":::" & (item 4 of wBounds) & linefeed
+        end repeat
+        return output
+    end tell
+    """
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+        process.waitUntilExit()
+    } catch {
+        return []
+    }
+    guard process.terminationStatus == 0 else { return [] }
+
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !output.isEmpty else { return [] }
+
+    var windows: [[String: Any]] = []
+    for line in output.components(separatedBy: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { continue }
+        let parts = trimmed.components(separatedBy: ":::")
+        guard parts.count >= 5 else { continue }
+        let title = parts[0]
+        let left = Double(parts[1]) ?? 0
+        let top = Double(parts[2]) ?? 0
+        let right = Double(parts[3]) ?? 0
+        let bottom = Double(parts[4]) ?? 0
+        windows.append([
+            "bundleId": bundleId,
+            "appName": appName,
+            "windowId": windows.count,
+            "title": title,
+            "layer": 0,
+            "bounds": [
+                "x": left,
+                "y": top,
+                "width": right - left,
+                "height": bottom - top,
+            ],
+        ])
+    }
+    return windows
+}
+
+func overviewWindows(bundleId: String?) -> [[String: Any]] {
+    let cgWindows = overviewWindowsViaCG(bundleId: bundleId)
+    if let bundleId {
+        if cgWindows.isEmpty {
+            return overviewWindowsViaAppleScript(bundleId: bundleId)
+        }
+        return cgWindows
+    }
+    // No bundleId filter: enrich CG results with AppleScript for missing apps
+    let cgBundleIds = Set(cgWindows.compactMap { $0["bundleId"] as? String })
+    let regularApps = NSWorkspace.shared.runningApplications.filter {
+        $0.activationPolicy == .regular && $0.bundleIdentifier != nil
+    }
+    var merged = cgWindows
+    for app in regularApps {
+        guard let bid = app.bundleIdentifier, !cgBundleIds.contains(bid) else { continue }
+        let extra = overviewWindowsViaAppleScript(bundleId: bid)
+        merged.append(contentsOf: extra)
+    }
+    return merged
 }
 
 func unionBounds(for bundleId: String) -> CGRect? {
