@@ -136,34 +136,34 @@ async function run() {
     assert(false, `agent channels.list failed: ${err.message}`)
   }
 
-  // ── Test 7: Agent gateway blocks agents.update (not in allowed set) ──
-  console.log('Test 7: Agent gateway blocks agents.update')
+  // ── Test 7: Agent gateway blocks agents.submitHostOperator ──
+  console.log('Test 7: Agent gateway blocks agents.submitHostOperator')
   try {
-    const res = await rpcCall(AGENT_WS, 'agents.update', { id: 'test', name: 'hacked' })
+    const res = await rpcCall(AGENT_WS, 'agents.submitHostOperator', { id: 'test', kind: 'status' })
     assert(res.error, 'has error')
     assert(res.error.code === -32601, 'error code is METHOD_NOT_FOUND')
   } catch (err) {
-    assert(false, `agent agents.update failed: ${err.message}`)
+    assert(false, `agent agents.submitHostOperator failed: ${err.message}`)
   }
 
-  // ── Test 8: Agent gateway blocks agents.delete ──
-  console.log('Test 8: Agent gateway blocks agents.delete')
+  // ── Test 8: Agent gateway blocks agents.getHostOperator ──
+  console.log('Test 8: Agent gateway blocks agents.getHostOperator')
   try {
-    const res = await rpcCall(AGENT_WS, 'agents.delete', { id: 'test' })
+    const res = await rpcCall(AGENT_WS, 'agents.getHostOperator', { requestId: 'test' })
     assert(res.error, 'has error')
     assert(res.error.code === -32601, 'error code is METHOD_NOT_FOUND')
   } catch (err) {
-    assert(false, `agent agents.delete failed: ${err.message}`)
+    assert(false, `agent agents.getHostOperator failed: ${err.message}`)
   }
 
-  // ── Test 9: Agent gateway blocks settings.updateClaude ──
-  console.log('Test 9: Agent gateway blocks settings.updateClaude')
+  // ── Test 9: Agent gateway blocks agents.upsertGrant ──
+  console.log('Test 9: Agent gateway blocks agents.upsertGrant')
   try {
-    const res = await rpcCall(AGENT_WS, 'settings.updateClaude', { defaultModelId: 'hacked' })
+    const res = await rpcCall(AGENT_WS, 'agents.upsertGrant', { agentId: 'test', kind: 'app', value: 'com.test' })
     assert(res.error, 'has error')
     assert(res.error.code === -32601, 'error code is METHOD_NOT_FOUND')
   } catch (err) {
-    assert(false, `agent settings.updateClaude failed: ${err.message}`)
+    assert(false, `agent agents.upsertGrant failed: ${err.message}`)
   }
 
   // ── Test 10: Client gateway rejects /ws/agent path ──

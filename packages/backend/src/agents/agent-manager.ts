@@ -1742,6 +1742,21 @@ export async function startAgent(agentId: string): Promise<void> {
       { DISPLAY: ':1' },
     )
 
+    // Ensure writable user-configured mounts are owned by abc
+    if (hasConfiguredMounts) {
+      const writableMountPaths = runtimeVolumes
+        .filter((v) => !v.readOnly && v.guestPath.startsWith('/workspace/'))
+        .map((v) => v.guestPath)
+      if (writableMountPaths.length > 0) {
+        await retriedExec(
+          box,
+          'bash',
+          ['-c', `chown -R abc:abc ${writableMountPaths.join(' ')}`],
+          { DISPLAY: ':1' },
+        )
+      }
+    }
+
     checkAborted(signal, agentId)
     emitStartupLog(agentId, 'Deploying communication listener...')
 

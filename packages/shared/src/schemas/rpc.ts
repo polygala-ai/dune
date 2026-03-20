@@ -230,40 +230,18 @@ export interface ClientMethods {
 }
 
 // ── Agent Method Registry ─────────────────────────────────────────────
-// ~20 methods that agents can call (restricted subset).
+// Agents get all ClientMethods EXCEPT the blocked ones below.
 
-export interface AgentMethods {
-  // Channels (read + send)
-  'channels.list':              { params: {}; result: Channel[] }
-  'channels.getByName':         { params: { name: string }; result: Channel }
-  'channels.sendMessage':       { params: { channelId: string; authorId: string; content: string }; result: Message }
-
-  // Mailbox
-  'agents.getMailbox':          { params: { id: string }; result: unknown }
-  'agents.fetchMailbox':        { params: { id: string }; result: unknown }
-  'agents.ackMailbox':          { params: { id: string; batchId: string }; result: { ok: boolean } }
-  'agents.respond':             { params: { id: string; mode?: string; channels?: unknown[] }; result: { ok: boolean; response: string } }
-
-  // Agent lifecycle (self + team)
-  'agents.list':                { params: {}; result: Agent[] }
-  'agents.get':                 { params: { id: string }; result: Agent }
-  'agents.start':               { params: { id: string }; result: { ok: boolean; status: string } }
-  'agents.stop':                { params: { id: string }; result: { ok: boolean; status: string } }
-
-  // Todos
-  'todos.list':                 { params: { agentId: string; status?: string }; result: Todo[] }
-  'todos.create':               { params: CreateTodo; result: Todo }
-  'todos.update':               { params: { id: string } & UpdateTodo; result: Todo }
-
-  // Sandboxes (passthrough)
-  'sandboxes.createExec':       { params: { boxId: string } & ExecCreateRequest; result: ExecResource }
-  'sandboxes.getExecEvents':    { params: { boxId: string; execId: string; afterSeq?: number; limit?: number }; result: ExecEvent[] }
-
-  // Host Operator
+/** Methods that agents are NOT allowed to call. */
+export interface BlockedAgentMethods {
   'agents.submitHostOperator':  { params: { id: string } & HostOperatorCreateRequest; result: HostOperatorRequest }
   'agents.getHostOperator':     { params: { requestId: string }; result: HostOperatorRequest }
-
+  'agents.listGrants':          { params: { agentId: string }; result: unknown }
+  'agents.upsertGrant':         { params: { agentId: string; kind: string; value: string; expiresAt?: number | null }; result: unknown }
+  'agents.deleteGrant':         { params: { agentId: string; kind: string; value: string }; result: unknown }
 }
+
+export type AgentMethods = Omit<ClientMethods, keyof BlockedAgentMethods>
 
 // ── Helper: extract method names ──────────────────────────────────────
 export type ClientMethodName = keyof ClientMethods

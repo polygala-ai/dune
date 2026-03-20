@@ -2,42 +2,15 @@ import type { HandlerMap, Handler, CallContext } from './protocol.js'
 import { clientHandlers } from './client-api.js'
 
 // ── Agent Handler Map ─────────────────────────────────────────────────
-// Agents get a restricted subset of client methods.
-// We reuse the same handler implementations — the only difference is
-// which methods are exposed.
+// Agents get all client methods except a small blocklist.
 
-const ALLOWED_AGENT_METHODS = new Set([
-  // Channels (read + send + create)
-  'channels.list',
-  'channels.getByName',
-  'channels.create',
-  'channels.sendMessage',
-
-  // Mailbox
-  'agents.getMailbox',
-  'agents.fetchMailbox',
-  'agents.ackMailbox',
-  'agents.respond',
-
-  // Agent lifecycle (self + team)
-  'agents.list',
-  'agents.get',
-  'agents.create',
-  'agents.start',
-  'agents.stop',
-
-  // Todos
-  'todos.list',
-  'todos.create',
-  'todos.update',
-
-  // Sandboxes (exec passthrough)
-  'sandboxes.createExec',
-  'sandboxes.getExecEvents',
-
-  // Host Operator
+const BLOCKED_AGENT_METHODS = new Set([
+  // Host Operator — requires human approval flow, agents must not self-serve
   'agents.submitHostOperator',
   'agents.getHostOperator',
+  'agents.listGrants',
+  'agents.upsertGrant',
+  'agents.deleteGrant',
 
   // Slack
   'slack.getSettings',
@@ -49,9 +22,8 @@ const ALLOWED_AGENT_METHODS = new Set([
 
 export const agentHandlers: HandlerMap = new Map<string, Handler>()
 
-for (const method of ALLOWED_AGENT_METHODS) {
-  const handler = clientHandlers.get(method)
-  if (handler) {
+for (const [method, handler] of clientHandlers) {
+  if (!BLOCKED_AGENT_METHODS.has(method)) {
     agentHandlers.set(method, handler)
   }
 }
