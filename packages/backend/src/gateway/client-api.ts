@@ -185,7 +185,8 @@ h('channels.list', async () => {
 h('channels.create', async (params) => {
   const name = typeof params.name === 'string' ? params.name.trim() : ''
   if (!name) throw new Error('Channel name is required')
-  const channel = channelStore.createChannel({ name, description: params.description as string | undefined })
+  const creatorId = typeof params.creatorId === 'string' ? params.creatorId.trim() || undefined : undefined
+  const channel = channelStore.createChannel({ name, description: params.description as string | undefined, creatorId })
   broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'created' } })
   return channel
 })

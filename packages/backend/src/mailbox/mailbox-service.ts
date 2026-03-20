@@ -205,14 +205,11 @@ function listUnreadMessagesForChannel(
   return rows.map(mapMessageRow)
 }
 
-function hasActionableMessages(messages: Message[], agentId: string, allAgentIds: Set<string>): boolean {
-  const hasHumanMessage = messages.some((message) => !allAgentIds.has(message.authorId) && message.authorId !== 'system')
-  const mentionsMe = messages.some((message) => message.mentionedAgentIds.includes(agentId))
-  return hasHumanMessage || mentionsMe
+function hasActionableMessages(messages: Message[], agentId: string): boolean {
+  return messages.some((message) => message.mentionedAgentIds.includes(agentId))
 }
 
 function collectCandidateChannels(agentId: string, now: number, options: { channelId?: string } = {}): MailboxChannelMessages[] {
-  const allAgentIds = new Set(agentStore.listAgents().map((agent) => agent.id))
   const activeLeasedChannelIds = listActiveLeasedChannelIds(agentId, now)
   const subscriptions = listSubscribedChannels(agentId, options.channelId)
   const actionable: MailboxChannelMessages[] = []
@@ -221,7 +218,7 @@ function collectCandidateChannels(agentId: string, now: number, options: { chann
     const messages = listUnreadMessagesForChannel(agentId, subscription.channelId, subscription.cursorTs, now)
     if (messages.length === 0) continue
 
-    if (hasActionableMessages(messages, agentId, allAgentIds)) {
+    if (hasActionableMessages(messages, agentId)) {
       actionable.push({
         channelId: subscription.channelId,
         channelName: subscription.channelName,

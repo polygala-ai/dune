@@ -263,6 +263,9 @@ export class ChannelDetailsPanel extends LitElement {
       justify-content: space-between;
       padding: 6px 0;
     }
+    .member-row.disabled {
+      opacity: 0.4;
+    }
     .member-info {
       display: flex;
       align-items: center;
@@ -644,16 +647,17 @@ export class ChannelDetailsPanel extends LitElement {
           </div>
 
           <div class="section-card">
-            <div class="section-title">Members (${this.subscribers.length})</div>
+            <div class="section-title">Members (${this.subscribers.length}/2)</div>
             ${this.agents.map(a => {
               const isMember = this.subscribers.includes(a.id)
+              const atLimit = !isMember && this.subscribers.length >= 2
               return html`
-                <div class="member-row">
+                <div class="member-row ${atLimit ? 'disabled' : ''}">
                   <div class="member-info">
                     <span class="member-dot" style="background: ${a.avatarColor}"></span>
                     <span class="member-name">${a.name}</span>
                   </div>
-                  <button class="toggle ${isMember ? 'on' : ''}" @click=${() => this.handleToggleMember(a.id)}></button>
+                  <button class="toggle ${isMember ? 'on' : ''}" ?disabled=${atLimit} @click=${() => !atLimit && this.handleToggleMember(a.id)}></button>
                 </div>
               `
             })}

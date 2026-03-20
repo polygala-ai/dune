@@ -8,25 +8,26 @@ export function createChannel(data: CreateChannel): Channel {
     id: newId(),
     name: data.name,
     description: data.description || '',
+    creatorId: data.creatorId || undefined,
     createdAt: Date.now(),
   }
-  db.prepare('INSERT INTO channels (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
-    channel.id, channel.name, channel.description, channel.createdAt
+  db.prepare('INSERT INTO channels (id, name, description, creator_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    channel.id, channel.name, channel.description, channel.creatorId || null, channel.createdAt
   )
   return channel
 }
 
 export function listChannels(): Channel[] {
-  return getDb().prepare('SELECT id, name, description, created_at as createdAt FROM channels').all() as Channel[]
+  return getDb().prepare('SELECT id, name, description, creator_id as creatorId, created_at as createdAt FROM channels').all() as Channel[]
 }
 
 export function getChannel(id: string): Channel | undefined {
-  const row = getDb().prepare('SELECT id, name, description, created_at as createdAt FROM channels WHERE id = ?').get(id)
+  const row = getDb().prepare('SELECT id, name, description, creator_id as creatorId, created_at as createdAt FROM channels WHERE id = ?').get(id)
   return row ? (row as Channel) : undefined
 }
 
 export function getChannelByName(name: string): Channel | undefined {
-  const row = getDb().prepare('SELECT id, name, description, created_at as createdAt FROM channels WHERE name = ?').get(name)
+  const row = getDb().prepare('SELECT id, name, description, creator_id as creatorId, created_at as createdAt FROM channels WHERE name = ?').get(name)
   return row ? (row as Channel) : undefined
 }
 
@@ -54,8 +55,22 @@ export function deleteChannel(id: string): boolean {
 }
 
 // Subscriptions
+
+const MAX_CHANNEL_MEMBERS = 2
+
+export function getChannelMemberCount(channelId: string): number {
+  const row = getDb().prepare('SELECT COUNT(*) as count FROM subscriptions WHERE channel_id = ?').get(channelId) as { count: number }
+  return row.count
+}
+
 export function subscribeAgent(agentId: string, channelId: string): void {
   const db = getDb()
+  // Check if already subscribed (idempotent)
+  if (isAgentSubscribed(agentId, channelId)) return
+  // Enforce max member limit
+  if (getChannelMemberCount(channelId) >= MAX_CHANNEL_MEMBERS) {
+    throw new Error('channel_member_limit')
+  }
   db.prepare('INSERT OR IGNORE INTO subscriptions (agent_id, channel_id) VALUES (?, ?)').run(agentId, channelId)
   // Set read cursor to now so agent only sees messages posted after joining (like Slack)
   db.prepare(
