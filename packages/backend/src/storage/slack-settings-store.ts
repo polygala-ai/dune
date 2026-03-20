@@ -10,6 +10,7 @@ type StoredRow = {
   teamName: string | null
   botUserId: string | null
   installedAt: number | null
+  approvalChannelId: string | null
   updatedAt: number
 }
 
@@ -22,6 +23,7 @@ function readRow(): StoredRow | null {
       team_name AS teamName,
       bot_user_id AS botUserId,
       installed_at AS installedAt,
+      approval_channel_id AS approvalChannelId,
       updated_at AS updatedAt
     FROM slack_settings WHERE id = ?
   `).get(ROW_ID) as StoredRow | undefined
@@ -31,7 +33,7 @@ function readRow(): StoredRow | null {
 export function getSlackSettingsSummary(): SlackSettings {
   const row = readRow()
   if (!row) {
-    return { isConnected: false, teamId: null, teamName: null, botUserId: null, installedAt: null, hasBotToken: false, hasAppToken: false }
+    return { isConnected: false, teamId: null, teamName: null, botUserId: null, installedAt: null, hasBotToken: false, hasAppToken: false, approvalChannelId: null }
   }
   return {
     isConnected: !!row.botToken,
@@ -41,6 +43,7 @@ export function getSlackSettingsSummary(): SlackSettings {
     installedAt: row.installedAt,
     hasBotToken: !!row.botToken,
     hasAppToken: !!row.appToken,
+    approvalChannelId: row.approvalChannelId,
   }
 }
 
@@ -72,6 +75,16 @@ export function updateSlackCredentials(data: { botToken?: string; appToken?: str
   // Upsert: insert minimal row if not exists, then update
   getDb().prepare(`INSERT INTO slack_settings (id, updated_at) VALUES (?, ?) ON CONFLICT(id) DO NOTHING`).run(ROW_ID, now)
   getDb().prepare(`UPDATE slack_settings SET ${sets.join(', ')} WHERE id = ?`).run(...values, ROW_ID)
+}
+
+export function getApprovalChannelId(): string | null {
+  return readRow()?.approvalChannelId ?? null
+}
+
+export function setApprovalChannelId(channelId: string | null): void {
+  const now = Date.now()
+  getDb().prepare(`INSERT INTO slack_settings (id, updated_at) VALUES (?, ?) ON CONFLICT(id) DO NOTHING`).run(ROW_ID, now)
+  getDb().prepare(`UPDATE slack_settings SET approval_channel_id = ?, updated_at = ? WHERE id = ?`).run(channelId, now, ROW_ID)
 }
 
 export function clearSlackInstallation(): void {

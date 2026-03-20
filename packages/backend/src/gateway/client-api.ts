@@ -1173,3 +1173,13 @@ h('slack.unsyncAgent', async (params) => {
   await slackConnection.unsyncAgentFromSlack(agentId)
   return { ok: true }
 })
+
+h('slack.getApprovalChannel', async () => {
+  return { approvalChannelId: slackSettingsStore.getApprovalChannelId() }
+})
+
+h('slack.setApprovalChannel', async (params) => {
+  const channelId = typeof params.approvalChannelId === 'string' ? params.approvalChannelId.trim() || null : null
+  slackSettingsStore.setApprovalChannelId(channelId)
+  return { approvalChannelId: slackSettingsStore.getApprovalChannelId() }
+})
