@@ -8,7 +8,7 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-sandbox-readonly')
 const { getDb } = await import('../src/storage/database.js')
 const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

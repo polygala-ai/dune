@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-API_SCRIPT="${SCRIPT_DIR}/sandbox-api.sh"
+RPC_CMD="${RPC_CMD:-python3 $DUNE_RPC_SCRIPT}"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -23,10 +22,22 @@ USAGE
 json_arg() {
   local value="$1"
   if [[ -f "$value" ]]; then
-    printf '@%s' "$value"
+    cat "$value"
   else
     printf '%s' "$value"
   fi
+}
+
+# Merge boxId into a JSON object: {"boxId":"...", ...rest}
+merge_box_id() {
+  local box_id="$1"
+  local json_body="$2"
+  python3 -c "
+import json,sys
+d = json.loads(sys.argv[2])
+d['boxId'] = sys.argv[1]
+print(json.dumps(d, ensure_ascii=True))
+" "$box_id" "$json_body"
 }
 
 ACTION="${1:-}"
@@ -35,44 +46,43 @@ shift || true
 
 case "$ACTION" in
   list)
-    "$API_SCRIPT" GET /sandboxes/v1/boxes
+    $RPC_CMD sandboxes.listBoxes '{}'
     ;;
   create)
     [[ $# -ge 1 ]] || usage
-    "$API_SCRIPT" POST /sandboxes/v1/boxes "$(json_arg "$1")"
+    $RPC_CMD sandboxes.createBox "$(json_arg "$1")"
     ;;
   get)
     [[ $# -ge 1 ]] || usage
-    "$API_SCRIPT" GET "/sandboxes/v1/boxes/$1"
+    $RPC_CMD sandboxes.getBox "{\"boxId\":\"$1\"}"
     ;;
   patch)
     [[ $# -ge 2 ]] || usage
-    "$API_SCRIPT" PATCH "/sandboxes/v1/boxes/$1" "$(json_arg "$2")"
+    $RPC_CMD sandboxes.patchBox "$(merge_box_id "$1" "$(json_arg "$2")")"
     ;;
   delete)
     [[ $# -ge 1 ]] || usage
-    PATH_PART="/sandboxes/v1/boxes/$1"
+    FORCE="false"
     if [[ "${2:-}" == "force" || "${2:-}" == "true" ]]; then
-      PATH_PART="${PATH_PART}?force=true"
+      FORCE="true"
     fi
-    "$API_SCRIPT" DELETE "$PATH_PART"
+    $RPC_CMD sandboxes.deleteBox "{\"boxId\":\"$1\",\"force\":$FORCE}"
     ;;
   start)
     [[ $# -ge 1 ]] || usage
-    "$API_SCRIPT" POST "/sandboxes/v1/boxes/$1/start" '{}'
+    $RPC_CMD sandboxes.startBox "{\"boxId\":\"$1\"}"
     ;;
   stop)
     [[ $# -ge 1 ]] || usage
-    "$API_SCRIPT" POST "/sandboxes/v1/boxes/$1/stop" '{}'
+    $RPC_CMD sandboxes.stopBox "{\"boxId\":\"$1\"}"
     ;;
   status)
     [[ $# -ge 1 ]] || usage
-    "$API_SCRIPT" GET "/sandboxes/v1/boxes/$1/status"
+    $RPC_CMD sandboxes.getBoxStatus "{\"boxId\":\"$1\"}"
     ;;
   attach)
-    [[ $# -ge 1 ]] || usage
-    echo "Note: backend attach passthrough currently returns 501." >&2
-    "$API_SCRIPT" GET "/sandboxes/v1/boxes/$1/attach"
+    echo "attach_not_implemented" >&2
+    exit 1
     ;;
   *)
     usage

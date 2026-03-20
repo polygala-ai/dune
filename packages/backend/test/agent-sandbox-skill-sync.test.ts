@@ -36,7 +36,7 @@ test('follower execution skills are bundled and synced for running agents', asyn
   )
   assert.equal(statSync(sourceSkillRoot).isDirectory(), true)
   assert.equal(statSync(join(sourceSkillRoot, 'SKILL.md')).isFile(), true)
-  assert.equal(statSync(join(sourceSkillRoot, 'scripts', 'sandbox-api.sh')).isFile(), true)
+  assert.equal(statSync(join(sourceSkillRoot, 'scripts', 'sandbox-box.sh')).isFile(), true)
 
   const agent = agentStore.createAgent({
     name: 'Skill Sync Agent',

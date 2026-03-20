@@ -5,14 +5,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { channelsApi } from './api/channels.js'
-import { agentsApi } from './api/agents.js'
-import { messagesApi } from './api/messages.js'
-import { sandboxesApi } from './api/sandboxes.js'
-import { todosApi } from './api/todos.js'
-import { settingsApi } from './api/settings.js'
 import { adminHostOperatorApi } from './api/admin-host-operator.js'
-import { mediaApi } from './api/media.js'
 import { startSlackConnection, stopSlackConnection } from './slack/slack-connection.js'
 import { setupAgentGateway, setupClientGateway } from './gateway/transport.js'
 import { reloadTimers } from './todos/todo-timer.js'
@@ -32,7 +25,7 @@ const hasFrontendBuild = existsSync(join(frontendDistAbsolutePath, 'index.html')
 const mediaAbsolutePath = resolve(join(config.dataRoot, 'media'))
 const mediaRoot = relative(process.cwd(), mediaAbsolutePath) || '.'
 
-// ── Agent App (REST + /ws/agent + terminal) ───────────────────────────
+// ── Agent App (/ws/agent + terminal) ──────────────────────────────────
 
 export const app = new Hono()
 app.use('/*', cors())
@@ -48,27 +41,7 @@ app.onError((err, c) => {
 
 app.get('/health', (c) => c.json({ status: 'ok' }))
 
-// Block dangerous sandbox operations for agent actors (system actor type)
-app.use('/api/sandboxes/*', async (c, next) => {
-  const actorType = c.req.header('X-Actor-Type')
-  if (actorType === 'system') {
-    const path = c.req.path.replace('/api/sandboxes', '')
-    const method = c.req.method
-    if (method === 'POST' && /^\/v1\/boxes\/?$/.test(path)) return c.json({ error: 'forbidden' }, 403)
-    if (method === 'DELETE' && /^\/v1\/boxes\/[^/]+\/?$/.test(path)) return c.json({ error: 'forbidden' }, 403)
-    if (/import-host-path/.test(path)) return c.json({ error: 'forbidden' }, 403)
-  }
-  return next()
-})
-
-// REST routes (backward compat for sandbox scripts)
-app.route('/api/channels', channelsApi)
-app.route('/api/agents', agentsApi)
-app.route('/api/messages', messagesApi)
-app.route('/api/sandboxes', sandboxesApi)
-app.route('/api/todos', todosApi)
-app.route('/api/settings', settingsApi)
-app.route('/api/media', mediaApi)
+// Agent REST routes removed — agents use /ws/agent RPC exclusively.
 
 // Serve uploaded media files
 app.use('/media/*', serveStatic({ root: mediaRoot, rewriteRequestPath: (p) => p.replace('/media', '') }))

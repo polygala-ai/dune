@@ -8,7 +8,7 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-dm-client-request-id-${Date.no
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const agentManager = await import('../src/agents/agent-manager.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

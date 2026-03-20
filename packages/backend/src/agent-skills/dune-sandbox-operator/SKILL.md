@@ -1,11 +1,11 @@
 ---
 name: dune-sandbox-operator
-description: Operate Dune sandbox APIs via agent gateway.
+description: Operate Dune sandbox APIs via agent RPC gateway.
 ---
 
 # Dune Sandbox Operator
 
-All endpoints at `${DUNE_AGENT_URL}/sandboxes/v1/...` — actor identity injected via env vars automatically.
+All operations use WebSocket RPC via `$DUNE_RPC_SCRIPT` — actor identity is injected automatically.
 
 ## Scripts
 - `scripts/sandbox-box.sh` — lifecycle: list, create, start, stop, delete, status

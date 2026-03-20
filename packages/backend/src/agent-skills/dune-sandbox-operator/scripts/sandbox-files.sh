@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-API_SCRIPT="${SCRIPT_DIR}/sandbox-api.sh"
-BASE_URL="${DUNE_AGENT_URL:?DUNE_AGENT_URL env var not set}"
+RPC_CMD="${RPC_CMD:-python3 $DUNE_RPC_SCRIPT}"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -17,15 +15,6 @@ USAGE
   exit 1
 }
 
-url_encode() {
-  python3 - "$1" <<'PY'
-import sys
-import urllib.parse
-
-print(urllib.parse.quote(sys.argv[1], safe=''))
-PY
-}
-
 ACTION="${1:-}"
 [[ -n "$ACTION" ]] || usage
 shift || true
@@ -37,17 +26,18 @@ case "$ACTION" in
     CONTAINER_PATH="$2"
     CONTENT_B64="$3"
     OVERWRITE="${4:-true}"
-    PAYLOAD="$(python3 - "$CONTAINER_PATH" "$CONTENT_B64" "$OVERWRITE" <<'PY'
+    PAYLOAD="$(python3 - "$BOX_ID" "$CONTAINER_PATH" "$CONTENT_B64" "$OVERWRITE" <<'PY'
 import json
 import sys
 
-path = sys.argv[1]
-content = sys.argv[2]
-overwrite = sys.argv[3].lower() != 'false'
-print(json.dumps({"path": path, "contentBase64": content, "overwrite": overwrite}, ensure_ascii=True))
+box_id = sys.argv[1]
+path = sys.argv[2]
+content = sys.argv[3]
+overwrite = sys.argv[4].lower() != 'false'
+print(json.dumps({"boxId": box_id, "path": path, "contentBase64": content, "overwrite": overwrite}, ensure_ascii=True))
 PY
 )"
-    "$API_SCRIPT" POST "/sandboxes/v1/boxes/${BOX_ID}/files" "$PAYLOAD"
+    $RPC_CMD sandboxes.uploadFiles "$PAYLOAD"
     ;;
   upload-file)
     [[ $# -ge 3 ]] || usage
@@ -56,38 +46,43 @@ PY
     HOST_FILE="$3"
     OVERWRITE="${4:-true}"
     [[ -f "$HOST_FILE" ]] || { echo "File not found: $HOST_FILE" >&2; exit 1; }
-    ENCODED_PATH="$(url_encode "$CONTAINER_PATH")"
-    curl -sS -X POST \
-      -H 'Content-Type: application/octet-stream' \
-      -H "X-Actor-Type: system" -H "X-Actor-Id: agent:${AGENT_ID}" \
-      --data-binary "@${HOST_FILE}" \
-      "${BASE_URL}/sandboxes/v1/boxes/${BOX_ID}/files?path=${ENCODED_PATH}&overwrite=${OVERWRITE}"
+    CONTENT_B64=$(base64 < "$HOST_FILE")
+    PAYLOAD="$(python3 - "$BOX_ID" "$CONTAINER_PATH" "$CONTENT_B64" "$OVERWRITE" <<'PY'
+import json
+import sys
+
+box_id = sys.argv[1]
+path = sys.argv[2]
+content = sys.argv[3]
+overwrite = sys.argv[4].lower() != 'false'
+print(json.dumps({"boxId": box_id, "path": path, "contentBase64": content, "overwrite": overwrite}, ensure_ascii=True))
+PY
+)"
+    $RPC_CMD sandboxes.uploadFiles "$PAYLOAD"
     ;;
   download)
     [[ $# -ge 2 ]] || usage
     BOX_ID="$1"
     CONTAINER_PATH="$2"
-    ENCODED_PATH="$(url_encode "$CONTAINER_PATH")"
-    "$API_SCRIPT" GET "/sandboxes/v1/boxes/${BOX_ID}/files?path=${ENCODED_PATH}"
+    $RPC_CMD sandboxes.downloadFile "{\"boxId\":\"${BOX_ID}\",\"path\":\"${CONTAINER_PATH}\"}"
     ;;
   import-host)
     [[ $# -ge 3 ]] || usage
     BOX_ID="$1"
     HOST_PATH="$2"
     DEST_PATH="$3"
-    PAYLOAD="$(python3 - "$HOST_PATH" "$DEST_PATH" <<'PY'
+    PAYLOAD="$(python3 - "$BOX_ID" "$HOST_PATH" "$DEST_PATH" <<'PY'
 import json
 import sys
 
-print(json.dumps({"hostPath": sys.argv[1], "destPath": sys.argv[2]}, ensure_ascii=True))
+print(json.dumps({"boxId": sys.argv[1], "hostPath": sys.argv[2], "destPath": sys.argv[3]}, ensure_ascii=True))
 PY
 )"
-    "$API_SCRIPT" POST "/sandboxes/v1/boxes/${BOX_ID}/import-host-path" "$PAYLOAD"
+    $RPC_CMD sandboxes.importHostPath "$PAYLOAD"
     ;;
   attach)
-    [[ $# -ge 1 ]] || usage
-    echo "Note: backend attach passthrough currently returns 501." >&2
-    "$API_SCRIPT" GET "/sandboxes/v1/boxes/$1/attach"
+    echo "attach_not_implemented" >&2
+    exit 1
     ;;
   *)
     usage

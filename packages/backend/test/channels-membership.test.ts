@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 process.env.DATA_DIR = join(tmpdir(), `dune-channels-membership-${Date.now()}`)
 
 const { getDb } = await import('../src/storage/database.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

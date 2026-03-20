@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node ./scripts/build-host-operator-helper.mjs && rm -rf dist && node ./scripts/build-bundle.mjs",
     "dev": "node scripts/dev-watch.mjs",
-    "test": "node --test --import tsx ./test/**/*.test.ts"
+    "test": "node --test --test-force-exit --test-timeout=10000 --import tsx ./test/**/*.test.ts"
   },
   "dependencies": {
     "@boxlite-ai/boxlite": "^0.4.3",

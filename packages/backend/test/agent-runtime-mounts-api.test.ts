@@ -13,7 +13,7 @@ const sandboxStore = await import('../src/storage/sandbox-store.js')
 const agentManager = await import('../src/agents/agent-manager.js')
 const agentsApi = await import('../src/api/agents.js')
 const { HostDirectoryPickerError } = await import('../src/utils/host-directory-picker.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

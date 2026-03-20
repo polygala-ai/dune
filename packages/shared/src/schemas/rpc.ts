@@ -225,23 +225,37 @@ export interface ClientMethods {
   'slack.syncAgent':            { params: { agentId: string }; result: { slackChannelId: string; slackChannelName: string } }
   'slack.unsyncAgent':          { params: { agentId: string }; result: { ok: boolean } }
 
-  // Terminal (special — opens a binary stream, not JSON RPC)
-  'terminal.open':              { params: { boxId: string }; result: { sessionId: string } }
+  // Media
+  'media.uploadImage':          { params: { filename?: string; mimeType: string; contentBase64: string }; result: { url: string } }
 }
 
 // ── Agent Method Registry ─────────────────────────────────────────────
-// Agents get all ClientMethods EXCEPT the blocked ones below.
+// Explicit allowlist of methods agents can call on /ws/agent.
 
-/** Methods that agents are NOT allowed to call. */
-export interface BlockedAgentMethods {
-  'agents.submitHostOperator':  { params: { id: string } & HostOperatorCreateRequest; result: HostOperatorRequest }
-  'agents.getHostOperator':     { params: { requestId: string }; result: HostOperatorRequest }
-  'agents.listGrants':          { params: { agentId: string }; result: unknown }
-  'agents.upsertGrant':         { params: { agentId: string; kind: string; value: string; expiresAt?: number | null }; result: unknown }
-  'agents.deleteGrant':         { params: { agentId: string; kind: string; value: string }; result: unknown }
-}
-
-export type AgentMethods = Omit<ClientMethods, keyof BlockedAgentMethods>
+export type AgentMethods = Pick<ClientMethods,
+  // Channels
+  | 'channels.list' | 'channels.create' | 'channels.get' | 'channels.getByName'
+  | 'channels.getMessages' | 'channels.sendMessage' | 'channels.subscribe'
+  // Agents
+  | 'agents.list' | 'agents.create' | 'agents.get' | 'agents.start' | 'agents.stop'
+  | 'agents.getMailbox' | 'agents.fetchMailbox' | 'agents.ackMailbox' | 'agents.respond'
+  | 'agents.submitHostOperator' | 'agents.getHostOperator'
+  // Todos
+  | 'todos.list' | 'todos.create' | 'todos.update' | 'todos.delete'
+  // Sandboxes
+  | 'sandboxes.listBoxes' | 'sandboxes.createBox' | 'sandboxes.getBox'
+  | 'sandboxes.patchBox' | 'sandboxes.deleteBox' | 'sandboxes.startBox'
+  | 'sandboxes.stopBox' | 'sandboxes.getBoxStatus' | 'sandboxes.createExec'
+  | 'sandboxes.listExecs' | 'sandboxes.getExec' | 'sandboxes.getExecEvents'
+  | 'sandboxes.uploadFiles' | 'sandboxes.downloadFile' | 'sandboxes.importHostPath'
+  | 'sandboxes.listFs' | 'sandboxes.readFs' | 'sandboxes.mkdirFs'
+  | 'sandboxes.moveFs' | 'sandboxes.deleteFs'
+  // Slack
+  | 'slack.getSettings' | 'slack.updateSettings' | 'slack.disconnect'
+  | 'slack.syncAgent' | 'slack.unsyncAgent'
+  // Media
+  | 'media.uploadImage'
+>
 
 // ── Helper: extract method names ──────────────────────────────────────
 export type ClientMethodName = keyof ClientMethods
