@@ -111,7 +111,7 @@ async function invokeHelper(helperPath: string, payload: HelperPayload): Promise
   })
 
   if (!response.ok) {
-    throw new Error(response.code || response.error || 'host_operator_helper_failed')
+    throw new Error(response.error || response.code || 'host_operator_helper_failed')
   }
 
   return {
