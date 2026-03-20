@@ -17,8 +17,19 @@ let botUserId: string | null = null
 // Cache Slack user display names to avoid repeated API calls
 const slackUserNameCache = new Map<string, string>()
 
-// Track posted approval messages: requestId → { ts, channelId }
-const approvalMessages = new Map<string, { ts: string; channelId: string }>()
+// Track posted approval messages: requestId → array of posted messages (may be in multiple channels)
+const approvalMessages = new Map<string, Array<{ ts: string; channelId: string }>>()
+
+// Track the active Slack thread per agent (set during sendMessage, cleared after)
+const agentSlackThread = new Map<string, { channelId: string; threadTs: string }>()
+
+export function isAgentTurnFromSlack(agentId: string): boolean {
+  return agentSlackThread.has(agentId)
+}
+
+export function getAgentSlackThread(agentId: string): { channelId: string; threadTs: string } | null {
+  return agentSlackThread.get(agentId) ?? null
+}
 
 const MEDIA_DIR = join(config.dataRoot, 'media')
 
@@ -176,6 +187,8 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   // Resolve Slack user display name
   const authorName = await resolveSlackUserName(slackUserId)
 
+  // Track Slack thread context so host operator approvals route to this channel
+  agentSlackThread.set(agent.id, { channelId: slackChannelId, threadTs })
   try {
     const slackContent = `[via Slack #dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${fullText}`
     const response = await agentManager.sendMessage(
@@ -187,6 +200,8 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   } catch (err) {
     console.error(`[slack] Failed to process message for agent ${agent.name}:`, err)
     await postEphemeral(slackChannelId, slackUserId, `Failed to get a response from *${agent.name}*.`)
+  } finally {
+    agentSlackThread.delete(agent.id)
   }
 }
 
@@ -328,11 +343,16 @@ async function getHostOperatorService() {
 
 export async function postApprovalRequest(request: HostOperatorRequest): Promise<void> {
   if (!webClient) return
-  const channelId = slackSettingsStore.getApprovalChannelId()
-  if (!channelId) return
 
+  const approvalChannelId = slackSettingsStore.getApprovalChannelId()
   const agent = agentStore.getAgent(request.agentId)
   const agentName = agent?.name ?? request.agentId
+  const threadCtx = getAgentSlackThread(request.agentId)
+  const agentChannelId = threadCtx?.channelId ?? agent?.slackChannelId ?? null
+
+  // Nothing to post to
+  if (!approvalChannelId && !agentChannelId) return
+
   const target = request.target
   const targetLine = target?.appName
     ? `${target.appName}${target.bundleId ? ` (${target.bundleId})` : ''}`
@@ -383,24 +403,47 @@ export async function postApprovalRequest(request: HostOperatorRequest): Promise
     },
   ]
 
-  try {
-    const result = await webClient.chat.postMessage({
-      channel: channelId,
-      blocks,
-      text: `Approval needed: ${agentName} wants to ${request.kind} — ${request.summary}`,
-    })
-    if (result.ts) {
-      approvalMessages.set(request.requestId, { ts: result.ts, channelId })
+  const fallbackText = `Approval needed: ${agentName} wants to ${request.kind} — ${request.summary}`
+  const entries: Array<{ ts: string; channelId: string }> = []
+
+  // Post to the agent's own Slack channel (threaded if context available)
+  if (agentChannelId) {
+    try {
+      const result = await webClient.chat.postMessage({
+        channel: agentChannelId,
+        blocks,
+        text: fallbackText,
+        ...(threadCtx?.threadTs ? { thread_ts: threadCtx.threadTs } : {}),
+      })
+      if (result.ts) entries.push({ ts: result.ts, channelId: agentChannelId })
+    } catch (err) {
+      console.error('[slack] Failed to post approval in agent channel:', err)
     }
-  } catch (err) {
-    console.error('[slack] Failed to post approval request:', err)
+  }
+
+  // Also post to the dedicated approval channel (monitoring/audit) if different
+  if (approvalChannelId && approvalChannelId !== agentChannelId) {
+    try {
+      const result = await webClient.chat.postMessage({
+        channel: approvalChannelId,
+        blocks,
+        text: fallbackText,
+      })
+      if (result.ts) entries.push({ ts: result.ts, channelId: approvalChannelId })
+    } catch (err) {
+      console.error('[slack] Failed to post approval request:', err)
+    }
+  }
+
+  if (entries.length > 0) {
+    approvalMessages.set(request.requestId, entries)
   }
 }
 
 export async function updateApprovalMessage(request: HostOperatorRequest): Promise<void> {
   if (!webClient) return
-  const msg = approvalMessages.get(request.requestId)
-  if (!msg) return
+  const messages = approvalMessages.get(request.requestId)
+  if (!messages || messages.length === 0) return
 
   const emoji = request.decision === 'approve' ? ':white_check_mark:' : ':x:'
   const label = request.decision === 'approve' ? 'Approved' : 'Rejected'
@@ -441,17 +484,20 @@ export async function updateApprovalMessage(request: HostOperatorRequest): Promi
     },
   ]
 
-  try {
-    await webClient.chat.update({
-      channel: msg.channelId,
-      ts: msg.ts,
-      blocks,
-      text: `${label} by ${approver}: ${request.summary}`,
-    })
-    approvalMessages.delete(request.requestId)
-  } catch (err) {
-    console.error('[slack] Failed to update approval message:', err)
+  const fallbackText = `${label} by ${approver}: ${request.summary}`
+  for (const msg of messages) {
+    try {
+      await webClient.chat.update({
+        channel: msg.channelId,
+        ts: msg.ts,
+        blocks,
+        text: fallbackText,
+      })
+    } catch (err) {
+      console.error('[slack] Failed to update approval message:', err)
+    }
   }
+  approvalMessages.delete(request.requestId)
 }
 
 async function handleInteractiveAction(body: any): Promise<void> {

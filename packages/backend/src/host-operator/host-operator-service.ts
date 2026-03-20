@@ -295,21 +295,27 @@ async function executeRequest(request: HostOperatorRequest, agent: Agent): Promi
 
 function notifyRequestUpdate(request: HostOperatorRequest): void {
   requestEvents.emit(request.requestId)
-  const eventType = request.status === 'pending' ? 'host-operator:pending' : 'host-operator:updated'
-  broadcastAll({
-    type: eventType,
-    payload: request,
-  })
 
-  // Post/update approval messages in Slack
   import('../slack/slack-connection.js').then((slack) => {
+    const fromSlack = slack.isAgentTurnFromSlack(request.agentId)
+
     if (request.status === 'pending') {
-      slack.postApprovalRequest(request)
-    } else if (request.decision) {
-      slack.updateApprovalMessage(request)
+      // Route approval to origin only
+      if (fromSlack) {
+        slack.postApprovalRequest(request)
+      } else {
+        broadcastAll({ type: 'host-operator:pending', payload: request })
+      }
+    } else {
+      // Status updates: always broadcast both (keeps state in sync, no modal triggered)
+      broadcastAll({ type: 'host-operator:updated', payload: request })
+      if (request.decision) slack.updateApprovalMessage(request)
     }
   }).catch((err) => {
     console.error('[host-operator] Failed to notify Slack:', err)
+    // Fallback: always broadcast to WS so UI isn't stuck
+    const eventType = request.status === 'pending' ? 'host-operator:pending' : 'host-operator:updated'
+    broadcastAll({ type: eventType, payload: request })
   })
 }
 
