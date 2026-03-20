@@ -208,6 +208,9 @@ export async function syncAgentToSlack(agentId: string): Promise<{ slackChannelI
     slackChannelId = result.channel?.id as string
     finalName = result.channel?.name as string || channelName
   } catch (err: any) {
+    if (err?.data?.error === 'missing_scope') {
+      throw new Error('Slack app is missing the "channels:manage" scope. Re-install the app with the updated manifest from Settings → Integrations.')
+    }
     // If name is taken, try with a suffix
     if (err?.data?.error === 'name_taken') {
       const suffix = `-${Date.now().toString(36).slice(-4)}`
