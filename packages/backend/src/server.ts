@@ -204,10 +204,15 @@ export async function startServer() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('Shutting down...')
-    agentServer.close()
-    clientServer.close()
-    adminServer.close()
     stopAgentLogRetentionSweepScheduler()
+
+    // Close servers first — await so OS releases ports before process exits
+    await Promise.allSettled([
+      new Promise<void>((resolve) => agentServer.close(() => resolve())),
+      new Promise<void>((resolve) => clientServer.close(() => resolve())),
+      new Promise<void>((resolve) => adminServer.close(() => resolve())),
+    ])
+
     await stopSlackConnection()
     await stopAllSandboxes()
     await stopAllAgents()
