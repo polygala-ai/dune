@@ -11,6 +11,13 @@ const BLOCKED_AGENT_METHODS = new Set([
   'agents.listGrants',
   'agents.upsertGrant',
   'agents.deleteGrant',
+
+  // Slack
+  'slack.getSettings',
+  'slack.updateSettings',
+  'slack.disconnect',
+  'slack.syncAgent',
+  'slack.unsyncAgent',
 ])
 
 export const agentHandlers: HandlerMap = new Map<string, Handler>()

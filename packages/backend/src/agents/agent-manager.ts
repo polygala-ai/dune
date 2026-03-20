@@ -104,6 +104,7 @@ const COORDINATION_AGENT_SKILLS = [
   'dune-team-manager',
   'dune-todo',
   'dune-host-operator',
+  'dune-slack-connector',
 ] as const
 const FOLLOWER_AGENT_SKILLS = [
   ...COORDINATION_AGENT_SKILLS,
@@ -2492,7 +2493,7 @@ function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string {
     `claude --print`,
     ...(modelId ? [`--model ${modelId}`] : []),
     `--dangerously-skip-permissions`,
-    ...(isPlanMode ? ['--permission-mode plan'] : ['--permission-mode auto']),
+    ...(isPlanMode ? ['--permission-mode plan'] : ['--permission-mode default']),
     `--output-format stream-json`,
     `--verbose`,
     `--mcp-config ${MCP_CONFIG_PATH}`,
