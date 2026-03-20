@@ -5,10 +5,13 @@ import { join, basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import * as slackSettingsStore from '../storage/slack-settings-store.js'
 import * as agentStore from '../storage/agent-store.js'
+import * as channelStore from '../storage/channel-store.js'
 import * as agentManager from '../agents/agent-manager.js'
 import { markdownToBlocks, extractImageUrls } from './block-kit.js'
 import { config } from '../config.js'
 import type { HostOperatorRequest } from '@dune/shared'
+import { getDb } from '../storage/database.js'
+import { newId } from '../utils/ids.js'
 
 let socketClient: SocketModeClient | null = null
 let webClient: WebClient | null = null
@@ -190,7 +193,7 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   // Track Slack thread context so host operator approvals route to this channel
   agentSlackThread.set(agent.id, { channelId: slackChannelId, threadTs })
   try {
-    const slackContent = `[via Slack #dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${fullText}`
+    const slackContent = `[via Slack #dune-agent-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${fullText}`
     const response = await agentManager.sendMessage(
       agent.id,
       [{ authorName, content: slackContent }],
@@ -593,7 +596,7 @@ export async function syncAgentToSlack(agentId: string): Promise<{ slackChannelI
   if (agent.slackChannelId) throw new Error('Agent is already synced to Slack')
 
   // Sanitize channel name: lowercase, hyphens, no special chars, max 80 chars
-  const channelName = `dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 74)}`
+  const channelName = `dune-agent-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 68)}`
 
   let slackChannelId: string
   let finalName: string
@@ -647,4 +650,124 @@ export async function unsyncAgentFromSlack(agentId: string): Promise<void> {
   }
 
   agentStore.updateAgent(agentId, { slackChannelId: null })
+}
+
+// ── Channel Sync ─────────────────────────────────────────────────────
+
+function sanitizeSlackName(prefix: string, name: string, maxLen: number): string {
+  return `${prefix}${name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, maxLen)}`
+}
+
+async function createSlackChannel(channelName: string): Promise<{ id: string; name: string }> {
+  if (!webClient) throw new Error('Slack is not connected')
+  try {
+    const result = await webClient.conversations.create({ name: channelName })
+    return { id: result.channel?.id as string, name: result.channel?.name as string || channelName }
+  } catch (err: any) {
+    if (err?.data?.error === 'missing_scope') {
+      throw new Error('Slack app is missing the "channels:manage" scope.')
+    }
+    if (err?.data?.error === 'name_taken') {
+      const suffix = `-${Date.now().toString(36).slice(-4)}`
+      const retryName = channelName.slice(0, 80 - suffix.length) + suffix
+      const result = await webClient.conversations.create({ name: retryName })
+      return { id: result.channel?.id as string, name: result.channel?.name as string || retryName }
+    }
+    throw err
+  }
+}
+
+export function getChannelSlackLink(duneChannelId: string): { slackChannelId: string; slackChannelName: string } | null {
+  const row = getDb().prepare(
+    'SELECT slack_channel_id AS slackChannelId, slack_channel_name AS slackChannelName FROM slack_channel_links WHERE dune_channel_id = ?'
+  ).get(duneChannelId) as { slackChannelId: string; slackChannelName: string } | undefined
+  return row ?? null
+}
+
+export function listChannelSlackLinks(): Array<{ id: string; duneChannelId: string; slackChannelId: string; slackChannelName: string }> {
+  return getDb().prepare(
+    'SELECT id, dune_channel_id AS duneChannelId, slack_channel_id AS slackChannelId, slack_channel_name AS slackChannelName FROM slack_channel_links'
+  ).all() as any[]
+}
+
+export async function syncChannelToSlack(duneChannelId: string): Promise<{ slackChannelId: string; slackChannelName: string }> {
+  if (!webClient) throw new Error('Slack is not connected')
+
+  const channel = channelStore.getChannel(duneChannelId)
+  if (!channel) throw new Error('Channel not found')
+
+  const existing = getChannelSlackLink(duneChannelId)
+  if (existing) throw new Error('Channel is already synced to Slack')
+
+  const channelName = sanitizeSlackName('dune-channel-', channel.name, 67)
+  const result = await createSlackChannel(channelName)
+
+  // Set channel topic
+  try {
+    const topic = channel.description?.slice(0, 250) || `Dune channel: ${channel.name}`
+    await webClient.conversations.setTopic({ channel: result.id, topic })
+  } catch { /* Non-critical */ }
+
+  // Save the link
+  getDb().prepare(
+    'INSERT INTO slack_channel_links (id, dune_channel_id, slack_channel_id, slack_channel_name, direction, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(newId(), duneChannelId, result.id, result.name, 'bidirectional', Date.now())
+
+  return { slackChannelId: result.id, slackChannelName: result.name }
+}
+
+export async function unsyncChannelFromSlack(duneChannelId: string): Promise<void> {
+  const link = getChannelSlackLink(duneChannelId)
+  if (!link) return
+
+  if (webClient) {
+    try {
+      await webClient.conversations.archive({ channel: link.slackChannelId })
+    } catch { /* Channel may already be archived */ }
+  }
+
+  getDb().prepare('DELETE FROM slack_channel_links WHERE dune_channel_id = ?').run(duneChannelId)
+}
+
+// ── Bulk Sync ────────────────────────────────────────────────────────
+
+export async function syncAllAgentsToSlack(): Promise<{ synced: number; errors: string[] }> {
+  if (!webClient) throw new Error('Slack is not connected')
+
+  const agents = agentStore.listAgents()
+  const unsynced = agents.filter(a => !a.slackChannelId)
+  let synced = 0
+  const errors: string[] = []
+
+  for (const agent of unsynced) {
+    try {
+      await syncAgentToSlack(agent.id)
+      synced++
+    } catch (err: any) {
+      errors.push(`${agent.name}: ${err.message ?? 'unknown error'}`)
+    }
+  }
+
+  return { synced, errors }
+}
+
+export async function syncAllChannelsToSlack(): Promise<{ synced: number; errors: string[] }> {
+  if (!webClient) throw new Error('Slack is not connected')
+
+  const channels = channelStore.listChannels()
+  const linkedIds = new Set(listChannelSlackLinks().map(l => l.duneChannelId))
+  const unsynced = channels.filter(c => !linkedIds.has(c.id))
+  let synced = 0
+  const errors: string[] = []
+
+  for (const channel of unsynced) {
+    try {
+      await syncChannelToSlack(channel.id)
+      synced++
+    } catch (err: any) {
+      errors.push(`${channel.name}: ${err.message ?? 'unknown error'}`)
+    }
+  }
+
+  return { synced, errors }
 }

@@ -1174,6 +1174,31 @@ h('slack.unsyncAgent', async (params) => {
   return { ok: true }
 })
 
+h('slack.syncAllAgents', async () => {
+  return slackConnection.syncAllAgentsToSlack()
+})
+
+h('slack.syncAllChannels', async () => {
+  return slackConnection.syncAllChannelsToSlack()
+})
+
+h('slack.syncChannel', async (params) => {
+  const channelId = params.channelId as string
+  if (!channelId) throw new Error('channelId required')
+  return slackConnection.syncChannelToSlack(channelId)
+})
+
+h('slack.unsyncChannel', async (params) => {
+  const channelId = params.channelId as string
+  if (!channelId) throw new Error('channelId required')
+  await slackConnection.unsyncChannelFromSlack(channelId)
+  return { ok: true }
+})
+
+h('slack.listChannelLinks', async () => {
+  return slackConnection.listChannelSlackLinks()
+})
+
 // ── Media ──────────────────────────────────────────────────────────────
 
 const MEDIA_DIR = join(config.dataRoot, 'media')
