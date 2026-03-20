@@ -38,6 +38,11 @@ export default defineConfig({
         ws: true,
         router: () => `ws://localhost:${readPortConfig().clientPort}`,
       },
+      '/media': {
+        target: `http://localhost:${readPortConfig().agentPort}`,
+        changeOrigin: true,
+        router: () => `http://localhost:${readPortConfig().agentPort}`,
+      },
     },
   },
 })
