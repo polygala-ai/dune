@@ -7,6 +7,22 @@
 type Block = { type: string; text?: { type: string; text: string }; [key: string]: unknown }
 
 const MAX_TEXT_LENGTH = 3000 // Slack's limit per text block
+const IMAGE_RE = /!\[([^\]]*)\]\(([^)]+)\)/g
+
+export interface ExtractedImages {
+  textWithoutImages: string
+  images: { url: string; alt: string }[]
+}
+
+/** Extract markdown image references from text and return them separately. */
+export function extractImageUrls(markdown: string): ExtractedImages {
+  const images: { url: string; alt: string }[] = []
+  const textWithoutImages = markdown.replace(IMAGE_RE, (_match, alt, url) => {
+    images.push({ url, alt: alt || 'image' })
+    return ''
+  }).replace(/\n{3,}/g, '\n\n').trim()
+  return { textWithoutImages, images }
+}
 
 export function markdownToBlocks(markdown: string): Block[] {
   if (!markdown.trim()) return []

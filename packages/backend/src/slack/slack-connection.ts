@@ -1,9 +1,13 @@
 import { SocketModeClient } from '@slack/socket-mode'
 import { WebClient } from '@slack/web-api'
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join, basename } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import * as slackSettingsStore from '../storage/slack-settings-store.js'
 import * as agentStore from '../storage/agent-store.js'
 import * as agentManager from '../agents/agent-manager.js'
-import { markdownToBlocks } from './block-kit.js'
+import { markdownToBlocks, extractImageUrls } from './block-kit.js'
+import { config } from '../config.js'
 
 let socketClient: SocketModeClient | null = null
 let webClient: WebClient | null = null
@@ -11,6 +15,16 @@ let botUserId: string | null = null
 
 // Cache Slack user display names to avoid repeated API calls
 const slackUserNameCache = new Map<string, string>()
+
+const MEDIA_DIR = join(config.dataRoot, 'media')
+
+const MIME_TO_EXT: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg',
+}
 
 export function isSlackConnected(): boolean {
   return webClient !== null
@@ -67,7 +81,7 @@ export async function startSlackConnection(): Promise<void> {
     if (botUserId && event.user === botUserId) return
 
     console.log(`[slack] message in ${event.channel} from ${event.user}: ${(event.text || '').slice(0, 80)}`)
-    handleInboundMessage(event.channel, event.user, event.text || '', event.ts)
+    handleInboundMessage(event.channel, event.user, event.text || '', event.ts, event.files || [])
   })
 
   socketClient.on('app_mention', async ({ event, ack }) => {
@@ -80,7 +94,7 @@ export async function startSlackConnection(): Promise<void> {
     if (botUserId && event.user === botUserId) return
 
     console.log(`[slack] app_mention in ${event.channel} from ${event.user}: ${(event.text || '').slice(0, 80)}`)
-    handleInboundMessage(event.channel, event.user, event.text || '', event.ts)
+    handleInboundMessage(event.channel, event.user, event.text || '', event.ts, event.files || [])
   })
 
   socketClient.on('slack_event', ({ type }) => {
@@ -112,8 +126,12 @@ export async function stopSlackConnection(): Promise<void> {
 
 // ── Inbound: Slack → Agent ─────────────────────────────────────────────
 
-async function handleInboundMessage(slackChannelId: string, slackUserId: string, text: string, threadTs: string): Promise<void> {
-  if (!text.trim()) return
+async function handleInboundMessage(slackChannelId: string, slackUserId: string, text: string, threadTs: string, files: any[]): Promise<void> {
+  // Download any image attachments from Slack and append as markdown
+  const imageMarkdown = await downloadSlackImages(files)
+  const fullText = imageMarkdown ? `${text}\n${imageMarkdown}` : text
+
+  if (!fullText.trim()) return
 
   // Look up which agent is synced to this Slack channel
   const agent = agentStore.getAgentBySlackChannel(slackChannelId)
@@ -138,7 +156,7 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   const authorName = await resolveSlackUserName(slackUserId)
 
   try {
-    const slackContent = `[via Slack #dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${text}`
+    const slackContent = `[via Slack #dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${fullText}`
     const response = await agentManager.sendMessage(
       agent.id,
       [{ authorName, content: slackContent }],
@@ -149,6 +167,41 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
     console.error(`[slack] Failed to process message for agent ${agent.name}:`, err)
     await postEphemeral(slackChannelId, slackUserId, `Failed to get a response from *${agent.name}*.`)
   }
+}
+
+/** Download image files from Slack and save to media directory, returning markdown references. */
+async function downloadSlackImages(files: any[]): Promise<string> {
+  if (!files || files.length === 0) return ''
+  const botToken = slackSettingsStore.getSlackBotToken()
+  if (!botToken) return ''
+
+  const parts: string[] = []
+  for (const file of files) {
+    if (!file.mimetype?.startsWith('image/')) continue
+    const downloadUrl = file.url_private_download || file.url_private
+    if (!downloadUrl) continue
+
+    try {
+      const resp = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${botToken}` },
+      })
+      if (!resp.ok) {
+        console.error(`[slack] Failed to download file ${file.name}: ${resp.status}`)
+        continue
+      }
+
+      const ext = MIME_TO_EXT[file.mimetype] || '.png'
+      const filename = `${randomUUID()}${ext}`
+      mkdirSync(MEDIA_DIR, { recursive: true })
+      const buffer = Buffer.from(await resp.arrayBuffer())
+      writeFileSync(join(MEDIA_DIR, filename), buffer)
+
+      parts.push(`![${file.name || 'image'}](/media/${filename})`)
+    } catch (err) {
+      console.error(`[slack] Failed to download Slack file ${file.name}:`, err)
+    }
+  }
+  return parts.join('\n')
 }
 
 async function resolveSlackUserName(slackUserId: string): Promise<string> {
@@ -172,23 +225,63 @@ async function resolveSlackUserName(slackUserId: string): Promise<string> {
 async function postAgentReplyToSlack(text: string, channelId: string, threadTs?: string): Promise<void> {
   if (!webClient || !text.trim()) return
 
-  const blocks = markdownToBlocks(text)
+  // Extract images from markdown — upload them to Slack separately
+  const { textWithoutImages, images } = extractImageUrls(text)
+
+  // Send text portion
+  if (textWithoutImages.trim()) {
+    const blocks = markdownToBlocks(textWithoutImages)
+    try {
+      await webClient.chat.postMessage({
+        channel: channelId,
+        blocks,
+        text: textWithoutImages, // fallback for notifications
+        ...(threadTs ? { thread_ts: threadTs } : {}),
+      })
+    } catch (err: any) {
+      if (threadTs && err?.data?.error === 'cannot_reply_to_message') {
+        console.log('[slack] Threading not supported for this message, posting as top-level')
+        await postAgentReplyToSlack(text, channelId)
+        return
+      }
+      console.error('[slack] Failed to post agent reply:', err)
+    }
+  }
+
+  // Upload local images to Slack
+  for (const img of images) {
+    try {
+      await uploadImageToSlack(img.url, img.alt, channelId, threadTs)
+    } catch (err) {
+      console.error(`[slack] Failed to upload image to Slack:`, err)
+    }
+  }
+}
+
+/** Upload a local image file to Slack. */
+async function uploadImageToSlack(imageUrl: string, alt: string, channelId: string, threadTs?: string): Promise<void> {
+  if (!webClient) return
+
+  // Only handle local media URLs
+  if (!imageUrl.startsWith('/media/')) {
+    // For external URLs, they'll be auto-unfurled by Slack in the text
+    return
+  }
+
+  const filename = basename(imageUrl)
+  const filePath = join(MEDIA_DIR, filename)
 
   try {
-    await webClient.chat.postMessage({
-      channel: channelId,
-      blocks,
-      text, // fallback for notifications
+    const fileData = readFileSync(filePath)
+    await webClient.filesUploadV2({
+      channel_id: channelId,
+      file: fileData,
+      filename,
+      title: alt,
       ...(threadTs ? { thread_ts: threadTs } : {}),
     })
-  } catch (err: any) {
-    // If threading fails, retry as a top-level message
-    if (threadTs && err?.data?.error === 'cannot_reply_to_message') {
-      console.log('[slack] Threading not supported for this message, posting as top-level')
-      await postAgentReplyToSlack(text, channelId)
-      return
-    }
-    console.error('[slack] Failed to post agent reply:', err)
+  } catch (err) {
+    console.error(`[slack] Failed to upload file ${filename} to Slack:`, err)
   }
 }
 
