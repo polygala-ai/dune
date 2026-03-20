@@ -61,6 +61,8 @@ function getDefaultModelIdOverride(role: AgentRoleType): string | null {
 
 export function createAgent(data: CreateAgent): Agent {
   const db = getDb()
+  const existing = getAgentByName(data.name)
+  if (existing) throw new Error('An agent with this name already exists')
   const role = data.role ?? DEFAULT_AGENT_ROLE
   const agent: Agent = {
     id: newId(),
@@ -115,7 +117,11 @@ export function updateAgent(
   if (!agent) return undefined
   const updates: string[] = []
   const values: any[] = []
-  if (data.name !== undefined) { updates.push('name = ?'); values.push(data.name) }
+  if (data.name !== undefined) {
+    const duplicate = getAgentByName(data.name)
+    if (duplicate && duplicate.id !== id) throw new Error('An agent with this name already exists')
+    updates.push('name = ?'); values.push(data.name)
+  }
   if (data.personality !== undefined) { updates.push('personality = ?'); values.push(data.personality) }
   if (data.role !== undefined) { updates.push('role = ?'); values.push(data.role) }
   if (data.workMode !== undefined) { updates.push('work_mode = ?'); values.push(data.workMode) }

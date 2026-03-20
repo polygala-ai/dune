@@ -228,7 +228,13 @@ agentsApi.post('/', async (c) => {
       return c.json({ error: String(err?.message || 'invalid_model_id') }, 400)
     }
   }
-  const agent = agentStore.createAgent(body)
+  let agent
+  try {
+    agent = agentStore.createAgent(body)
+  } catch (err: any) {
+    if (err?.message?.includes('already exists')) return c.json({ error: err.message }, 409)
+    throw err
+  }
   // Auto-subscribe new agents to #general
   const general = channelStore.getChannelByName('general')
   if (general) {
@@ -769,7 +775,13 @@ agentsApi.put('/:id', async (c) => {
     }
   }
 
-  const agent = agentStore.updateAgent(c.req.param('id'), nextBody)
+  let agent
+  try {
+    agent = agentStore.updateAgent(c.req.param('id'), nextBody)
+  } catch (err: any) {
+    if (err?.message?.includes('already exists')) return c.json({ error: err.message }, 409)
+    throw err
+  }
   if (!agent) return c.json({ error: 'Not found' }, 404)
   if (
     existing.hostOperatorApprovalMode !== 'dangerously-skip'
