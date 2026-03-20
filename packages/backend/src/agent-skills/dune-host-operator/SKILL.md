@@ -34,6 +34,7 @@ Use these scripts to interact with host macOS apps and files. Requests require a
 - `press` — press keyboard `key` (e.g. "Return", "Escape", "cmd+c")
 - `select` / `focus` — select or focus an element
 - `launch` / `close` — launch or close an app by bundleId
+- `navigate` — navigate a running app to a `url` (requires `bundleId` and `url`; uses Cmd+L, type, Enter)
 - `clipboard_read` / `clipboard_write` — read or write clipboard (no bundleId needed)
 - `url` — open a `url` in default browser
 
@@ -56,6 +57,7 @@ scripts/host-act.sh '{"action":"url","url":"https://example.com"}'
 scripts/host-act.sh '{"action":"type","bundleId":"com.apple.Safari","text":"hello"}'
 scripts/host-act.sh '{"action":"press","bundleId":"com.apple.Safari","key":"Return"}'
 scripts/host-act.sh '{"action":"launch","bundleId":"com.apple.Safari"}'
+scripts/host-act.sh '{"action":"navigate","bundleId":"com.apple.Safari","url":"https://example.com"}'
 scripts/host-fs.sh '{"op":"read","path":"/Users/admin/Documents/note.txt"}'
 scripts/host-fs.sh '{"op":"list","path":"/Users/admin/Documents"}'
 scripts/host-fs.sh '{"op":"write","path":"/Users/admin/Documents/out.txt","content":"hello"}'

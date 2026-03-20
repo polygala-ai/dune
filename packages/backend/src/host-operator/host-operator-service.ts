@@ -191,6 +191,7 @@ function validateInput(agent: Pick<Agent, 'hostOperatorApps' | 'hostOperatorPath
       }
       if (input.action === 'press' && (!input.key || !input.key.trim())) throw new Error('key_required')
       if (input.action === 'url' && (!input.url || !input.url.trim())) throw new Error('url_required')
+      if (input.action === 'navigate' && (!input.url || !input.url.trim())) throw new Error('url_required')
       return input
     }
     case 'filesystem': {
@@ -254,6 +255,19 @@ async function executeRequest(request: HostOperatorRequest, agent: Agent): Promi
       break
     case 'perceive':
       result = await provider.perceive(request.input as HostOperatorPerceiveCreateRequest)
+      if (result.artifacts && result.artifacts.length > 0) {
+        const content: Array<Record<string, unknown>> = []
+        if (result.resultJson && typeof result.resultJson === 'object') {
+          content.push({ type: 'text', text: JSON.stringify(result.resultJson) })
+        }
+        for (const artifact of result.artifacts) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/png', data: artifact.contentBase64 },
+          })
+        }
+        result.resultJson = { content }
+      }
       break
     case 'act':
       result = await provider.act(request.input as HostOperatorActCreateRequest)

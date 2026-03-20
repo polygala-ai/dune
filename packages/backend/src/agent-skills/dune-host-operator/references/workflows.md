@@ -24,7 +24,16 @@ scripts/host-act.sh '{"action":"click","bundleId":"com.apple.Safari","point":{"x
 scripts/host-act.sh '{"action":"type","bundleId":"com.apple.Safari","text":"hello world"}'
 ```
 
-## 4) Use allowed filesystem paths
+## 4) Navigate a browser to a URL
+
+```bash
+scripts/host-act.sh '{"action":"navigate","bundleId":"com.apple.Safari","url":"https://example.com"}'
+scripts/host-act.sh '{"action":"navigate","bundleId":"com.apple.Safari","url":"https://example.com","wait":5}'
+```
+
+Navigate sends Cmd+L to focus the address bar, types the URL, then presses Enter. The optional `wait` parameter (default 2s, max 10s) controls how long to wait for the page to load before returning.
+
+## 5) Use allowed filesystem paths
 
 ```bash
 scripts/host-fs.sh '{"op":"list","path":"/Users/admin/Documents"}'
