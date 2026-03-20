@@ -95,6 +95,6 @@ test('bundled asset resolver falls back from dist to src assets', () => {
   )
   assert.equal(
     agentManager.__resolveBundledAssetDirForTests('agent-mcp', resolve(backendRoot, 'dist')),
-    resolve(backendRoot, 'src', 'agent-mcp'),
+    resolve(backendRoot, 'src', 'agents', 'mcp'),
   )
 })

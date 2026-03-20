@@ -631,12 +631,13 @@ async function ensureCliInstalled(box: SimpleBox): Promise<void> {
   console.log('Claude CLI:', check.stdout.trim())
 }
 
-/** Read the current backend port from the .port file.
- *  server.ts writes it to join(__dirname, '../.port') from src/,
- *  which is packages/backend/.port. From src/agents/, that's ../../.port. */
+/** Returns the agent-facing backend port.
+ *  In packaged mode the sidecar passes PORT via env -> config.port.
+ *  In dev mode we fall back to the .port file written by server.ts. */
 function getBackendPort(): number {
+  if (config.port > 0) return config.port
   try {
-    const portFile = join(__dirname, '../../.port')
+    const portFile = join(__dirname, '../.port')
     const raw = readFileSync(portFile, 'utf-8').trim()
     if (raw.startsWith('{')) {
       const parsed = JSON.parse(raw)
