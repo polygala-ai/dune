@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node ./scripts/build-host-operator-helper.mjs && rm -rf dist && node ./scripts/build-bundle.mjs",
-    "dev": "tsx --env-file=../../.env --watch src/index.ts",
+    "dev": "node scripts/dev-watch.mjs",
     "test": "node --test --import tsx ./test/**/*.test.ts"
   },
   "dependencies": {
