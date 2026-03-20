@@ -47,6 +47,30 @@ test('merge creates valid settings when content is missing', () => {
   assert.equal(merged.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '1')
 })
 
+test('merge removes managed env keys when they are cleared', () => {
+  const existing = JSON.stringify({
+    theme: 'dark',
+    env: {
+      KEEP_ME: 'yes',
+      ANTHROPIC_AUTH_TOKEN: 'old-token',
+      ANTHROPIC_BASE_URL: 'https://old.example.com',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    },
+  })
+
+  // Only ANTHROPIC_AUTH_TOKEN is still set; the other managed keys are cleared
+  const mergedText = agentManager.__mergeClaudeSettingsContentForTests(existing, {
+    ANTHROPIC_AUTH_TOKEN: 'new-token',
+  })
+  const merged = JSON.parse(mergedText)
+
+  assert.equal(merged.theme, 'dark')
+  assert.equal(merged.env.KEEP_ME, 'yes', 'unmanaged keys must survive')
+  assert.equal(merged.env.ANTHROPIC_AUTH_TOKEN, 'new-token')
+  assert.equal(merged.env.ANTHROPIC_BASE_URL, undefined, 'cleared base URL must be removed')
+  assert.equal(merged.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, undefined, 'cleared traffic flag must be removed')
+})
+
 test('merge falls back safely when existing content is malformed', () => {
   const mergedText = agentManager.__mergeClaudeSettingsContentForTests('{"env": {"KEEP_ME": "value"', {
     ANTHROPIC_AUTH_TOKEN: 'token-2',
