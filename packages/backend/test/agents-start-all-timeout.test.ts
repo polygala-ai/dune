@@ -9,7 +9,7 @@ process.env.AGENT_STARTUP_TIMEOUT_MS = '250'
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const { __setEnsureAgentRunningForTests } = await import('../src/api/agents.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

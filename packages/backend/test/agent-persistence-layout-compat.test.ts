@@ -9,7 +9,7 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-persistence-layout-${Date.now(
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const miniappStore = await import('../src/storage/miniapp-store.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

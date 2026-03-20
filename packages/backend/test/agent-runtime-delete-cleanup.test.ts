@@ -9,7 +9,7 @@ const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const agentManager = await import('../src/agents/agent-manager.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 

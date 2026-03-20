@@ -10,7 +10,7 @@ process.env.DATA_DIR = join(tmpdir(), `dune-host-operator-${Date.now()}`)
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const hostOperatorService = await import('../src/host-operator/host-operator-service.js')
-const { app, adminApp } = await import('../src/server.js')
+const { app, adminApp } = await import('./_test-app.js')
 
 const db = getDb()
 

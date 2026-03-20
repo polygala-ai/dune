@@ -7,7 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 process.env.DATA_DIR = join(tmpdir(), `dune-todos-api-validation-${Date.now()}`)
 
 const { getDb } = await import('../src/storage/database.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 const { _reset: resetTodoTimers } = await import('../src/todos/todo-timer.js')
 
 const db = getDb()

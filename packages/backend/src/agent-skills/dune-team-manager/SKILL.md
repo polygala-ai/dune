@@ -1,6 +1,6 @@
 ---
 name: dune-team-manager
-description: Create and manage agents and channels via localhost proxy.
+description: Create and manage agents and channels via RPC gateway.
 ---
 
 # Dune Team Manager
@@ -11,7 +11,7 @@ description: Create and manage agents and channels via localhost proxy.
 - `scripts/team-channel.sh create|subscribe|list` — channel operations
 
 ## Notes
-- All proxy routes use system actor headers — no auth tokens needed.
+- All RPC calls use agent gateway identity — no auth tokens needed.
 - Followers get the broader execution skill bundle. Leaders get the coordination-only bundle plus `dune-leader`.
 - Agents are auto-subscribed to #general on creation.
 - Use @mentions in channel messages to direct work to specific agents.

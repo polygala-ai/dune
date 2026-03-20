@@ -4,6 +4,8 @@ set -euo pipefail
 # Upload an image file and print its markdown reference.
 # Usage: upload-image.sh <filepath> [alt-text]
 
+RPC_CMD="${RPC_CMD:-python3 $DUNE_RPC_SCRIPT}"
+
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <filepath> [alt-text]" >&2
   exit 1
@@ -11,17 +13,26 @@ fi
 
 FILEPATH="$1"
 ALT_TEXT="${2:-image}"
-BASE_URL="${DUNE_AGENT_URL:?DUNE_AGENT_URL not set}"
 
 if [[ ! -f "$FILEPATH" ]]; then
   echo "File not found: $FILEPATH" >&2
   exit 1
 fi
 
-RESULT=$(curl -sS -X POST "${BASE_URL}/api/media" \
-  -H "X-Actor-Type: system" \
-  -H "X-Agent-Id: ${AGENT_ID}" \
-  -F "file=@${FILEPATH}")
+MIME_TYPE=$(file --brief --mime-type "$FILEPATH")
+CONTENT_B64=$(base64 < "$FILEPATH")
+FILENAME=$(basename "$FILEPATH")
+
+PAYLOAD=$(python3 -c "
+import json, sys
+print(json.dumps({
+    'mimeType': sys.argv[1],
+    'contentBase64': sys.argv[2],
+    'filename': sys.argv[3]
+}, ensure_ascii=True))
+" "$MIME_TYPE" "$CONTENT_B64" "$FILENAME")
+
+RESULT=$($RPC_CMD media.uploadImage "$PAYLOAD")
 
 URL=$(echo "$RESULT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['url'])")
 

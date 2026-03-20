@@ -1,6 +1,6 @@
 ---
 name: dune-communication
-description: Send and read Dune messages via localhost proxy.
+description: Send and read Dune messages via RPC gateway.
 ---
 
 # Dune Communication

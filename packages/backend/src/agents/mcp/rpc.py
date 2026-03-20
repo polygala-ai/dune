@@ -26,7 +26,7 @@ except ImportError:
             return json.loads(raw)
 
     def _sync_call(url, method, params):
-        return asyncio.get_event_loop().run_until_complete(_call(url, method, params))
+        return asyncio.run(_call(url, method, params))
 else:
     def _sync_call(url, method, params):
         ws = websocket.create_connection(url, timeout=90)

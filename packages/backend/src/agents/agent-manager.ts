@@ -370,7 +370,6 @@ interface RunningAgent {
   guiHttpPort: number
   guiHttpsPort: number
   backendUrl: string
-  agentHttpUrl: string
   daemonAssetHash?: string
   cliInstalled: boolean
   hasSession: boolean
@@ -1615,7 +1614,6 @@ export async function startAgent(agentId: string): Promise<void> {
   Object.assign(env, buildClaudeCliAuthEnvValues())
 
   let backendUrl = ''
-  let agentHttpUrl = ''
   let sandboxId = runtimeState.sandboxId
   let box: SimpleBox | null = null
   try {
@@ -1766,7 +1764,6 @@ export async function startAgent(agentId: string): Promise<void> {
       // Resolve host IP reachable from inside container
       const hostIps = getHostLanIps()
       const hostAddr = hostIps[0] || '127.0.0.1'
-      agentHttpUrl = `http://${hostAddr}:${backendPort}`
       const wsUrl = `ws://${hostAddr}:${backendPort}/ws/agent?agentId=${agentId}`
       backendUrl = wsUrl
       console.log(`Backend host for agent ${agentId}: ${hostAddr} (candidates: ${hostIps.join(', ')})`)
@@ -1808,7 +1805,6 @@ export async function startAgent(agentId: string): Promise<void> {
       guiHttpPort,
       guiHttpsPort,
       backendUrl,
-      agentHttpUrl,
       daemonAssetHash: daemonAssets.assetHash,
       cliInstalled: true,
       hasSession: runtimeState.hasSession,
@@ -2465,7 +2461,6 @@ type BuildClaudeCliCommandInput = {
   hasSession: boolean
   oauthToken: string
   modelId: string | null
-  agentHttpUrl: string
   wsUrl: string
   permissionMode?: 'plan'
   sessionId?: string
@@ -2486,7 +2481,6 @@ function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string {
     `IS_SANDBOX=1`,
     `AGENT_ID=${input.agentId}`,
     `DUNE_AGENT_ID=${input.agentId}`,
-    ...(input.agentHttpUrl ? [`DUNE_AGENT_URL=${input.agentHttpUrl}`] : []),
     ...(input.wsUrl ? [`DUNE_WS_URL=${input.wsUrl}`] : []),
     `DUNE_RPC_SCRIPT=${RPC_GUEST_PATH}`,
     ...(oauthToken ? [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`] : []),
@@ -2744,7 +2738,6 @@ async function _sendMessageInner(
       hasSession: running.hasSession,
       oauthToken,
       modelId,
-      agentHttpUrl: running.agentHttpUrl,
       wsUrl: running.backendUrl,
       ...(usePlanMode ? { permissionMode: 'plan' as const } : {}),
       ...(running.sessionId ? { resumeSessionId: running.sessionId } : { sessionId: turnSessionId }),

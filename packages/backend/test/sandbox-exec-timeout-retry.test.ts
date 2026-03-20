@@ -14,7 +14,7 @@ const sandboxStore = await import('../src/storage/sandbox-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const agentManager = await import('../src/agents/agent-manager.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 
 const db = getDb()
 const hostFixtureRoot = join(process.env.DATA_DIR!, 'sandbox-exec-timeout-tests')

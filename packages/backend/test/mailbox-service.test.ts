@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 process.env.DATA_DIR = join(tmpdir(), `dune-mailbox-${Date.now()}`)
 
 const { getDb } = await import('../src/storage/database.js')
-const { app } = await import('../src/server.js')
+const { app } = await import('./_test-app.js')
 const mailboxService = await import('../src/mailbox/mailbox-service.js')
 
 const db = getDb()
