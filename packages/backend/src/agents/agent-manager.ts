@@ -637,8 +637,7 @@ async function ensureCliInstalled(box: SimpleBox): Promise<void> {
 function getBackendPort(): number {
   if (config.port > 0) return config.port
   try {
-    const portFile = join(__dirname, '../.port')
-    const raw = readFileSync(portFile, 'utf-8').trim()
+    const raw = readFileSync(config.portFilePath, 'utf-8').trim()
     if (raw.startsWith('{')) {
       const parsed = JSON.parse(raw)
       return parsed.agentPort || 0
