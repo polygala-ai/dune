@@ -7,6 +7,7 @@ export type AgentRuntimeState = {
   guiHttpPort: number
   guiHttpsPort: number
   hasSession: boolean
+  sessionId: string | null
   createdAt: number
   updatedAt: number
   lastStartedAt: number | null
@@ -32,7 +33,8 @@ function mapRow(row: any): AgentRuntimeState {
     sandboxId: row.sandboxId,
     guiHttpPort: Number(row.guiHttpPort),
     guiHttpsPort: Number(row.guiHttpsPort),
-    hasSession: Number(row.hasSession || 0) === 1,
+    hasSession: Number(row.hasSession || 0) === 1 || !!row.sessionId,
+    sessionId: row.sessionId || null,
     createdAt: Number(row.createdAt),
     updatedAt: Number(row.updatedAt),
     lastStartedAt: row.lastStartedAt == null ? null : Number(row.lastStartedAt),
@@ -49,6 +51,7 @@ export function getAgentRuntimeState(agentId: string): AgentRuntimeState | null 
       gui_http_port as guiHttpPort,
       gui_https_port as guiHttpsPort,
       has_session as hasSession,
+      session_id as sessionId,
       created_at as createdAt,
       updated_at as updatedAt,
       last_started_at as lastStartedAt,
@@ -69,6 +72,7 @@ export function listAgentRuntimeStates(limit = 500): AgentRuntimeState[] {
       gui_http_port as guiHttpPort,
       gui_https_port as guiHttpsPort,
       has_session as hasSession,
+      session_id as sessionId,
       created_at as createdAt,
       updated_at as updatedAt,
       last_started_at as lastStartedAt,
@@ -153,6 +157,14 @@ export function setAgentRuntimeHasSession(agentId: string, hasSession: boolean, 
     SET has_session = ?, updated_at = ?
     WHERE agent_id = ?`
   ).run(Number(hasSession), ts, agentId)
+}
+
+export function setAgentRuntimeSessionId(agentId: string, sessionId: string | null, ts = Date.now()): void {
+  getDb().prepare(
+    `UPDATE agent_runtime_state
+    SET session_id = ?, has_session = ?, updated_at = ?
+    WHERE agent_id = ?`
+  ).run(sessionId, sessionId ? 1 : 0, ts, agentId)
 }
 
 export function deleteAgentRuntimeState(agentId: string): void {

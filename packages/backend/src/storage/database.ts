@@ -581,4 +581,10 @@ function initSchema(db: Database.Database) {
     // Column already exists — ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE agent_runtime_state ADD COLUMN session_id TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
 }
