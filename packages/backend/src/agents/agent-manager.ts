@@ -1738,7 +1738,7 @@ export async function startAgent(agentId: string): Promise<void> {
     await retriedExec(
       box,
       'bash',
-      ['-c', `mkdir -p ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}/skills && chown -R abc:abc ${AGENT_DUNE_VOLUME_PATH}`],
+      ['-c', `mkdir -p ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}/skills && chown abc:abc ${AGENT_DUNE_VOLUME_PATH} && chown -R abc:abc ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}`],
       { DISPLAY: ':1' },
     )
 
