@@ -22,6 +22,7 @@ const AGENT_SELECT_COLUMNS = [
   'host_operator_approval_mode as hostOperatorApprovalMode',
   'host_operator_apps_json as hostOperatorAppsJson',
   'host_operator_paths_json as hostOperatorPathsJson',
+  'keep_alive as keepAlive',
   'status',
   'avatar_color as avatarColor',
   'slack_channel_id as slackChannelId',
@@ -48,6 +49,7 @@ function normalizeAgent(row: AgentRow): Agent {
     ...row,
     hostOperatorApps: parseJsonArray(row.hostOperatorAppsJson),
     hostOperatorPaths: parseJsonArray(row.hostOperatorPathsJson),
+    keepAlive: row.keepAlive !== 0 && row.keepAlive !== false,
   }
 }
 
@@ -74,13 +76,14 @@ export function createAgent(data: CreateAgent): Agent {
     hostOperatorApprovalMode: DEFAULT_HOST_OPERATOR_APPROVAL_MODE,
     hostOperatorApps: [],
     hostOperatorPaths: [],
+    keepAlive: true,
     status: 'stopped',
     avatarColor: data.avatarColor || randomColor(),
     slackChannelId: null,
     createdAt: Date.now(),
   }
   db.prepare(
-    'INSERT INTO agents (id, name, personality, role, work_mode, model_id_override, host_exec_approval_mode, host_operator_approval_mode, host_operator_apps_json, host_operator_paths_json, status, avatar_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO agents (id, name, personality, role, work_mode, model_id_override, host_exec_approval_mode, host_operator_approval_mode, host_operator_apps_json, host_operator_paths_json, keep_alive, status, avatar_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(
     agent.id,
     agent.name,
@@ -92,6 +95,7 @@ export function createAgent(data: CreateAgent): Agent {
     agent.hostOperatorApprovalMode,
     JSON.stringify(agent.hostOperatorApps),
     JSON.stringify(agent.hostOperatorPaths),
+    agent.keepAlive ? 1 : 0,
     agent.status,
     agent.avatarColor,
     agent.createdAt,
@@ -111,7 +115,7 @@ export function getAgent(id: string): Agent | undefined {
 
 export function updateAgent(
   id: string,
-  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'status' | 'avatarColor' | 'slackChannelId'>>,
+  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'keepAlive' | 'status' | 'avatarColor' | 'slackChannelId'>>,
 ): Agent | undefined {
   const agent = getAgent(id)
   if (!agent) return undefined
@@ -132,6 +136,7 @@ export function updateAgent(
   }
   if (data.hostOperatorApps !== undefined) { updates.push('host_operator_apps_json = ?'); values.push(JSON.stringify(data.hostOperatorApps)) }
   if (data.hostOperatorPaths !== undefined) { updates.push('host_operator_paths_json = ?'); values.push(JSON.stringify(data.hostOperatorPaths)) }
+  if (data.keepAlive !== undefined) { updates.push('keep_alive = ?'); values.push(data.keepAlive ? 1 : 0) }
   if (data.status !== undefined) { updates.push('status = ?'); values.push(data.status) }
   if (data.avatarColor !== undefined) { updates.push('avatar_color = ?'); values.push(data.avatarColor) }
   if (data.slackChannelId !== undefined) { updates.push('slack_channel_id = ?'); values.push(data.slackChannelId) }

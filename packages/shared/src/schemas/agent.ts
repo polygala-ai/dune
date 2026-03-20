@@ -35,6 +35,7 @@ export const AgentSchema = Type.Object({
   hostOperatorApprovalMode: HostOperatorApprovalMode,
   hostOperatorApps: Type.Array(Type.String()),
   hostOperatorPaths: Type.Array(Type.String()),
+  keepAlive: Type.Boolean(),
   status: AgentStatus,
   avatarColor: Type.String(),
   slackChannelId: Type.Union([Type.String(), Type.Null()]),

@@ -2392,6 +2392,7 @@ function buildTodoReminderPayload(agentId: string, now: number): TodoReminderPay
 
   const agent = agentStore.getAgent(agentId)
   if (!agent) return null
+  if (!agent.keepAlive) return null
 
   const pending = todoStore.getPendingTodosByAgent(agentId)
   const overdue = pending.filter(t => t.dueAt !== undefined && isValidDueAtMs(t.dueAt) && t.dueAt <= now)
