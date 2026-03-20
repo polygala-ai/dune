@@ -122,10 +122,16 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
     return
   }
 
-  // Check if agent is running
+  // Auto-start agent if not running
   if (!agentManager.isAgentRunning(agent.id)) {
-    await postEphemeral(slackChannelId, slackUserId, `Agent *${agent.name}* is not running. Start it in Dune first.`)
-    return
+    try {
+      console.log(`[slack] Auto-starting agent ${agent.name} for inbound Slack message`)
+      await agentManager.startAgent(agent.id)
+    } catch (err) {
+      console.error(`[slack] Failed to auto-start agent ${agent.name}:`, err)
+      await postEphemeral(slackChannelId, slackUserId, `Failed to start agent *${agent.name}*. Check Dune for details.`)
+      return
+    }
   }
 
   // Resolve Slack user display name
