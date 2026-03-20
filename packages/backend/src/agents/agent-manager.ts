@@ -2477,7 +2477,7 @@ function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string {
     `claude --print`,
     ...(modelId ? [`--model ${modelId}`] : []),
     `--dangerously-skip-permissions`,
-    ...(isPlanMode ? ['--permission-mode plan'] : ['--permission-mode auto']),
+    ...(isPlanMode ? ['--permission-mode plan'] : ['--permission-mode default']),
     `--output-format stream-json`,
     `--verbose`,
     `--mcp-config ${MCP_CONFIG_PATH}`,
