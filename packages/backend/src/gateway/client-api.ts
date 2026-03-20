@@ -1174,6 +1174,28 @@ h('slack.unsyncAgent', async (params) => {
   return { ok: true }
 })
 
+h('slack.sendMessage', async (params) => {
+  const agentId = params.agentId as string
+  if (!agentId) throw new Error('agentId required')
+  const text = params.text as string
+  if (!text) throw new Error('text required')
+  const channelId = (params.channelId as string) || agentStore.getAgent(agentId)?.slackChannelId
+  if (!channelId) throw new Error('No Slack channel: agent is not synced and no channelId provided')
+  return slackConnection.sendMessageToSlack(text, channelId)
+})
+
+h('slack.sendImage', async (params) => {
+  const agentId = params.agentId as string
+  if (!agentId) throw new Error('agentId required')
+  const imageUrl = params.imageUrl as string
+  if (!imageUrl) throw new Error('imageUrl required')
+  const alt = (params.alt as string) || 'image'
+  const channelId = (params.channelId as string) || agentStore.getAgent(agentId)?.slackChannelId
+  if (!channelId) throw new Error('No Slack channel: agent is not synced and no channelId provided')
+  await slackConnection.sendImageToSlack(imageUrl, alt, channelId)
+  return { ok: true }
+})
+
 // ── Media ──────────────────────────────────────────────────────────────
 
 const MEDIA_DIR = join(config.dataRoot, 'media')

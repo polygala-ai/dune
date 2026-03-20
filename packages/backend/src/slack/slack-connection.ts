@@ -583,6 +583,49 @@ async function handleTextApproval(slackUserId: string, text: string): Promise<bo
   return true
 }
 
+// ── Direct Send (agent-initiated) ─────────────────────────────────────
+
+/** Send a text message to a Slack channel (public API for RPC). */
+export async function sendMessageToSlack(
+  text: string,
+  channelId: string,
+): Promise<{ ok: boolean; ts: string }> {
+  if (!webClient) throw new Error('Slack is not connected')
+
+  const { textWithoutImages, images } = extractImageUrls(text)
+
+  let ts = ''
+  if (textWithoutImages.trim()) {
+    const blocks = markdownToBlocks(textWithoutImages)
+    const result = await webClient.chat.postMessage({
+      channel: channelId,
+      blocks,
+      text: textWithoutImages,
+    })
+    ts = (result.ts as string) || ''
+  }
+
+  for (const img of images) {
+    try {
+      await uploadImageToSlack(img.url, img.alt, channelId)
+    } catch (err) {
+      console.error('[slack] Failed to upload embedded image:', err)
+    }
+  }
+
+  return { ok: true, ts }
+}
+
+/** Upload a local /media/ image to a Slack channel (public API for RPC). */
+export async function sendImageToSlack(
+  imageUrl: string,
+  alt: string,
+  channelId: string,
+): Promise<void> {
+  if (!webClient) throw new Error('Slack is not connected')
+  await uploadImageToSlack(imageUrl, alt, channelId)
+}
+
 // ── Sync / Unsync ──────────────────────────────────────────────────────
 
 export async function syncAgentToSlack(agentId: string): Promise<{ slackChannelId: string; slackChannelName: string }> {
