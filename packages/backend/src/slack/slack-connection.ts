@@ -1,16 +1,16 @@
 import { SocketModeClient } from '@slack/socket-mode'
 import { WebClient } from '@slack/web-api'
 import * as slackSettingsStore from '../storage/slack-settings-store.js'
-import * as slackChannelLinkStore from '../storage/slack-channel-link-store.js'
-import * as messageStore from '../storage/message-store.js'
-import * as channelStore from '../storage/channel-store.js'
 import * as agentStore from '../storage/agent-store.js'
-import { onNewMessage } from '../agents/orchestrator.js'
-import { parseMentions } from '../utils/mentions.js'
+import * as agentManager from '../agents/agent-manager.js'
+import { markdownToBlocks } from './block-kit.js'
 
 let socketClient: SocketModeClient | null = null
 let webClient: WebClient | null = null
 let botUserId: string | null = null
+
+// Cache Slack user display names to avoid repeated API calls
+const slackUserNameCache = new Map<string, string>()
 
 export function isSlackConnected(): boolean {
   return webClient !== null
@@ -55,8 +55,6 @@ export async function startSlackConnection(): Promise<void> {
 
   socketClient = new SocketModeClient({ appToken })
 
-  // events_api events: the SocketModeClient emits the inner event type
-  // e.g., 'message' for message events, 'app_mention' for app_mention events
   socketClient.on('message', async ({ event, ack }) => {
     try {
       await ack()
@@ -69,7 +67,7 @@ export async function startSlackConnection(): Promise<void> {
     if (botUserId && event.user === botUserId) return
 
     console.log(`[slack] message in ${event.channel} from ${event.user}: ${(event.text || '').slice(0, 80)}`)
-    handleInboundMessage(event.channel, event.user, event.text || '', event.channel_type)
+    handleInboundMessage(event.channel, event.user, event.text || '', event.ts)
   })
 
   socketClient.on('app_mention', async ({ event, ack }) => {
@@ -82,10 +80,9 @@ export async function startSlackConnection(): Promise<void> {
     if (botUserId && event.user === botUserId) return
 
     console.log(`[slack] app_mention in ${event.channel} from ${event.user}: ${(event.text || '').slice(0, 80)}`)
-    handleInboundMessage(event.channel, event.user, event.text || '', 'channel')
+    handleInboundMessage(event.channel, event.user, event.text || '', event.ts)
   })
 
-  // Log all events for debugging
   socketClient.on('slack_event', ({ type }) => {
     console.log(`[slack] event: ${type}`)
   })
@@ -109,63 +106,147 @@ export async function stopSlackConnection(): Promise<void> {
   }
   webClient = null
   botUserId = null
+  slackUserNameCache.clear()
   console.log('Slack Socket Mode disconnected')
 }
 
-function handleInboundMessage(slackChannelId: string, slackUserId: string, text: string, channelType?: string): void {
+// ── Inbound: Slack → Agent ─────────────────────────────────────────────
+
+async function handleInboundMessage(slackChannelId: string, slackUserId: string, text: string, threadTs: string): Promise<void> {
   if (!text.trim()) return
 
-  // Check if this Slack channel is linked to a Dune channel
-  const link = slackChannelLinkStore.getLinkBySlackChannel(slackChannelId)
-
-  if (link) {
-    if (link.direction === 'outbound') return
-    routeToLinkedChannel(link.duneChannelId, slackUserId, text)
+  // Look up which agent is synced to this Slack channel
+  const agent = agentStore.getAgentBySlackChannel(slackChannelId)
+  if (!agent) {
+    console.log(`[slack] No agent synced to channel ${slackChannelId}, ignoring`)
     return
   }
 
-  // DMs or unlinked channels: route to the "general" channel
-  if (channelType === 'im') {
-    const general = channelStore.getChannelByName('general')
-    if (general) {
-      routeToLinkedChannel(general.id, slackUserId, text)
-      return
-    }
+  // Check if agent is running
+  if (!agentManager.isAgentRunning(agent.id)) {
+    await postEphemeral(slackChannelId, slackUserId, `Agent *${agent.name}* is not running. Start it in Dune first.`)
+    return
   }
 
-  console.log(`[slack] No link for Slack channel ${slackChannelId}, ignoring`)
+  // Resolve Slack user display name
+  const authorName = await resolveSlackUserName(slackUserId)
+
+  try {
+    const response = await agentManager.sendMessage(
+      agent.id,
+      [{ authorName, content: text }],
+      { source: 'slack' as any },
+    )
+    await postAgentReplyToSlack(response, slackChannelId, threadTs)
+  } catch (err) {
+    console.error(`[slack] Failed to process message for agent ${agent.name}:`, err)
+    await postEphemeral(slackChannelId, slackUserId, `Failed to get a response from *${agent.name}*.`)
+  }
 }
 
-function routeToLinkedChannel(duneChannelId: string, slackUserId: string, text: string): void {
-  const agents = agentStore.listAgents()
-  const mentionedIds = parseMentions(text, agents)
-  const authorId = `slack:${slackUserId}`
+async function resolveSlackUserName(slackUserId: string): Promise<string> {
+  const cached = slackUserNameCache.get(slackUserId)
+  if (cached) return cached
 
-  const message = messageStore.createMessage(duneChannelId, authorId, text, mentionedIds)
-  onNewMessage(message).catch(err => console.error('Slack inbound orchestrator error:', err))
+  if (!webClient) return slackUserId
+
+  try {
+    const result = await webClient.users.info({ user: slackUserId })
+    const name = result.user?.real_name || result.user?.name || slackUserId
+    slackUserNameCache.set(slackUserId, name)
+    return name
+  } catch {
+    return slackUserId
+  }
 }
 
-export async function maybeForwardToSlack(message: { channelId: string; authorId: string; content: string }): Promise<void> {
-  if (!webClient) return
+// ── Outbound: Agent → Slack ────────────────────────────────────────────
 
-  // Echo prevention: don't forward messages that came from Slack or system
-  if (message.authorId.startsWith('slack:') || message.authorId === 'system') return
+async function postAgentReplyToSlack(text: string, channelId: string, threadTs: string): Promise<void> {
+  if (!webClient || !text.trim()) return
 
-  const link = slackChannelLinkStore.getLinkByDuneChannel(message.channelId)
-  if (!link) return
-  if (link.direction === 'inbound') return
-
-  // Resolve display name for agents
-  const agent = agentStore.getAgent(message.authorId)
-  const username = agent?.name ?? 'Dune User'
+  const blocks = markdownToBlocks(text)
 
   try {
     await webClient.chat.postMessage({
-      channel: link.slackChannelId,
-      text: message.content,
-      username,
+      channel: channelId,
+      blocks,
+      text, // fallback for notifications
+      thread_ts: threadTs,
     })
   } catch (err) {
-    console.error('Failed to forward message to Slack:', err)
+    console.error('[slack] Failed to post agent reply:', err)
   }
+}
+
+async function postEphemeral(channelId: string, userId: string, text: string): Promise<void> {
+  if (!webClient) return
+  try {
+    await webClient.chat.postEphemeral({ channel: channelId, user: userId, text })
+  } catch (err) {
+    console.error('[slack] Failed to post ephemeral:', err)
+  }
+}
+
+// ── Sync / Unsync ──────────────────────────────────────────────────────
+
+export async function syncAgentToSlack(agentId: string): Promise<{ slackChannelId: string; slackChannelName: string }> {
+  if (!webClient) throw new Error('Slack is not connected')
+
+  const agent = agentStore.getAgent(agentId)
+  if (!agent) throw new Error('Agent not found')
+  if (agent.slackChannelId) throw new Error('Agent is already synced to Slack')
+
+  // Sanitize channel name: lowercase, hyphens, no special chars, max 80 chars
+  const channelName = `dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 74)}`
+
+  let slackChannelId: string
+  let finalName: string
+
+  try {
+    const result = await webClient.conversations.create({ name: channelName })
+    slackChannelId = result.channel?.id as string
+    finalName = result.channel?.name as string || channelName
+  } catch (err: any) {
+    // If name is taken, try with a suffix
+    if (err?.data?.error === 'name_taken') {
+      const suffix = `-${Date.now().toString(36).slice(-4)}`
+      const retryName = channelName.slice(0, 80 - suffix.length) + suffix
+      const result = await webClient.conversations.create({ name: retryName })
+      slackChannelId = result.channel?.id as string
+      finalName = result.channel?.name as string || retryName
+    } else {
+      throw err
+    }
+  }
+
+  // Set channel topic
+  try {
+    const topic = agent.personality.slice(0, 250)
+    await webClient.conversations.setTopic({ channel: slackChannelId, topic })
+  } catch {
+    // Non-critical
+  }
+
+  // Save the mapping
+  agentStore.updateAgent(agentId, { slackChannelId })
+
+  return { slackChannelId, slackChannelName: finalName }
+}
+
+export async function unsyncAgentFromSlack(agentId: string): Promise<void> {
+  const agent = agentStore.getAgent(agentId)
+  if (!agent) throw new Error('Agent not found')
+  if (!agent.slackChannelId) return
+
+  // Archive the Slack channel
+  if (webClient) {
+    try {
+      await webClient.conversations.archive({ channel: agent.slackChannelId })
+    } catch {
+      // Channel may already be archived or deleted
+    }
+  }
+
+  agentStore.updateAgent(agentId, { slackChannelId: null })
 }

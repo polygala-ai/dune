@@ -568,4 +568,10 @@ function initSchema(db: Database.Database) {
     // Column already exists — ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN slack_channel_id TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
 }

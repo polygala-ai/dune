@@ -36,10 +36,6 @@ const ALLOWED_AGENT_METHODS = new Set([
   // Host Operator
   'agents.submitHostOperator',
   'agents.getHostOperator',
-
-  // Slack
-  'slack.listChannels',
-  'slack.send',
 ])
 
 export const agentHandlers: HandlerMap = new Map<string, Handler>()
