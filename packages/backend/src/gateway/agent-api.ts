@@ -61,6 +61,8 @@ const ALLOWED_AGENT_METHODS = new Set([
   'slack.disconnect',
   'slack.syncAgent',
   'slack.unsyncAgent',
+  'slack.sendMessage',
+  'slack.sendImage',
 
   // Media
   'media.uploadImage',

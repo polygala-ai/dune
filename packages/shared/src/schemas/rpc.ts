@@ -224,6 +224,8 @@ export interface ClientMethods {
   'slack.disconnect':           { params: {}; result: { ok: boolean } }
   'slack.syncAgent':            { params: { agentId: string }; result: { slackChannelId: string; slackChannelName: string } }
   'slack.unsyncAgent':          { params: { agentId: string }; result: { ok: boolean } }
+  'slack.sendMessage':          { params: { agentId: string; text: string; channelId?: string }; result: { ok: boolean; ts: string } }
+  'slack.sendImage':            { params: { agentId: string; imageUrl: string; alt?: string; channelId?: string }; result: { ok: boolean } }
 
   // Media
   'media.uploadImage':          { params: { filename?: string; mimeType: string; contentBase64: string }; result: { url: string } }
@@ -253,6 +255,7 @@ export type AgentMethods = Pick<ClientMethods,
   // Slack
   | 'slack.getSettings' | 'slack.updateSettings' | 'slack.disconnect'
   | 'slack.syncAgent' | 'slack.unsyncAgent'
+  | 'slack.sendMessage' | 'slack.sendImage'
   // Media
   | 'media.uploadImage'
 >
