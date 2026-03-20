@@ -421,6 +421,13 @@ export const updateSlackSettings = (data: { botToken?: string; appToken?: string
 export const disconnectSlack = () => call<{ ok: boolean }>('slack.disconnect')
 export const syncAgentToSlack = (agentId: string) => call<{ slackChannelId: string; slackChannelName: string }>('slack.syncAgent', { agentId })
 export const unsyncAgentFromSlack = (agentId: string) => call<{ ok: boolean }>('slack.unsyncAgent', { agentId })
+export const syncAllAgentsToSlack = () => call<{ synced: number; errors: string[] }>('slack.syncAllAgents')
+export const syncAllChannelsToSlack = () => call<{ synced: number; errors: string[] }>('slack.syncAllChannels')
+export const syncChannelToSlack = (channelId: string) => call<{ slackChannelId: string; slackChannelName: string }>('slack.syncChannel', { channelId })
+export const unsyncChannelFromSlack = (channelId: string) => call<{ ok: boolean }>('slack.unsyncChannel', { channelId })
+
+type SlackChannelLink = { id: string; duneChannelId: string; slackChannelId: string; slackChannelName: string }
+export const listSlackChannelLinks = () => call<SlackChannelLink[]>('slack.listChannelLinks')
 
 // ── Sandboxes ─────────────────────────────────────────────────────────
 
