@@ -7,9 +7,10 @@ import { clientHandlers } from './client-api.js'
 // which methods are exposed.
 
 const ALLOWED_AGENT_METHODS = new Set([
-  // Channels (read + send)
+  // Channels (read + send + create)
   'channels.list',
   'channels.getByName',
+  'channels.create',
   'channels.sendMessage',
 
   // Mailbox
@@ -21,6 +22,7 @@ const ALLOWED_AGENT_METHODS = new Set([
   // Agent lifecycle (self + team)
   'agents.list',
   'agents.get',
+  'agents.create',
   'agents.start',
   'agents.stop',
 
