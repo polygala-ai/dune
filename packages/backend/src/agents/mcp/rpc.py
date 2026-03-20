@@ -19,7 +19,7 @@ except ImportError:
     import websockets
 
     async def _call(url, method, params):
-        async with websockets.connect(url) as ws:
+        async with websockets.connect(url, max_size=None) as ws:
             msg = json.dumps({"id": str(uuid.uuid4()), "method": method, "params": params})
             await ws.send(msg)
             raw = await ws.recv()
