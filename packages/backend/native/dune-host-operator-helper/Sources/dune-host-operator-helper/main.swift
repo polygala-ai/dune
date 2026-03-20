@@ -244,7 +244,9 @@ func frameForElement(_ element: AXUIElement) -> [String: Any]? {
     ]
 }
 
-func serializeAXElement(_ element: AXUIElement, depth: Int = 0, maxDepth: Int = 4) -> [String: Any] {
+func serializeAXElement(_ element: AXUIElement, depth: Int = 0, maxDepth: Int = 8, maxNodes: inout Int) -> [String: Any] {
+    guard maxNodes > 0 else { return [:] }
+    maxNodes -= 1
     var node: [String: Any] = [:]
     if let role = copyAttribute(element, kAXRoleAttribute as CFString) as? String {
         node["role"] = role
@@ -271,17 +273,18 @@ func serializeAXElement(_ element: AXUIElement, depth: Int = 0, maxDepth: Int = 
     if depth < maxDepth,
        let children = copyAttribute(element, kAXChildrenAttribute as CFString) as? [AXUIElement],
        !children.isEmpty {
-        node["children"] = Array(children.prefix(40)).map { serializeAXElement($0, depth: depth + 1, maxDepth: maxDepth) }
+        node["children"] = Array(children.prefix(40)).map { serializeAXElement($0, depth: depth + 1, maxDepth: maxDepth, maxNodes: &maxNodes) }
     }
     return node
 }
 
-func accessibilityTree(bundleId: String) throws -> [String: Any] {
+func accessibilityTree(bundleId: String, maxDepth: Int = 8, maxNodes: Int = 300) throws -> [String: Any] {
     guard let app = appForBundleId(bundleId) else {
         throw HelperError.message("bundle_id_not_running")
     }
     let element = AXUIElementCreateApplication(app.processIdentifier)
-    let tree = serializeAXElement(element)
+    var remaining = maxNodes
+    let tree = serializeAXElement(element, maxDepth: maxDepth, maxNodes: &remaining)
     return [
         "bundleId": bundleId,
         "appName": app.localizedName ?? bundleId,
@@ -323,7 +326,9 @@ func perceive(_ input: [String: Any]) throws -> (Any, [[String: Any]]) {
         throw HelperError.message("invalid_perceive_input")
     }
 
-    let accessibility = try accessibilityTree(bundleId: bundleId)
+    let maxDepth = min(intValue(input, "maxDepth") ?? (mode == "find" ? 12 : 8), 20)
+    let maxNodes = min(intValue(input, "maxNodes") ?? (mode == "find" ? 1000 : 300), 5000)
+    let accessibility = try accessibilityTree(bundleId: bundleId, maxDepth: maxDepth, maxNodes: maxNodes)
     switch mode {
     case "accessibility":
         return (accessibility, [])
@@ -384,6 +389,56 @@ func postKeyCode(_ keyCode: CGKeyCode) throws {
     }
     down.post(tap: .cghidEventTap)
     up.post(tap: .cghidEventTap)
+}
+
+func postKeyboardTextToPid(_ text: String, pid: pid_t) throws {
+    for scalar in text.utf16 {
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+            throw HelperError.message("keyboard_event_failed")
+        }
+        var value = scalar
+        down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &value)
+        up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &value)
+        down.postToPid(pid)
+        up.postToPid(pid)
+        usleep(5000)
+    }
+}
+
+func postKeyCodeToPid(_ keyCode: CGKeyCode, flags: CGEventFlags = [], pid: pid_t) throws {
+    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
+        throw HelperError.message("keyboard_event_failed")
+    }
+    down.flags = flags
+    up.flags = flags
+    down.postToPid(pid)
+    up.postToPid(pid)
+}
+
+func pressKeyComboToPid(_ combo: String, pid: pid_t) throws {
+    let parts = combo.lowercased().split(separator: "+").map(String.init)
+    var flags: CGEventFlags = []
+    var keyName = ""
+    for part in parts {
+        switch part {
+        case "cmd", "command": flags.insert(.maskCommand)
+        case "shift": flags.insert(.maskShift)
+        case "ctrl", "control": flags.insert(.maskControl)
+        case "opt", "option", "alt": flags.insert(.maskAlternate)
+        default: keyName = part
+        }
+    }
+    let keyCode: CGKeyCode
+    if let special = specialKeyCode(keyName) {
+        keyCode = special
+    } else if keyName.count == 1 {
+        keyCode = characterToKeyCode(keyName)
+    } else {
+        throw HelperError.message("unknown_key: \(keyName)")
+    }
+    try postKeyCodeToPid(keyCode, flags: flags, pid: pid)
 }
 
 func specialKeyCode(_ key: String) -> CGKeyCode? {
@@ -473,7 +528,7 @@ func act(_ input: [String: Any]) throws -> Any {
     guard let action = stringValue(input, "action") else {
         throw HelperError.message("action_required")
     }
-    if let bundleId = stringValue(input, "bundleId"), !["launch", "clipboard_read", "clipboard_write"].contains(action) {
+    if let bundleId = stringValue(input, "bundleId"), !["launch", "navigate", "clipboard_read", "clipboard_write"].contains(action) {
         try activateApp(bundleId)
         usleep(150_000)
     }
@@ -486,48 +541,80 @@ func act(_ input: [String: Any]) throws -> Any {
         process.arguments = ["-b", bundleId]
         try process.run()
         process.waitUntilExit()
-        return ["ok": process.terminationStatus == 0]
+        return ["ok": process.terminationStatus == 0, "text": "Launched \(bundleId)"]
+    case "navigate":
+        guard let bundleId = stringValue(input, "bundleId") else { throw HelperError.message("bundle_id_required") }
+        guard let urlString = stringValue(input, "url") else { throw HelperError.message("url_required") }
+        guard let app = appForBundleId(bundleId) else { throw HelperError.message("bundle_id_not_running") }
+        let navPid = app.processIdentifier
+        app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        usleep(200_000)
+        try postKeyCodeToPid(37, flags: .maskCommand, pid: navPid) // Cmd+L
+        usleep(150_000)
+        try postKeyboardTextToPid(urlString, pid: navPid)
+        usleep(100_000)
+        try postKeyCodeToPid(36, pid: navPid) // Enter
+        let waitSec = min(doubleValue(input, "wait") ?? 2.0, 10.0)
+        usleep(UInt32(waitSec * 1_000_000))
+        return ["ok": true, "text": "Navigated to \(urlString) in \(bundleId)"]
     case "close":
         guard let bundleId = stringValue(input, "bundleId"),
               let app = appForBundleId(bundleId) else { throw HelperError.message("bundle_id_not_running") }
-        return ["ok": app.terminate()]
+        return ["ok": app.terminate(), "text": "Closed \(bundleId)"]
     case "focus":
         guard let bundleId = stringValue(input, "bundleId") else { throw HelperError.message("bundle_id_required") }
         try activateApp(bundleId)
-        return ["ok": true]
+        return ["ok": true, "text": "Focused \(bundleId)"]
     case "url":
-        guard let urlString = stringValue(input, "url"), let url = URL(string: urlString) else {
-            throw HelperError.message("invalid_url")
-        }
-        return ["ok": NSWorkspace.shared.open(url)]
+        throw HelperError.message("url_read_not_supported")
     case "clipboard_read":
-        return ["text": NSPasteboard.general.string(forType: .string) ?? ""]
+        let clipText = NSPasteboard.general.string(forType: .string) ?? ""
+        return ["ok": true, "text": clipText]
     case "clipboard_write":
         let text = stringValue(input, "text") ?? ""
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        return ["ok": true]
+        return ["ok": true, "text": "Wrote \(text.count) chars to clipboard"]
     case "type":
-        try postKeyboardText(stringValue(input, "text") ?? "")
-        return ["ok": true]
+        let text = stringValue(input, "text") ?? ""
+        guard text.count <= 10_000 else { throw HelperError.message("text_too_long") }
+        let preview = text.count > 40 ? String(text.prefix(40)) + "..." : text
+        if let bundleId = stringValue(input, "bundleId"), let app = appForBundleId(bundleId) {
+            try postKeyboardTextToPid(text, pid: app.processIdentifier)
+        } else {
+            try postKeyboardText(text)
+        }
+        return ["ok": true, "text": "Typed \"\(preview)\""]
     case "press":
         let key = stringValue(input, "key") ?? ""
-        if key.contains("+") {
-            try postKeyWithModifiers(key)
-        } else if let code = specialKeyCode(key) {
-            try postKeyCode(code)
-        } else if key.count == 1 {
-            try postKeyboardText(key)
+        if let bundleId = stringValue(input, "bundleId"), let app = appForBundleId(bundleId) {
+            if key.contains("+") {
+                try pressKeyComboToPid(key, pid: app.processIdentifier)
+            } else if let code = specialKeyCode(key) {
+                try postKeyCodeToPid(code, pid: app.processIdentifier)
+            } else if key.count == 1 {
+                try postKeyboardTextToPid(key, pid: app.processIdentifier)
+            } else {
+                throw HelperError.message("unknown_key: \(key)")
+            }
         } else {
-            throw HelperError.message("unknown_key: \(key)")
+            if key.contains("+") {
+                try postKeyWithModifiers(key)
+            } else if let code = specialKeyCode(key) {
+                try postKeyCode(code)
+            } else if key.count == 1 {
+                try postKeyboardText(key)
+            } else {
+                throw HelperError.message("unknown_key: \(key)")
+            }
         }
-        return ["ok": true]
+        return ["ok": true, "text": "Pressed \(key)"]
     case "click", "select":
         guard let point = pointValue(input, "point") else { throw HelperError.message("point_required") }
         try postMouse(type: .mouseMoved, point: point)
         try postMouse(type: .leftMouseDown, point: point)
         try postMouse(type: .leftMouseUp, point: point)
-        return ["ok": true]
+        return ["ok": true, "text": "Clicked at (\(Int(point.x)), \(Int(point.y)))"]
     case "double_click":
         guard let point = pointValue(input, "point") else { throw HelperError.message("point_required") }
         try postMouse(type: .mouseMoved, point: point)
@@ -535,34 +622,45 @@ func act(_ input: [String: Any]) throws -> Any {
         try postMouse(type: .leftMouseUp, point: point, clickState: 1)
         try postMouse(type: .leftMouseDown, point: point, clickState: 2)
         try postMouse(type: .leftMouseUp, point: point, clickState: 2)
-        return ["ok": true]
+        return ["ok": true, "text": "Double-clicked at (\(Int(point.x)), \(Int(point.y)))"]
     case "right_click":
         guard let point = pointValue(input, "point") else { throw HelperError.message("point_required") }
         try postMouse(type: .mouseMoved, point: point, button: .right)
         try postMouse(type: .rightMouseDown, point: point, button: .right)
         try postMouse(type: .rightMouseUp, point: point, button: .right)
-        return ["ok": true]
+        return ["ok": true, "text": "Right-clicked at (\(Int(point.x)), \(Int(point.y)))"]
     case "hover":
         guard let point = pointValue(input, "point") else { throw HelperError.message("point_required") }
         try postMouse(type: .mouseMoved, point: point)
-        return ["ok": true]
+        return ["ok": true, "text": "Hovered at (\(Int(point.x)), \(Int(point.y)))"]
     case "drag":
         guard let from = pointValue(input, "point"),
               let to = pointValue(input, "toPoint") else { throw HelperError.message("point_required") }
+        let duration = min(doubleValue(input, "duration") ?? 0.3, 5.0)
+        let steps = max(Int(duration * 60), 2)
         try postMouse(type: .mouseMoved, point: from)
         try postMouse(type: .leftMouseDown, point: from)
-        try postMouse(type: .leftMouseDragged, point: to)
+        for i in 1...steps {
+            let t = Double(i) / Double(steps)
+            let intermediate = CGPoint(
+                x: from.x + (to.x - from.x) * t,
+                y: from.y + (to.y - from.y) * t
+            )
+            try postMouse(type: .leftMouseDragged, point: intermediate)
+            usleep(UInt32(duration / Double(steps) * 1_000_000))
+        }
         try postMouse(type: .leftMouseUp, point: to)
-        return ["ok": true]
+        return ["ok": true, "text": "Dragged from (\(Int(from.x)), \(Int(from.y))) to (\(Int(to.x)), \(Int(to.y)))"]
     case "scroll":
-        guard pointValue(input, "point") != nil else { throw HelperError.message("point_required") }
+        guard let point = pointValue(input, "point") else { throw HelperError.message("point_required") }
         let deltaX = Int32(intValue(input, "deltaX") ?? 0)
         let deltaY = Int32(intValue(input, "deltaY") ?? 0)
-        guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: deltaY, wheel2: deltaX, wheel3: 0) else {
+        try postMouse(type: .mouseMoved, point: point)
+        guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: deltaY, wheel2: deltaX, wheel3: 0) else {
             throw HelperError.message("scroll_event_failed")
         }
-        event.post(tap: .cghidEventTap)
-        return ["ok": true]
+        event.post(tap: .cgSessionEventTap)
+        return ["ok": true, "text": "Scrolled (\(deltaX), \(deltaY)) at (\(Int(point.x)), \(Int(point.y)))"]
     default:
         throw HelperError.message("unsupported_action")
     }
@@ -621,6 +719,15 @@ func filesystem(_ input: [String: Any]) throws -> Any {
             }
         }
         return ["results": results]
+    case "metadata":
+        guard fm.fileExists(atPath: path) else { throw HelperError.message("file_not_found") }
+        let attrs = try fm.attributesOfItem(atPath: path)
+        var meta: [String: Any] = ["path": path, "type": (attrs[.type] as? FileAttributeType) == .typeDirectory ? "directory" : "file"]
+        if let size = attrs[.size] as? Int { meta["size"] = size }
+        if let modified = attrs[.modificationDate] as? Date { meta["modified"] = ISO8601DateFormatter().string(from: modified) }
+        if let created = attrs[.creationDate] as? Date { meta["created"] = ISO8601DateFormatter().string(from: created) }
+        if let perms = attrs[.posixPermissions] as? Int { meta["permissions"] = String(perms, radix: 8) }
+        return meta
     default:
         throw HelperError.message("unsupported_filesystem_op")
     }
