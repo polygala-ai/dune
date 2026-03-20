@@ -2541,7 +2541,7 @@ export function __setAgentLockForTests(agentId: string, locked: boolean): void {
 }
 
 export interface InputMetadata {
-  source?: 'dm' | 'channel' | 'mailbox' | 'app_action'
+  source?: 'dm' | 'channel' | 'mailbox' | 'app_action' | 'slack'
   /** For channel input: structured data about which channels and messages the agent received */
   channels?: Array<{ name: string; messages: Array<{ author: string; content: string }> }>
   /** For DM: the user's message content */

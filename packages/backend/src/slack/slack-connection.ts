@@ -138,10 +138,11 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   const authorName = await resolveSlackUserName(slackUserId)
 
   try {
+    const slackContent = `[via Slack #dune-${agent.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}] ${text}`
     const response = await agentManager.sendMessage(
       agent.id,
-      [{ authorName, content: text }],
-      { source: 'slack' as any },
+      [{ authorName, content: slackContent }],
+      { source: 'slack' },
     )
     await postAgentReplyToSlack(response, slackChannelId, threadTs)
   } catch (err) {
