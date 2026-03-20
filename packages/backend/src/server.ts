@@ -92,7 +92,7 @@ adminApp.route('/api/admin', adminHostOperatorApi)
 // ── Port allocation ───────────────────────────────────────────────────
 
 const PORT_RANGE_START = 20000
-const portFilePath = join(__dirname, '../.port')
+const portFilePath = config.portFilePath
 
 /** Read previously allocated ports so restarts reuse the same ports. */
 function readPreviousPorts(): { agentPort: number; clientPort: number; adminPort: number } | null {
@@ -160,7 +160,7 @@ export async function startServer() {
   // Write port file (JSON format) for frontend dev server and agent-manager
   try {
     writeFileSync(
-      join(__dirname, '../.port'),
+      portFilePath,
       JSON.stringify({ agentPort, clientPort: resolvedClientPort, adminPort: resolvedAdminPort }),
     )
   } catch {}

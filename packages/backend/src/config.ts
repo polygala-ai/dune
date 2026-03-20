@@ -16,11 +16,14 @@ const adminPort = parseInt(process.env.ADMIN_PORT || '0', 10)
 const dataRoot = resolveFromRepoRoot(process.env.DATA_DIR || './data')
 const boxliteDataPath = join(dataRoot, 'boxlite')
 
+const portFilePath = join(backendPackageRoot, '.port')
+
 export const config = {
   repoRoot,
   port,
   clientPort,
   adminPort,
+  portFilePath,
   dataRoot,
   agentsRoot: join(dataRoot, 'agents'),
   databasePath: join(dataRoot, 'db', 'dune.db'),
