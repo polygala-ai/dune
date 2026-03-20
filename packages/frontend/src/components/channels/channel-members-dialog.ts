@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit'
+import { LitElement, html, css, nothing } from 'lit'
 import { customElement, property, query, state as litState } from 'lit/decorators.js'
 import type { Agent } from '@dune/shared'
 import * as api from '../../services/rpc.js'
@@ -63,6 +63,21 @@ export class ChannelMembersDialog extends LitElement {
 
     .agent-row:hover {
       background: var(--bg-hover);
+    }
+
+    .agent-row.disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .agent-row.disabled:hover {
+      background: transparent;
+    }
+
+    .limit-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 4px 10px 8px;
     }
 
     .agent-dot {
@@ -198,18 +213,21 @@ export class ChannelMembersDialog extends LitElement {
           : this.agents.length === 0
             ? html`<div class="empty">No agents available yet.</div>`
             : html`
+              ${this.subscribedIds.length >= 2 ? html`<div class="limit-note">Max 2 members per channel</div>` : nothing}
               <div class="agent-list">
                 ${this.agents.map(a => {
                   const subscribed = this.subscribedIds.includes(a.id)
+                  const atLimit = !subscribed && this.subscribedIds.length >= 2
                   return html`
-                    <div class="agent-row" @click=${() => this.toggleAgent(a.id)}>
+                    <div class="agent-row ${atLimit ? 'disabled' : ''}" @click=${() => !atLimit && this.toggleAgent(a.id)}>
                       <span class="agent-dot" style="background: ${a.avatarColor}"></span>
                       <span class="agent-name">${a.name}</span>
                       <button
                         class="toggle ${subscribed ? 'active' : ''}"
                         type="button"
+                        ?disabled=${atLimit}
                         aria-label=${subscribed ? `Remove ${a.name}` : `Add ${a.name}`}
-                        @click=${(e: Event) => { e.stopPropagation(); this.toggleAgent(a.id) }}
+                        @click=${(e: Event) => { e.stopPropagation(); if (!atLimit) this.toggleAgent(a.id) }}
                       ></button>
                     </div>
                   `

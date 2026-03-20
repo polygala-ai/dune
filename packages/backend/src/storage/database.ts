@@ -52,6 +52,7 @@ function initSchema(db: Database.Database) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL DEFAULT '',
+      creator_id TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -570,6 +571,12 @@ function initSchema(db: Database.Database) {
 
   try {
     db.exec(`ALTER TABLE agents ADD COLUMN slack_channel_id TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE channels ADD COLUMN creator_id TEXT`)
   } catch {
     // Column already exists — ignore
   }
