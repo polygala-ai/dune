@@ -38,6 +38,7 @@ export class AppShell extends LitElement {
   @queryEl('channel-details-panel') detailsPanel!: ChannelDetailsPanel
   @litState() private sidebarWidthPx = DEFAULT_SIDEBAR_WIDTH_PX
   @litState() private sidebarResizeActive = false
+  @litState() private lightboxSrc = ''
 
   private subscriberCount = 0
   private detailsChannelId: string | null = null
@@ -663,6 +664,26 @@ export class AppShell extends LitElement {
       }
     }
 
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      cursor: zoom-out;
+    }
+
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
   `
 
   connectedCallback() {
@@ -675,6 +696,9 @@ export class AppShell extends LitElement {
     uiPreferences.addEventListener('change', this.uiPreferenceChangeHandler)
     desktopShell.addEventListener('change', this.desktopShellChangeHandler)
     window.addEventListener('resize', this.windowResizeHandler)
+    this.addEventListener('open-lightbox', ((e: CustomEvent<{ src: string }>) => {
+      this.lightboxSrc = e.detail.src
+    }) as EventListener)
     this.initApp()
   }
 
@@ -1928,6 +1952,12 @@ export class AppShell extends LitElement {
         .agents=${state.agents}
         @members-changed=${this.handleMembersChanged}
       ></channel-members-dialog>
+
+      ${this.lightboxSrc ? html`
+        <div class="lightbox" @click=${() => { this.lightboxSrc = '' }}>
+          <img src=${this.lightboxSrc} alt="Full size" @click=${(e: Event) => e.stopPropagation()} />
+        </div>
+      ` : ''}
     `
   }
 }
