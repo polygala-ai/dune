@@ -76,7 +76,7 @@ export function createAgent(data: CreateAgent): Agent {
     hostOperatorApprovalMode: DEFAULT_HOST_OPERATOR_APPROVAL_MODE,
     hostOperatorApps: [],
     hostOperatorPaths: [],
-    keepAlive: true,
+    keepAlive: false,
     status: 'stopped',
     avatarColor: data.avatarColor || randomColor(),
     slackChannelId: null,

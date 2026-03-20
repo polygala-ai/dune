@@ -595,9 +595,12 @@ function initSchema(db: Database.Database) {
   }
 
   try {
-    db.exec(`ALTER TABLE agents ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 1`)
+    db.exec(`ALTER TABLE agents ADD COLUMN keep_alive INTEGER NOT NULL DEFAULT 0`)
   } catch {
     // Column already exists — ignore
   }
+
+  // Ensure all existing agents default to keep_alive off
+  db.exec(`UPDATE agents SET keep_alive = 0 WHERE keep_alive = 1`)
 
 }
