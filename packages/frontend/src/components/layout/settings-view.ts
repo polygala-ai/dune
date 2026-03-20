@@ -983,7 +983,7 @@ export class SettingsView extends LitElement {
       },
       oauth_config: {
         scopes: {
-          bot: ['channels:history', 'channels:manage', 'channels:read', 'chat:write', 'chat:write.customize', 'users:read', 'app_mentions:read'],
+          bot: ['channels:history', 'channels:manage', 'channels:read', 'chat:write', 'chat:write.customize', 'files:write', 'users:read', 'app_mentions:read'],
         },
       },
       settings: {

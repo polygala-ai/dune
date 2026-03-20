@@ -626,7 +626,20 @@ export async function sendImageToSlack(
   channelId: string,
 ): Promise<void> {
   if (!webClient) throw new Error('Slack is not connected')
-  await uploadImageToSlack(imageUrl, alt, channelId)
+
+  if (!imageUrl.startsWith('/media/')) {
+    throw new Error(`Only local /media/ URLs are supported, got: ${imageUrl}`)
+  }
+
+  const filename = basename(imageUrl)
+  const filePath = join(MEDIA_DIR, filename)
+  const fileData = readFileSync(filePath)
+  await webClient.filesUploadV2({
+    channel_id: channelId,
+    file: fileData,
+    filename,
+    title: alt,
+  })
 }
 
 // ── Sync / Unsync ──────────────────────────────────────────────────────

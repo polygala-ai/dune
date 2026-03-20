@@ -8,6 +8,7 @@ import * as broadcast from './broadcast.js'
 import { openTerminal } from './terminal.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
+const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024 // 16 MB — enough for base64-encoded 10 MB images
 
 function setupHeartbeat(wss: WebSocketServer) {
   const heartbeat = setInterval(() => {
@@ -31,7 +32,7 @@ function markAlive(ws: WebSocket) {
 // ── Client Gateway (/ws/client) — runs on its own port ────────────────
 
 export function setupClientGateway(server: Server) {
-  const wss = new WebSocketServer({ server })
+  const wss = new WebSocketServer({ server, maxPayload: MAX_PAYLOAD_BYTES })
   const clientRpc = createRpcDispatcher(clientHandlers)
   setupHeartbeat(wss)
 
@@ -73,7 +74,7 @@ export function setupClientGateway(server: Server) {
 // ── Agent Gateway (/ws/agent + terminal) — runs on its own port ───────
 
 export function setupAgentGateway(server: Server) {
-  const wss = new WebSocketServer({ server })
+  const wss = new WebSocketServer({ server, maxPayload: MAX_PAYLOAD_BYTES })
   const agentRpc = createRpcDispatcher(agentHandlers)
   setupHeartbeat(wss)
 
