@@ -54,6 +54,7 @@ package: build resolve-deps ## Build installable app for the current platform
 	@$(PNPM) --dir packages/electron dist
 
 package-mac: build resolve-deps ## Build .dmg for macOS (current arch)
+	@hdiutil detach /Volumes/Dune -force 2>/dev/null || true
 	@$(PNPM) --dir packages/electron dist:mac -- --$(shell uname -m | sed 's/x86_64/x64/')
 
 package-linux: build resolve-deps ## Build .AppImage/.deb for Linux

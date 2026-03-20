@@ -33,7 +33,7 @@ extraResources:
     filter:
       - "**/*"
 
-  - from: ../backend/src/agent-mcp
+  - from: ../backend/src/agents/mcp
     to: backend/agent-mcp
     filter:
       - "**/*.py"
@@ -53,14 +53,8 @@ npmRebuild: true
 mac:
   category: public.app-category.developer-tools
   target:
-    - target: dmg
-      arch:
-        - arm64
-        - x64
-    - target: zip
-      arch:
-        - arm64
-        - x64
+    - dmg
+    - zip
   icon: assets/icon.icns
   darkModeSupport: true
   hardenedRuntime: true
@@ -69,6 +63,7 @@ mac:
 dmg:
   sign: false
   title: Dune
+  backgroundColor: '#ffffff'
 
 linux:
   target:
