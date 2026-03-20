@@ -13,7 +13,7 @@ import { resolve, dirname, join } from 'node:path'
 import { readFileSync, mkdirSync, readdirSync, statSync, existsSync, rmSync, cpSync, writeFileSync, renameSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { newEventId } from '../utils/ids.js'
 import * as todoStore from '../storage/todo-store.js'
 import { isValidDueAtMs } from '../todos/due-at.js'
@@ -373,6 +373,7 @@ interface RunningAgent {
   daemonAssetHash?: string
   cliInstalled: boolean
   hasSession: boolean
+  sessionId: string | null
   startedAt: number
   thinkingSince: number  // timestamp when agent entered thinking state, 0 if not thinking
   currentExecution: { kill: () => Promise<void> } | null
@@ -1795,6 +1796,7 @@ export async function startAgent(agentId: string): Promise<void> {
       daemonAssetHash: daemonAssets.assetHash,
       cliInstalled: true,
       hasSession: runtimeState.hasSession,
+      sessionId: runtimeState.sessionId,
       startedAt,
       thinkingSince: 0,
       currentExecution: null,
@@ -2449,11 +2451,15 @@ type BuildClaudeCliCommandInput = {
   modelId: string | null
   agentHttpUrl: string
   wsUrl: string
+  permissionMode?: 'plan'
+  sessionId?: string
+  resumeSessionId?: string
 }
 
 function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string {
   const oauthToken = input.oauthToken.trim()
   const modelId = input.modelId?.trim() || ''
+  const isPlanMode = input.permissionMode === 'plan'
   return [
     `cat ${input.promptFile} |`,
     `runuser -u abc -- env`,
@@ -2471,12 +2477,15 @@ function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string {
     `claude --print`,
     ...(modelId ? [`--model ${modelId}`] : []),
     `--dangerously-skip-permissions`,
+    ...(isPlanMode ? ['--permission-mode plan'] : ['--permission-mode auto']),
     `--output-format stream-json`,
     `--verbose`,
     `--mcp-config ${MCP_CONFIG_PATH}`,
     `--append-system-prompt-file ${input.systemPromptFile}`,
     `--max-turns 30`,
-    ...(input.hasSession ? ['--continue'] : []),
+    ...(input.sessionId ? [`--session-id ${input.sessionId}`] : []),
+    ...(input.resumeSessionId ? [`--resume ${input.resumeSessionId}`] : []),
+    ...(!input.sessionId && !input.resumeSessionId && input.hasSession ? ['--continue'] : []),
   ].join(' ')
 }
 
@@ -2584,9 +2593,14 @@ export async function sendMessage(agentId: string, messages: Array<{ authorName:
   }
 }
 
-function finalizeInterruptedRun(agentId: string, running: RunningAgent, metadata: Record<string, unknown> = {}): string {
+function finalizeInterruptedRun(agentId: string, running: RunningAgent, metadata: Record<string, unknown> = {}, sessionId?: string): string {
   running.hasSession = true
-  agentRuntimeStore.setAgentRuntimeHasSession(agentId, true)
+  if (sessionId) {
+    running.sessionId = sessionId
+    agentRuntimeStore.setAgentRuntimeSessionId(agentId, sessionId)
+  } else {
+    agentRuntimeStore.setAgentRuntimeHasSession(agentId, true)
+  }
   running.thinkingSince = 0
   emitRuntimeLog(agentId, 'lifecycle', 'claude_cli_interrupted', metadata)
   emitAgentLogEntries(agentId, [{
@@ -2703,6 +2717,10 @@ async function _sendMessageInner(
     // 4. Use separate MCP config — CLI overwrites $HOME/.claude.json with its own state
     const oauthToken = buildClaudeCliAuthEnvValues().CLAUDE_CODE_OAUTH_TOKEN || ''
     const modelId = resolveClaudeModelId(currentAgent)
+    // For plan-first agents on a fresh turn (no existing session), run in plan mode first
+    const usePlanMode = currentAgent.workMode === 'plan-first' && !running.hasSession
+    // Generate or reuse a session ID for explicit session management
+    const turnSessionId = running.sessionId || randomUUID()
     const cliCmd = buildClaudeCliCommand({
       agentId,
       promptFile,
@@ -2712,6 +2730,8 @@ async function _sendMessageInner(
       modelId,
       agentHttpUrl: running.agentHttpUrl,
       wsUrl: running.backendUrl,
+      ...(usePlanMode ? { permissionMode: 'plan' as const } : {}),
+      ...(running.sessionId ? { resumeSessionId: running.sessionId } : { sessionId: turnSessionId }),
     })
 
     console.log(`[${agentId}] Starting claude -p (prompt length: ${fullPrompt.length})...`)
@@ -2770,7 +2790,7 @@ async function _sendMessageInner(
         exitCode: result.exitCode,
         stdoutBytes: result.stdout.length,
         stderrBytes: result.stderr.length,
-      })
+      }, turnSessionId)
     }
 
     console.log(`[${agentId}] streamingExec done: exit=${result.exitCode} stdout=${result.stdout.length}b stderr=${result.stderr.length}b firstOutput=${firstOutputSent} response=${fullResponse.length}b`)
@@ -2791,7 +2811,71 @@ async function _sendMessageInner(
     }
 
     running.hasSession = true
-    agentRuntimeStore.setAgentRuntimeHasSession(agentId, true)
+    running.sessionId = turnSessionId
+    agentRuntimeStore.setAgentRuntimeSessionId(agentId, turnSessionId)
+
+    // Plan-first phase 2: if we just ran plan mode, now execute the plan
+    if (usePlanMode && fullResponse) {
+      console.log(`[${agentId}] Plan phase complete, starting execution phase...`)
+      emitAgentLogEntries(agentId, [{
+        id: newEventId(),
+        agentId,
+        timestamp: Date.now(),
+        type: 'system' as const,
+        data: { message: 'Plan complete. Executing...' },
+      }])
+
+      // Write "execute" prompt and run with full permissions
+      const executePrompt = 'The plan looks good. Now execute it.'
+      await retriedExec(running.box, 'python3', [
+        '-c', 'import sys; open(sys.argv[1],"w").write(sys.argv[2])',
+        promptFile, executePrompt,
+      ], { DISPLAY: ':1' })
+
+      const execCmd = buildClaudeCliCommand({
+        agentId,
+        promptFile,
+        systemPromptFile,
+        hasSession: true,
+        oauthToken,
+        modelId,
+        agentHttpUrl: running.agentHttpUrl,
+        wsUrl: running.backendUrl,
+        resumeSessionId: turnSessionId,
+      })
+
+      console.log(`[${agentId}] Starting execution phase...`)
+      let execResponse = ''
+      const execResult = await streamingExec(
+        running.box, 'bash', ['-c', execCmd], { DISPLAY: ':1' },
+        (line) => {
+          try {
+            const parsed = JSON.parse(line)
+            const entries = parseStreamJsonLine(parsed, agentId)
+            if (entries.length > 0) emitAgentLogEntries(agentId, entries)
+            if (parsed.type === 'result') execResponse = parsed.result || ''
+          } catch {
+            emitRuntimeLog(agentId, 'stdout', line, { source: 'claude-stream-exec', parse: 'non-json' })
+          }
+        },
+        300_000,
+        (execution) => {
+          running.currentExecution = execution
+          if (execution && running.interruptRequested) {
+            triggerInterruptSignals(agentId, running)
+          }
+        },
+        running.interruptAbort?.promise,
+      )
+
+      if (execResult.stderr) {
+        console.error(`Agent ${agentId} exec phase stderr:`, execResult.stderr)
+      }
+
+      console.log(`[${agentId}] Execution phase done: exit=${execResult.exitCode} response=${execResponse.length}b`)
+      fullResponse = execResponse || fullResponse
+    }
+
     running.thinkingSince = 0
     setAgentStatus(agentId, 'idle', { source: 'send-message' })
 
@@ -2830,7 +2914,7 @@ async function _sendMessageInner(
     if (running.interruptRequested) {
       return finalizeInterruptedRun(agentId, running, {
         error: err?.message?.slice(0, 200) || 'unknown interrupt error',
-      })
+      }, turnSessionId)
     }
     console.error(`[${agentId}] sendMessage error:`, err.message?.slice(0, 200))
     running.thinkingSince = 0
