@@ -1,5 +1,5 @@
 import { LitElement, html, css, unsafeCSS } from 'lit'
-import { customElement, property } from 'lit/decorators.js'
+import { customElement, property, state } from 'lit/decorators.js'
 import { unsafeHTML } from 'lit/directives/unsafe-html.js'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -16,6 +16,7 @@ export class MessageItem extends LitElement {
   @property({ type: Object }) message!: Message
   @property() agentName = ''
   @property() agentColor = '#64748b'
+  @state() private lightboxSrc = ''
 
   static styles = css`
     :host {
@@ -138,15 +139,37 @@ export class MessageItem extends LitElement {
     }
 
     .content img {
-      max-width: 100%;
-      height: auto;
+      max-width: 240px;
+      max-height: 180px;
+      object-fit: cover;
       border-radius: var(--radius);
       margin: 8px 0;
       cursor: pointer;
+      transition: opacity var(--transition-fast);
     }
 
     .content img:hover {
-      opacity: 0.92;
+      opacity: 0.85;
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      cursor: zoom-out;
+    }
+
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
 
     .content pre .copy-btn {
@@ -257,6 +280,12 @@ export class MessageItem extends LitElement {
       highlightCodeBlocks(this.shadowRoot)
       renderMathBlocks(this.shadowRoot)
       renderMermaidBlocks(this.shadowRoot)
+      this.shadowRoot.querySelectorAll<HTMLImageElement>('.content img').forEach((img) => {
+        if (!img.dataset.lightbox) {
+          img.dataset.lightbox = '1'
+          img.addEventListener('click', () => { this.lightboxSrc = img.src })
+        }
+      })
     }
   }
 
@@ -319,6 +348,11 @@ export class MessageItem extends LitElement {
         </div>
         <div class="content">${this.renderContent()}</div>
       </div>
+      ${this.lightboxSrc ? html`
+        <div class="lightbox" @click=${() => { this.lightboxSrc = '' }}>
+          <img src=${this.lightboxSrc} alt="Full size" @click=${(e: Event) => e.stopPropagation()} />
+        </div>
+      ` : ''}
     `
   }
 }
