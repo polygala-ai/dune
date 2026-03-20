@@ -1,7 +1,8 @@
 import { LitElement, html, css, nothing } from 'lit'
 import { customElement, property, state } from 'lit/decorators.js'
-import type { ClaudeSettings, ClaudeSettingsUpdate, SelectedModelProvider, SlackSettings, SlackChannelLink, SlackChannel, Channel } from '@dune/shared'
-import { getClaudeSettings, updateClaudeSettings, getSlackSettings, updateSlackSettings, disconnectSlack, listSlackRemoteChannels, listSlackLinks, createSlackLink, deleteSlackLink, listChannels } from '../../services/rpc.js'
+import type { ClaudeSettings, ClaudeSettingsUpdate, SelectedModelProvider, SlackSettings, Agent } from '@dune/shared'
+import { getClaudeSettings, updateClaudeSettings, getSlackSettings, updateSlackSettings, disconnectSlack, syncAgentToSlack, unsyncAgentFromSlack } from '../../services/rpc.js'
+import { listAgents } from '../../services/rpc.js'
 
 import type { ThemeMode } from '../../state/ui-preferences.js'
 
@@ -37,11 +38,8 @@ export class SettingsView extends LitElement {
   @state() private slackLoading = false
   @state() private slackBotTokenDraft = ''
   @state() private slackAppTokenDraft = ''
-  @state() private slackLinks: SlackChannelLink[] = []
-  @state() private slackRemoteChannels: SlackChannel[] = []
-  @state() private duneChannels: Channel[] = []
-  @state() private slackLinkDuneChannelId = ''
-  @state() private slackLinkSlackChannelId = ''
+  @state() private allAgents: Agent[] = []
+  @state() private slackSyncingAgentId = ''
   @state() private slackStatusMessage = ''
   @state() private slackStatusTone: 'idle' | 'success' | 'error' = 'idle'
 
@@ -936,22 +934,12 @@ export class SettingsView extends LitElement {
   private async loadSlackSettings() {
     this.slackLoading = true
     try {
-      const [settings, links, duneChannels] = await Promise.all([
+      const [settings, agents] = await Promise.all([
         getSlackSettings(),
-        listSlackLinks(),
-        listChannels(),
+        listAgents(),
       ])
       this.slackSettings = settings
-      this.slackLinks = links
-      this.duneChannels = duneChannels
-
-      if (settings.isConnected) {
-        try {
-          this.slackRemoteChannels = await listSlackRemoteChannels()
-        } catch {
-          this.slackRemoteChannels = []
-        }
-      }
+      this.allAgents = agents
     } catch (err) {
       this.slackStatusTone = 'error'
       this.slackStatusMessage = err instanceof Error ? err.message : 'Failed to load Slack settings'
@@ -987,7 +975,7 @@ export class SettingsView extends LitElement {
       },
       oauth_config: {
         scopes: {
-          bot: ['channels:history', 'channels:read', 'chat:write', 'chat:write.customize', 'users:read', 'app_mentions:read', 'im:history'],
+          bot: ['channels:history', 'channels:manage', 'channels:read', 'chat:write', 'chat:write.customize', 'users:read', 'app_mentions:read'],
         },
       },
       settings: {
@@ -1003,9 +991,7 @@ export class SettingsView extends LitElement {
   private async handleDisconnectSlack() {
     try {
       await disconnectSlack()
-      this.slackSettings = { isConnected: false, teamId: null, teamName: null, botUserId: null, installedAt: null }
-      this.slackLinks = []
-      this.slackRemoteChannels = []
+      this.slackSettings = { isConnected: false, teamId: null, teamName: null, botUserId: null, installedAt: null, hasBotToken: false, hasAppToken: false }
       this.slackStatusTone = 'success'
       this.slackStatusMessage = 'Slack disconnected.'
     } catch (err) {
@@ -1014,31 +1000,29 @@ export class SettingsView extends LitElement {
     }
   }
 
-  private async handleCreateLink() {
-    if (!this.slackLinkDuneChannelId || !this.slackLinkSlackChannelId) return
-    const slackCh = this.slackRemoteChannels.find(c => c.id === this.slackLinkSlackChannelId)
+  private async handleSyncAgent() {
+    if (!this.slackSyncingAgentId) return
     try {
-      await createSlackLink({
-        duneChannelId: this.slackLinkDuneChannelId,
-        slackChannelId: this.slackLinkSlackChannelId,
-        slackChannelName: slackCh?.name || this.slackLinkSlackChannelId,
-      })
-      this.slackLinkDuneChannelId = ''
-      this.slackLinkSlackChannelId = ''
-      this.slackLinks = await listSlackLinks()
+      const result = await syncAgentToSlack(this.slackSyncingAgentId)
+      this.slackSyncingAgentId = ''
+      this.slackStatusTone = 'success'
+      this.slackStatusMessage = `Synced to #${result.slackChannelName}`
+      this.allAgents = await listAgents()
     } catch (err) {
       this.slackStatusTone = 'error'
-      this.slackStatusMessage = err instanceof Error ? err.message : 'Failed to create link'
+      this.slackStatusMessage = err instanceof Error ? err.message : 'Failed to sync agent'
     }
   }
 
-  private async handleDeleteLink(id: string) {
+  private async handleUnsyncAgent(agentId: string) {
     try {
-      await deleteSlackLink(id)
-      this.slackLinks = await listSlackLinks()
+      await unsyncAgentFromSlack(agentId)
+      this.slackStatusTone = 'success'
+      this.slackStatusMessage = 'Agent unsynced from Slack.'
+      this.allAgents = await listAgents()
     } catch (err) {
       this.slackStatusTone = 'error'
-      this.slackStatusMessage = err instanceof Error ? err.message : 'Failed to delete link'
+      this.slackStatusMessage = err instanceof Error ? err.message : 'Failed to unsync agent'
     }
   }
 
@@ -1058,7 +1042,7 @@ export class SettingsView extends LitElement {
               <div class="field-title">Connection</div>
               <div class="field-status ${connected ? 'success' : ''}">${connected ? `Connected to ${this.slackSettings?.teamName || 'workspace'}` : 'Not connected'}</div>
             </div>
-            <div class="field-help">Connect to a Slack workspace to bridge messages between Dune channels and Slack channels.</div>
+            <div class="field-help">Connect to Slack so agents can interact with users directly in dedicated Slack channels.</div>
 
             ${!connected ? html`
               <div class="field-help">
@@ -1129,41 +1113,34 @@ export class SettingsView extends LitElement {
 
           ${connected ? html`
             <div class="field">
-              <div class="field-title">Channel Links</div>
-              <div class="field-help">Link Dune channels to Slack channels for bidirectional messaging.</div>
+              <div class="field-title">Agent Sync</div>
+              <div class="field-help">Sync agents to Slack. Each synced agent gets a dedicated channel where users can interact with it.</div>
 
-              ${this.slackLinks.length > 0 ? html`
-                ${this.slackLinks.map(link => html`
-                  <div class="row">
-                    <div class="row-copy">
-                      <div class="row-label">${this.duneChannels.find(c => c.id === link.duneChannelId)?.name || link.duneChannelId} ↔ #${link.slackChannelName}</div>
-                      <p class="row-sub">${link.direction}</p>
-                    </div>
-                    <button class="btn" type="button" @click=${() => void this.handleDeleteLink(link.id)}>Unlink</button>
+              ${this.allAgents.filter(a => a.slackChannelId).map(agent => html`
+                <div class="row">
+                  <div class="row-copy">
+                    <div class="row-label">${agent.name}</div>
+                    <p class="row-sub">Synced to Slack</p>
                   </div>
-                `)}
-              ` : nothing}
+                  <button class="btn" type="button" @click=${() => void this.handleUnsyncAgent(agent.id)}>Unsync</button>
+                </div>
+              `)}
 
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <select class="text-input" style="flex:1;min-width:120px;"
-                  .value=${this.slackLinkDuneChannelId}
-                  @change=${(e: Event) => { this.slackLinkDuneChannelId = (e.target as HTMLSelectElement).value }}
-                >
-                  <option value="">Dune channel...</option>
-                  ${this.duneChannels.map(ch => html`<option value=${ch.id}>${ch.name}</option>`)}
-                </select>
-                <select class="text-input" style="flex:1;min-width:120px;"
-                  .value=${this.slackLinkSlackChannelId}
-                  @change=${(e: Event) => { this.slackLinkSlackChannelId = (e.target as HTMLSelectElement).value }}
-                >
-                  <option value="">Slack channel...</option>
-                  ${this.slackRemoteChannels.map(ch => html`<option value=${ch.id}>#${ch.name}</option>`)}
-                </select>
-                <button class="btn primary" type="button"
-                  .disabled=${!this.slackLinkDuneChannelId || !this.slackLinkSlackChannelId}
-                  @click=${() => void this.handleCreateLink()}
-                >Link</button>
-              </div>
+              ${this.allAgents.filter(a => !a.slackChannelId).length > 0 ? html`
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <select class="text-input" style="flex:1;min-width:120px;"
+                    .value=${this.slackSyncingAgentId}
+                    @change=${(e: Event) => { this.slackSyncingAgentId = (e.target as HTMLSelectElement).value }}
+                  >
+                    <option value="">Select agent...</option>
+                    ${this.allAgents.filter(a => !a.slackChannelId).map(a => html`<option value=${a.id}>${a.name}</option>`)}
+                  </select>
+                  <button class="btn primary" type="button"
+                    .disabled=${!this.slackSyncingAgentId}
+                    @click=${() => void this.handleSyncAgent()}
+                  >Sync to Slack</button>
+                </div>
+              ` : nothing}
             </div>
           ` : nothing}
 

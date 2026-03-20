@@ -37,6 +37,7 @@ export const AgentSchema = Type.Object({
   hostOperatorPaths: Type.Array(Type.String()),
   status: AgentStatus,
   avatarColor: Type.String(),
+  slackChannelId: Type.Union([Type.String(), Type.Null()]),
   createdAt: Type.Number(),
 })
 

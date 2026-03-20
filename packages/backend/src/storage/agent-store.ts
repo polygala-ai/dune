@@ -24,6 +24,7 @@ const AGENT_SELECT_COLUMNS = [
   'host_operator_paths_json as hostOperatorPathsJson',
   'status',
   'avatar_color as avatarColor',
+  'slack_channel_id as slackChannelId',
   'created_at as createdAt',
 ].join(', ')
 
@@ -73,6 +74,7 @@ export function createAgent(data: CreateAgent): Agent {
     hostOperatorPaths: [],
     status: 'stopped',
     avatarColor: data.avatarColor || randomColor(),
+    slackChannelId: null,
     createdAt: Date.now(),
   }
   db.prepare(
@@ -107,7 +109,7 @@ export function getAgent(id: string): Agent | undefined {
 
 export function updateAgent(
   id: string,
-  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'status' | 'avatarColor'>>,
+  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'status' | 'avatarColor' | 'slackChannelId'>>,
 ): Agent | undefined {
   const agent = getAgent(id)
   if (!agent) return undefined
@@ -126,6 +128,7 @@ export function updateAgent(
   if (data.hostOperatorPaths !== undefined) { updates.push('host_operator_paths_json = ?'); values.push(JSON.stringify(data.hostOperatorPaths)) }
   if (data.status !== undefined) { updates.push('status = ?'); values.push(data.status) }
   if (data.avatarColor !== undefined) { updates.push('avatar_color = ?'); values.push(data.avatarColor) }
+  if (data.slackChannelId !== undefined) { updates.push('slack_channel_id = ?'); values.push(data.slackChannelId) }
   if (updates.length > 0) {
     values.push(id)
     getDb().prepare(`UPDATE agents SET ${updates.join(', ')} WHERE id = ?`).run(...values)
@@ -216,6 +219,13 @@ export function getAgentByName(name: string): Agent | undefined {
   return getDb().prepare(
     `SELECT ${AGENT_SELECT_COLUMNS} FROM agents WHERE name = ?`
   ).get(name) as Agent | undefined
+}
+
+export function getAgentBySlackChannel(slackChannelId: string): Agent | undefined {
+  const row = getDb().prepare(
+    `SELECT ${AGENT_SELECT_COLUMNS} FROM agents WHERE slack_channel_id = ?`
+  ).get(slackChannelId) as AgentRow | undefined
+  return row ? normalizeAgent(row) : undefined
 }
 
 function randomColor(): string {

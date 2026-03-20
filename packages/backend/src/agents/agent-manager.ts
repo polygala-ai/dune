@@ -104,7 +104,6 @@ const COORDINATION_AGENT_SKILLS = [
   'dune-team-manager',
   'dune-todo',
   'dune-host-operator',
-  'dune-slack',
 ] as const
 const FOLLOWER_AGENT_SKILLS = [
   ...COORDINATION_AGENT_SKILLS,

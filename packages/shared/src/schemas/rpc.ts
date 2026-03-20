@@ -50,7 +50,7 @@ export const RPC_GONE = 410
 
 import type { Channel, CreateChannel } from './channel.js'
 import type { Message } from './message.js'
-import type { SlackSettings, SlackChannelLink, SlackChannel } from './slack-settings.js'
+import type { SlackSettings } from './slack-settings.js'
 import type {
   Agent,
   CreateAgent,
@@ -222,12 +222,8 @@ export interface ClientMethods {
   'slack.getSettings':          { params: {}; result: SlackSettings }
   'slack.updateSettings':       { params: { botToken?: string; appToken?: string }; result: SlackSettings }
   'slack.disconnect':           { params: {}; result: { ok: boolean } }
-  'slack.listRemoteChannels':   { params: {}; result: SlackChannel[] }
-  'slack.listLinks':            { params: {}; result: SlackChannelLink[] }
-  'slack.createLink':           { params: { duneChannelId: string; slackChannelId: string; slackChannelName: string; direction?: string }; result: SlackChannelLink }
-  'slack.deleteLink':           { params: { id: string }; result: { ok: boolean } }
-  'slack.listChannels':         { params: {}; result: SlackChannelLink[] }
-  'slack.send':                 { params: { slackChannelId: string; content: string; agentName?: string }; result: { ok: boolean } }
+  'slack.syncAgent':            { params: { agentId: string }; result: { slackChannelId: string; slackChannelName: string } }
+  'slack.unsyncAgent':          { params: { agentId: string }; result: { ok: boolean } }
 
   // Terminal (special — opens a binary stream, not JSON RPC)
   'terminal.open':              { params: { boxId: string }; result: { sessionId: string } }
@@ -267,9 +263,6 @@ export interface AgentMethods {
   'agents.submitHostOperator':  { params: { id: string } & HostOperatorCreateRequest; result: HostOperatorRequest }
   'agents.getHostOperator':     { params: { requestId: string }; result: HostOperatorRequest }
 
-  // Slack
-  'slack.listChannels':         { params: {}; result: SlackChannelLink[] }
-  'slack.send':                 { params: { slackChannelId: string; content: string; agentName?: string }; result: { ok: boolean } }
 }
 
 // ── Helper: extract method names ──────────────────────────────────────
