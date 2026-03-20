@@ -122,10 +122,16 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
     return
   }
 
-  // Check if agent is running
+  // Auto-start agent if not running
   if (!agentManager.isAgentRunning(agent.id)) {
-    await postEphemeral(slackChannelId, slackUserId, `Agent *${agent.name}* is not running. Start it in Dune first.`)
-    return
+    try {
+      console.log(`[slack] Auto-starting agent ${agent.name} for inbound Slack message`)
+      await agentManager.startAgent(agent.id)
+    } catch (err) {
+      console.error(`[slack] Failed to auto-start agent ${agent.name}:`, err)
+      await postEphemeral(slackChannelId, slackUserId, `Failed to start agent *${agent.name}*. Check Dune for details.`)
+      return
+    }
   }
 
   // Resolve Slack user display name
@@ -162,7 +168,7 @@ async function resolveSlackUserName(slackUserId: string): Promise<string> {
 
 // ── Outbound: Agent → Slack ────────────────────────────────────────────
 
-async function postAgentReplyToSlack(text: string, channelId: string, threadTs: string): Promise<void> {
+async function postAgentReplyToSlack(text: string, channelId: string, threadTs?: string): Promise<void> {
   if (!webClient || !text.trim()) return
 
   const blocks = markdownToBlocks(text)
@@ -172,9 +178,15 @@ async function postAgentReplyToSlack(text: string, channelId: string, threadTs: 
       channel: channelId,
       blocks,
       text, // fallback for notifications
-      thread_ts: threadTs,
+      ...(threadTs ? { thread_ts: threadTs } : {}),
     })
-  } catch (err) {
+  } catch (err: any) {
+    // If threading fails, retry as a top-level message
+    if (threadTs && err?.data?.error === 'cannot_reply_to_message') {
+      console.log('[slack] Threading not supported for this message, posting as top-level')
+      await postAgentReplyToSlack(text, channelId)
+      return
+    }
     console.error('[slack] Failed to post agent reply:', err)
   }
 }
@@ -208,6 +220,9 @@ export async function syncAgentToSlack(agentId: string): Promise<{ slackChannelI
     slackChannelId = result.channel?.id as string
     finalName = result.channel?.name as string || channelName
   } catch (err: any) {
+    if (err?.data?.error === 'missing_scope') {
+      throw new Error('Slack app is missing the "channels:manage" scope. Re-install the app with the updated manifest from Settings → Integrations.')
+    }
     // If name is taken, try with a suffix
     if (err?.data?.error === 'name_taken') {
       const suffix = `-${Date.now().toString(36).slice(-4)}`
