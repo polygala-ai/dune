@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { channelsApi } from './api/channels.js'
@@ -109,18 +109,39 @@ adminApp.route('/api/admin', adminHostOperatorApi)
 // ── Port allocation ───────────────────────────────────────────────────
 
 const PORT_RANGE_START = 20000
+const portFilePath = join(__dirname, '../.port')
 
-async function resolvePort(configured: number): Promise<number> {
+/** Read previously allocated ports so restarts reuse the same ports. */
+function readPreviousPorts(): { agentPort: number; clientPort: number; adminPort: number } | null {
+  try {
+    const raw = readFileSync(portFilePath, 'utf-8').trim()
+    if (!raw.startsWith('{')) return null
+    const parsed = JSON.parse(raw)
+    if (parsed.agentPort > 0 && parsed.clientPort > 0 && parsed.adminPort > 0) return parsed
+  } catch {}
+  return null
+}
+
+async function resolvePort(configured: number, previous?: number): Promise<number> {
   if (configured > 0) return configured
+  if (previous && previous > 0) {
+    try {
+      await findFreePort(previous, 1)
+      return previous
+    } catch {
+      // Previous port occupied, fall back to random
+    }
+  }
   return findFreePort(PORT_RANGE_START + Math.floor(Math.random() * 30000))
 }
 
 // ── Start ─────────────────────────────────────────────────────────────
 
 export async function startServer() {
-  const agentPort = await resolvePort(config.port)
-  const resolvedClientPort = await resolvePort(config.clientPort)
-  const resolvedAdminPort = await resolvePort(config.adminPort)
+  const prev = readPreviousPorts()
+  const agentPort = await resolvePort(config.port, prev?.agentPort)
+  const resolvedClientPort = await resolvePort(config.clientPort, prev?.clientPort)
+  const resolvedAdminPort = await resolvePort(config.adminPort, prev?.adminPort)
 
   // Server A: Agent gateway (REST + /ws/agent + terminal)
   const agentServer = serve({ fetch: app.fetch, port: agentPort }, (info) => {

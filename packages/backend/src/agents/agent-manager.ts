@@ -1867,6 +1867,14 @@ export async function stopAgent(agentId: string): Promise<void> {
       }
     }
 
+    // Kill any lingering CLI process before stopping the box to avoid
+    // "Handle invalidated after stop()" errors from in-flight executions
+    if (running.currentExecution) {
+      try { await running.currentExecution.kill() } catch {}
+      running.currentExecution = null
+    }
+    agentLocks.delete(agentId)
+
     try {
       // Timeout box.stop() to prevent hanging if container is stuck
       await Promise.race([
@@ -2019,6 +2027,7 @@ const LEADER_ALLOWED_READ_ONLY_TOOL_NAMES = new Set([
   'WebFetch',
   'WebSearch',
   'KillBash',
+  'Skill',
 ])
 
 const LEADER_MUTATING_TOOL_NAMES = new Set([
