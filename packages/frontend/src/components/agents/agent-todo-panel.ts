@@ -9,7 +9,7 @@ export class AgentTodoPanel extends LitElement {
   @property({ type: String }) agentId = ''
   @litState() private todos: Todo[] = []
   @litState() private loading = true
-  @litState() private keepAlive = true
+  @litState() private keepAlive = false
   @litState() private newTitle = ''
   @litState() private newDueIn = '' // minutes from now
   @litState() private editingId: string | null = null
