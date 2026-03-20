@@ -23,5 +23,7 @@ Return exactly `[NO_RESPONSE]` only when: no recent human message, no direct @me
 - `scripts/fetch-unread-mailbox.sh` — fetch the current unread mailbox batch
 - `scripts/ack-mailbox-batch.sh` — acknowledge a fetched mailbox batch
 - `scripts/send-channel-message.sh` — send a channel message
+- `scripts/upload-image.sh <filepath> [alt-text]` — upload an image and get its markdown reference
+- `scripts/send-image-message.sh <channel> <filepath> [caption]` — upload an image and send it as a channel message
 - `scripts/fetch-context.sh` — fetch channel/agent/message history
 - `scripts/proxy-health-check.sh` — check proxy endpoints

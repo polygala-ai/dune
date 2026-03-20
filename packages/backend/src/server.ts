@@ -12,6 +12,7 @@ import { sandboxesApi } from './api/sandboxes.js'
 import { todosApi } from './api/todos.js'
 import { settingsApi } from './api/settings.js'
 import { adminHostOperatorApi } from './api/admin-host-operator.js'
+import { mediaApi } from './api/media.js'
 import { startSlackConnection, stopSlackConnection } from './slack/slack-connection.js'
 import { setupAgentGateway, setupClientGateway } from './gateway/transport.js'
 import { reloadTimers } from './todos/todo-timer.js'
@@ -28,6 +29,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const frontendDistAbsolutePath = resolve(config.frontendDistPath)
 const frontendDistRoot = relative(process.cwd(), frontendDistAbsolutePath) || '.'
 const hasFrontendBuild = existsSync(join(frontendDistAbsolutePath, 'index.html'))
+const mediaAbsolutePath = resolve(join(config.dataRoot, 'media'))
+const mediaRoot = relative(process.cwd(), mediaAbsolutePath) || '.'
 
 // ── Agent App (REST + /ws/agent + terminal) ───────────────────────────
 
@@ -65,12 +68,19 @@ app.route('/api/messages', messagesApi)
 app.route('/api/sandboxes', sandboxesApi)
 app.route('/api/todos', todosApi)
 app.route('/api/settings', settingsApi)
+app.route('/api/media', mediaApi)
+
+// Serve uploaded media files
+app.use('/media/*', serveStatic({ root: mediaRoot, rewriteRequestPath: (p) => p.replace('/media', '') }))
 
 // ── Client App (SPA + /ws/client) ─────────────────────────────────────
 
 export const clientApp = new Hono()
 clientApp.use('/*', cors())
 clientApp.get('/health', (c) => c.json({ status: 'ok' }))
+
+// Serve uploaded media files
+clientApp.use('/media/*', serveStatic({ root: mediaRoot, rewriteRequestPath: (p) => p.replace('/media', '') }))
 
 function isReservedFrontendPath(path: string): boolean {
   return path === '/api'
