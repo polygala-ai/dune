@@ -168,7 +168,7 @@ async function resolveSlackUserName(slackUserId: string): Promise<string> {
 
 // ── Outbound: Agent → Slack ────────────────────────────────────────────
 
-async function postAgentReplyToSlack(text: string, channelId: string, threadTs: string): Promise<void> {
+async function postAgentReplyToSlack(text: string, channelId: string, threadTs?: string): Promise<void> {
   if (!webClient || !text.trim()) return
 
   const blocks = markdownToBlocks(text)
@@ -178,9 +178,15 @@ async function postAgentReplyToSlack(text: string, channelId: string, threadTs: 
       channel: channelId,
       blocks,
       text, // fallback for notifications
-      thread_ts: threadTs,
+      ...(threadTs ? { thread_ts: threadTs } : {}),
     })
-  } catch (err) {
+  } catch (err: any) {
+    // If threading fails, retry as a top-level message
+    if (threadTs && err?.data?.error === 'cannot_reply_to_message') {
+      console.log('[slack] Threading not supported for this message, posting as top-level')
+      await postAgentReplyToSlack(text, channelId)
+      return
+    }
     console.error('[slack] Failed to post agent reply:', err)
   }
 }
