@@ -6,8 +6,10 @@ import { randomUUID } from 'node:crypto'
 import * as slackSettingsStore from '../storage/slack-settings-store.js'
 import * as agentStore from '../storage/agent-store.js'
 import * as channelStore from '../storage/channel-store.js'
+import * as messageStore from '../storage/message-store.js'
 import * as agentManager from '../agents/agent-manager.js'
 import { markdownToBlocks, extractImageUrls } from './block-kit.js'
+import { sendToChannel as broadcastToChannel } from '../gateway/broadcast.js'
 import { config } from '../config.js'
 import type { HostOperatorRequest } from '@dune/shared'
 import { getDb } from '../storage/database.js'
@@ -190,6 +192,16 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
   // Resolve Slack user display name
   const authorName = await resolveSlackUserName(slackUserId)
 
+  // Find agent's subscribed Dune channels for syncing the conversation
+  const subscribedChannelIds = channelStore.getAgentSubscriptions(agent.id)
+
+  // Sync the human's message to subscribed Dune channels
+  for (const duneChannelId of subscribedChannelIds) {
+    const channelContent = `**${authorName}** (via Slack): ${fullText}`
+    const msg = messageStore.createMessage(duneChannelId, 'user', channelContent)
+    broadcastToChannel(duneChannelId, { type: 'message:new', payload: msg })
+  }
+
   // Track Slack thread context so host operator approvals route to this channel
   agentSlackThread.set(agent.id, { channelId: slackChannelId, threadTs })
   try {
@@ -200,6 +212,14 @@ async function handleInboundMessage(slackChannelId: string, slackUserId: string,
       { source: 'slack' },
     )
     await postAgentReplyToSlack(response, slackChannelId, threadTs)
+
+    // Sync the agent's response to subscribed Dune channels
+    if (response.trim()) {
+      for (const duneChannelId of subscribedChannelIds) {
+        const agentMsg = messageStore.createMessage(duneChannelId, agent.id, response)
+        broadcastToChannel(duneChannelId, { type: 'message:new', payload: agentMsg })
+      }
+    }
   } catch (err) {
     console.error(`[slack] Failed to process message for agent ${agent.name}:`, err)
     await postEphemeral(slackChannelId, slackUserId, `Failed to get a response from *${agent.name}*.`)
