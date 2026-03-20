@@ -300,6 +300,17 @@ function notifyRequestUpdate(request: HostOperatorRequest): void {
     type: eventType,
     payload: request,
   })
+
+  // Post/update approval messages in Slack
+  import('../slack/slack-connection.js').then((slack) => {
+    if (request.status === 'pending') {
+      slack.postApprovalRequest(request)
+    } else if (request.decision) {
+      slack.updateApprovalMessage(request)
+    }
+  }).catch((err) => {
+    console.error('[host-operator] Failed to notify Slack:', err)
+  })
 }
 
 function waitForRequestUpdate(requestId: string): Promise<void> {

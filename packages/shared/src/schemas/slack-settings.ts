@@ -8,6 +8,7 @@ export const SlackSettingsSchema = Type.Object({
   installedAt: Type.Union([Type.Number(), Type.Null()]),
   hasBotToken: Type.Boolean(),
   hasAppToken: Type.Boolean(),
+  approvalChannelId: Type.Union([Type.String(), Type.Null()]),
 })
 
 export type SlackSettings = Static<typeof SlackSettingsSchema>

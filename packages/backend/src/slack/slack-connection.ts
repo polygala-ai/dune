@@ -8,6 +8,7 @@ import * as agentStore from '../storage/agent-store.js'
 import * as agentManager from '../agents/agent-manager.js'
 import { markdownToBlocks, extractImageUrls } from './block-kit.js'
 import { config } from '../config.js'
+import type { HostOperatorRequest } from '@dune/shared'
 
 let socketClient: SocketModeClient | null = null
 let webClient: WebClient | null = null
@@ -15,6 +16,9 @@ let botUserId: string | null = null
 
 // Cache Slack user display names to avoid repeated API calls
 const slackUserNameCache = new Map<string, string>()
+
+// Track posted approval messages: requestId → { ts, channelId }
+const approvalMessages = new Map<string, { ts: string; channelId: string }>()
 
 const MEDIA_DIR = join(config.dataRoot, 'media')
 
@@ -101,6 +105,16 @@ export async function startSlackConnection(): Promise<void> {
     console.log(`[slack] event: ${type}`)
   })
 
+  socketClient.on('interactive', async ({ body, ack }: any) => {
+    try {
+      await ack()
+    } catch (e) {
+      console.error('Slack interactive ack failed:', e)
+    }
+    if (body?.type !== 'block_actions' || !body.actions?.length) return
+    handleInteractiveAction(body)
+  })
+
   try {
     await socketClient.start()
     console.log('Slack Socket Mode connected')
@@ -127,6 +141,13 @@ export async function stopSlackConnection(): Promise<void> {
 // ── Inbound: Slack → Agent ─────────────────────────────────────────────
 
 async function handleInboundMessage(slackChannelId: string, slackUserId: string, text: string, threadTs: string, files: any[]): Promise<void> {
+  // Check if this is a text-based approval in the approval channel
+  const approvalChannelId = slackSettingsStore.getApprovalChannelId()
+  if (approvalChannelId && slackChannelId === approvalChannelId) {
+    const handled = await handleTextApproval(slackUserId, text.trim())
+    if (handled) return
+  }
+
   // Download any image attachments from Slack and append as markdown
   const imageMarkdown = await downloadSlackImages(files)
   const fullText = imageMarkdown ? `${text}\n${imageMarkdown}` : text
@@ -292,6 +313,228 @@ async function postEphemeral(channelId: string, userId: string, text: string): P
   } catch (err) {
     console.error('[slack] Failed to post ephemeral:', err)
   }
+}
+
+// ── Host Operator Approval via Slack ──────────────────────────────────
+
+// Lazy import to avoid circular dependency
+let _hostOperatorService: typeof import('../host-operator/host-operator-service.js') | null = null
+async function getHostOperatorService() {
+  if (!_hostOperatorService) {
+    _hostOperatorService = await import('../host-operator/host-operator-service.js')
+  }
+  return _hostOperatorService
+}
+
+export async function postApprovalRequest(request: HostOperatorRequest): Promise<void> {
+  if (!webClient) return
+  const channelId = slackSettingsStore.getApprovalChannelId()
+  if (!channelId) return
+
+  const agent = agentStore.getAgent(request.agentId)
+  const agentName = agent?.name ?? request.agentId
+  const target = request.target
+  const targetLine = target?.appName
+    ? `${target.appName}${target.bundleId ? ` (${target.bundleId})` : ''}`
+    : target?.path ?? 'N/A'
+
+  const blocks: any[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:bell: *Host Operator Approval Request*`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Agent:*\n${agentName}` },
+        { type: 'mrkdwn', text: `*Action:*\n${request.kind}${request.input.kind === 'act' ? ` → ${(request.input as any).action}` : ''}` },
+        { type: 'mrkdwn', text: `*Target:*\n${targetLine}` },
+        { type: 'mrkdwn', text: `*Request ID:*\n\`${request.requestId.slice(0, 8)}\`` },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Summary:*\n${request.summary}`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '✅ Approve' },
+          style: 'primary',
+          action_id: 'host_op_approve',
+          value: request.requestId,
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '❌ Reject' },
+          style: 'danger',
+          action_id: 'host_op_reject',
+          value: request.requestId,
+        },
+      ],
+    },
+  ]
+
+  try {
+    const result = await webClient.chat.postMessage({
+      channel: channelId,
+      blocks,
+      text: `Approval needed: ${agentName} wants to ${request.kind} — ${request.summary}`,
+    })
+    if (result.ts) {
+      approvalMessages.set(request.requestId, { ts: result.ts, channelId })
+    }
+  } catch (err) {
+    console.error('[slack] Failed to post approval request:', err)
+  }
+}
+
+export async function updateApprovalMessage(request: HostOperatorRequest): Promise<void> {
+  if (!webClient) return
+  const msg = approvalMessages.get(request.requestId)
+  if (!msg) return
+
+  const emoji = request.decision === 'approve' ? ':white_check_mark:' : ':x:'
+  const label = request.decision === 'approve' ? 'Approved' : 'Rejected'
+  const approver = request.approverId ?? 'unknown'
+
+  const agent = agentStore.getAgent(request.agentId)
+  const agentName = agent?.name ?? request.agentId
+  const target = request.target
+  const targetLine = target?.appName
+    ? `${target.appName}${target.bundleId ? ` (${target.bundleId})` : ''}`
+    : target?.path ?? 'N/A'
+
+  const decidedAt = request.decidedAt ? new Date(request.decidedAt).toLocaleString() : 'N/A'
+
+  const blocks: any[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `${emoji} *${label} by ${approver}*`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Agent:*\n${agentName}` },
+        { type: 'mrkdwn', text: `*Action:*\n${request.kind}` },
+        { type: 'mrkdwn', text: `*Target:*\n${targetLine}` },
+        { type: 'mrkdwn', text: `*Decided:*\n${decidedAt}` },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Summary:*\n${request.summary}`,
+      },
+    },
+  ]
+
+  try {
+    await webClient.chat.update({
+      channel: msg.channelId,
+      ts: msg.ts,
+      blocks,
+      text: `${label} by ${approver}: ${request.summary}`,
+    })
+    approvalMessages.delete(request.requestId)
+  } catch (err) {
+    console.error('[slack] Failed to update approval message:', err)
+  }
+}
+
+async function handleInteractiveAction(body: any): Promise<void> {
+  const action = body.actions[0]
+  if (action.action_id !== 'host_op_approve' && action.action_id !== 'host_op_reject') return
+
+  const requestId = action.value as string
+  const decision = action.action_id === 'host_op_approve' ? 'approve' : 'reject' as const
+  const slackUserId = body.user?.id as string
+
+  const approverName = await resolveSlackUserName(slackUserId)
+  console.log(`[slack] ${approverName} clicked ${decision} for request ${requestId}`)
+
+  try {
+    const hostOperatorService = await getHostOperatorService()
+    const decided = await hostOperatorService.decideHostOperatorRequest({
+      requestId,
+      decision,
+      approverId: approverName,
+      agentLookup: (agentId) => agentStore.getAgent(agentId),
+    })
+    if (!decided) {
+      console.error(`[slack] Request ${requestId} not found or already decided`)
+    }
+  } catch (err: any) {
+    console.error(`[slack] Failed to decide request ${requestId}:`, err)
+    // Post ephemeral error to the user who clicked
+    if (body.channel?.id && slackUserId) {
+      await postEphemeral(body.channel.id, slackUserId, `Failed to ${decision} request: ${err.message ?? 'unknown error'}`)
+    }
+  }
+}
+
+async function handleTextApproval(slackUserId: string, text: string): Promise<boolean> {
+  const normalized = text.toLowerCase().trim()
+  let decision: 'approve' | 'reject' | null = null
+
+  if (/^approve\b/i.test(normalized)) decision = 'approve'
+  else if (/^reject\b/i.test(normalized)) decision = 'reject'
+  if (!decision) return false
+
+  // Extract optional requestId from text (e.g. "approve abc123")
+  const parts = text.trim().split(/\s+/)
+  let requestId: string | null = parts.length > 1 ? parts[1] : null
+
+  const hostOperatorService = await getHostOperatorService()
+
+  // If no requestId specified, use the most recent pending request
+  if (!requestId) {
+    const pending = hostOperatorService.listPendingHostOperatorRequests(1)
+    if (pending.length === 0) {
+      const approvalChannelId = slackSettingsStore.getApprovalChannelId()
+      if (approvalChannelId) {
+        await postEphemeral(approvalChannelId, slackUserId, 'No pending approval requests.')
+      }
+      return true
+    }
+    requestId = pending[0].requestId
+  }
+
+  const approverName = await resolveSlackUserName(slackUserId)
+  console.log(`[slack] ${approverName} text-${decision}d request ${requestId}`)
+
+  try {
+    const decided = await hostOperatorService.decideHostOperatorRequest({
+      requestId,
+      decision,
+      approverId: approverName,
+      agentLookup: (agentId) => agentStore.getAgent(agentId),
+    })
+    if (!decided) {
+      const approvalChannelId = slackSettingsStore.getApprovalChannelId()
+      if (approvalChannelId) {
+        await postEphemeral(approvalChannelId, slackUserId, `Request \`${requestId}\` not found or already decided.`)
+      }
+    }
+  } catch (err: any) {
+    const approvalChannelId = slackSettingsStore.getApprovalChannelId()
+    if (approvalChannelId) {
+      await postEphemeral(approvalChannelId, slackUserId, `Failed to ${decision}: ${err.message ?? 'unknown error'}`)
+    }
+  }
+  return true
 }
 
 // ── Sync / Unsync ──────────────────────────────────────────────────────
