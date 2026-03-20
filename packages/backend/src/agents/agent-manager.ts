@@ -695,6 +695,12 @@ function buildClaudeCliAuthEnvValues(): ClaudeCliAuthEnvValues {
   return values
 }
 
+const MANAGED_ENV_KEYS: (keyof ClaudeSettingsEnvValues)[] = [
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+]
+
 function mergeClaudeSettingsContent(
   existingContent: string | null | undefined,
   envValues: ClaudeSettingsEnvValues,
@@ -717,6 +723,14 @@ function mergeClaudeSettingsContent(
     existingEnv && typeof existingEnv === 'object' && !Array.isArray(existingEnv)
       ? { ...(existingEnv as Record<string, unknown>) }
       : {}
+
+  // Remove managed keys that are no longer set, so clearing a value
+  // in the UI actually takes effect instead of leaving stale entries.
+  for (const key of MANAGED_ENV_KEYS) {
+    if (!(key in envValues) || envValues[key] == null || envValues[key] === '') {
+      delete mergedEnv[key]
+    }
+  }
 
   for (const [key, value] of Object.entries(envValues)) {
     if (value != null && value !== '') {
