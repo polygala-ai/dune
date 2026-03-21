@@ -7,7 +7,10 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-agent-system-prompt')
 
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __getStopAgentShutdownPromptForTests } = await import('../src/domains/agents/messaging.js')
+const { __resolveBundledAssetDirForTests } = await import('../src/domains/agents/constants.js')
+const { assembleSystemPrompt, listSkills } = await import('../src/domains/agents/prompt-builder.js')
 
 const db = getDb()
 
@@ -29,7 +32,7 @@ test('assembled system prompt does not include AGENTS profile sections', () => {
     role: 'leader',
   })
 
-  const prompt = agentManager.assembleSystemPrompt(agent.id)
+  const prompt = assembleSystemPrompt(agent.id)
   assert.ok(prompt.length > 0)
   assert.equal(prompt.includes('--- AGENTS.global.md ---'), false)
   assert.equal(prompt.includes('--- AGENTS.agent.md ---'), false)
@@ -54,14 +57,14 @@ test('assembled system prompt does not include AGENTS profile sections', () => {
 })
 
 test('stop-agent shutdown prompt remains generic and not role-specific', () => {
-  const prompt = agentManager.__getStopAgentShutdownPromptForTests()
+  const prompt = __getStopAgentShutdownPromptForTests()
   assert.match(prompt, /Save any important information from this session/i)
   assert.equal(prompt.includes('leader'), false)
   assert.equal(prompt.includes('follower'), false)
 })
 
 test('listSkills includes markdown payload while preserving existing fields', () => {
-  const skills = agentManager.listSkills({ role: 'leader' })
+  const skills = listSkills({ role: 'leader' })
   assert.ok(skills.length > 0)
 
   for (const skill of skills) {
@@ -79,22 +82,22 @@ test('listSkills includes markdown payload while preserving existing fields', ()
   // host-operator is a coordination skill shared by both leader and follower
   assert.equal(skills.some(skill => skill.name === 'dune-host-operator'), true)
   assert.equal(skills.some(skill => skill.name === 'dune-miniapp-builder'), false)
-  assert.equal(agentManager.listSkills({ role: 'follower' }).some(skill => skill.name === 'dune-leader'), false)
+  assert.equal(listSkills({ role: 'follower' }).some(skill => skill.name === 'dune-leader'), false)
 })
 
 test('bundled asset resolver falls back from dist to src assets', () => {
   const backendRoot = process.cwd()
 
   assert.equal(
-    agentManager.__resolveBundledAssetDirForTests('agent-skills', resolve(backendRoot, 'dist')),
+    __resolveBundledAssetDirForTests('agent-skills', resolve(backendRoot, 'dist')),
     resolve(backendRoot, 'src', 'agent-skills'),
   )
   assert.equal(
-    agentManager.__resolveBundledAssetDirForTests('agent-prompts', resolve(backendRoot, 'dist')),
+    __resolveBundledAssetDirForTests('agent-prompts', resolve(backendRoot, 'dist')),
     resolve(backendRoot, 'src', 'agent-prompts'),
   )
   assert.equal(
-    agentManager.__resolveBundledAssetDirForTests('agent-mcp', resolve(backendRoot, 'dist')),
+    __resolveBundledAssetDirForTests('agent-mcp', resolve(backendRoot, 'dist')),
     resolve(backendRoot, 'src', 'agents', 'mcp'),
   )
 })

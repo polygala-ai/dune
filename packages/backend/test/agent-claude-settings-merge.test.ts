@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 
 process.env.DATA_DIR = join(tmpdir(), 'dune-agent-claude-settings-merge')
 
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __mergeClaudeSettingsContentForTests } = await import('../src/domains/agents/settings-sync.js')
 
 test('merge keeps existing root keys and unrelated env keys', () => {
   const existing = JSON.stringify({
@@ -18,7 +19,7 @@ test('merge keeps existing root keys and unrelated env keys', () => {
     },
   })
 
-  const mergedText = agentManager.__mergeClaudeSettingsContentForTests(existing, {
+  const mergedText = __mergeClaudeSettingsContentForTests(existing, {
     ANTHROPIC_AUTH_TOKEN: 'new-token',
     ANTHROPIC_BASE_URL: 'https://right.codes/o2a',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
@@ -34,7 +35,7 @@ test('merge keeps existing root keys and unrelated env keys', () => {
 })
 
 test('merge creates valid settings when content is missing', () => {
-  const mergedText = agentManager.__mergeClaudeSettingsContentForTests(null, {
+  const mergedText = __mergeClaudeSettingsContentForTests(null, {
     ANTHROPIC_AUTH_TOKEN: 'token-1',
     ANTHROPIC_BASE_URL: 'https://right.codes/o2a',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
@@ -59,7 +60,7 @@ test('merge removes managed env keys when they are cleared', () => {
   })
 
   // Only ANTHROPIC_AUTH_TOKEN is still set; the other managed keys are cleared
-  const mergedText = agentManager.__mergeClaudeSettingsContentForTests(existing, {
+  const mergedText = __mergeClaudeSettingsContentForTests(existing, {
     ANTHROPIC_AUTH_TOKEN: 'new-token',
   })
   const merged = JSON.parse(mergedText)
@@ -72,7 +73,7 @@ test('merge removes managed env keys when they are cleared', () => {
 })
 
 test('merge falls back safely when existing content is malformed', () => {
-  const mergedText = agentManager.__mergeClaudeSettingsContentForTests('{"env": {"KEEP_ME": "value"', {
+  const mergedText = __mergeClaudeSettingsContentForTests('{"env": {"KEEP_ME": "value"', {
     ANTHROPIC_AUTH_TOKEN: 'token-2',
   })
   const merged = JSON.parse(mergedText)

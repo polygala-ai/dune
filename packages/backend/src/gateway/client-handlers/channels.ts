@@ -3,7 +3,7 @@ import * as broadcast from '../broadcast.js'
 import * as channelStore from '../../storage/channel-store.js'
 import * as messageStore from '../../storage/message-store.js'
 import * as agentStore from '../../storage/agent-store.js'
-import { onNewMessage } from '../../agents/orchestrator.js'
+import { onNewMessage } from '../../domains/agents/orchestrator.js'
 import { parseMentions } from '../../utils/mentions.js'
 
 export function registerChannelHandlers(h: (method: string, fn: Handler) => void): void {

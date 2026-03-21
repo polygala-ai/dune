@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { patchMiniappNginxRouting } from '../src/agents/agent-manager.js'
+import { patchMiniappNginxRouting } from '../src/domains/agents/nginx.js'
 
 const BASE_NGINX_CONFIG = `
 server {

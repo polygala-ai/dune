@@ -1,8 +1,10 @@
 import type { Handler } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
 import * as miniappStore from '../../storage/miniapp-store.js'
-import * as agentManager from '../../agents/agent-manager.js'
-import * as sandboxManager from '../../sandboxes/sandbox-manager.js'
+import { ensureAgentRunning } from '../../domains/agents/lifecycle.js'
+import { ensureMiniappNginxConfigured } from '../../domains/agents/nginx.js'
+import { sendMessage } from '../../domains/agents/messaging.js'
+import { getBox, startBox } from '../../domains/sandboxes/lifecycle.js'
 import { isNoResponse } from './validation.js'
 
 async function openAppImpl(agentId: string, slug: string) {
@@ -14,10 +16,10 @@ async function openAppImpl(agentId: string, slug: string) {
 
   if (app.sandboxId && app.port != null) {
     const systemActor = { actorType: 'system' as const, actorId: 'agent-apps' }
-    let box = await sandboxManager.getBox(systemActor, app.sandboxId)
+    let box = await getBox(systemActor, app.sandboxId)
     if (!box) throw new Error(`Sandbox "${app.sandboxId}" not found`)
     if (box.status === 'stopped') {
-      box = await sandboxManager.startBox(systemActor, app.sandboxId)
+      box = await startBox(systemActor, app.sandboxId)
       if (!box) throw new Error(`Failed to start sandbox "${app.sandboxId}"`)
     }
     const portMapping = box.ports?.find((p: any) => p.guestPort === app.port)
@@ -25,8 +27,8 @@ async function openAppImpl(agentId: string, slug: string) {
     return { app, url: `http://localhost:${portMapping.hostPort}${app.path || '/'}` }
   }
 
-  const screen = await agentManager.ensureAgentRunning(agent.id)
-  await agentManager.ensureMiniappNginxConfigured(agent.id)
+  const screen = await ensureAgentRunning(agent.id)
+  await ensureMiniappNginxConfigured(agent.id)
   const encodedEntry = app.entry.split('/').map((segment: string) => encodeURIComponent(segment)).join('/')
   return { app, url: `http://localhost:${screen.guiHttpPort}/miniapps/${encodeURIComponent(app.slug)}/${encodedEntry}` }
 }
@@ -69,7 +71,7 @@ export function registerAppHandlers(h: (method: string, fn: Handler) => void): v
     const requestId = typeof params.requestId === 'string' ? params.requestId : undefined
     if (!action) throw new Error('action required')
 
-    await agentManager.ensureAgentRunning(agent.id)
+    await ensureAgentRunning(agent.id)
     const actionPrompt = [
       'Miniapp action request from Dune host:',
       `App slug: ${app.slug}`,
@@ -82,7 +84,7 @@ export function registerAppHandlers(h: (method: string, fn: Handler) => void): v
     ].join('\n')
 
     const response = await Promise.race([
-      agentManager.sendMessage(agentId, [{ authorName: 'System', content: actionPrompt }], {
+      sendMessage(agentId, [{ authorName: 'System', content: actionPrompt }], {
         source: 'app_action',
         appAction: { slug: app.slug, action, payload: params.payload, requestId },
       }),

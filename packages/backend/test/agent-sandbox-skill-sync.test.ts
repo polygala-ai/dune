@@ -8,7 +8,10 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-agent-sandbox-skill-sync')
 
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests } = await import('../src/domains/agents/runtime-state.js')
+const { BUILTIN_AGENT_SKILLS } = await import('../src/domains/agents/constants.js')
+const { redeployAllDaemons } = await import('../src/domains/agents/daemon-sync.js')
 
 const db = getDb()
 
@@ -24,9 +27,9 @@ function clearTables() {
 test('follower execution skills are bundled and synced for running agents', async () => {
   clearTables()
 
-  assert.ok(agentManager.BUILTIN_AGENT_SKILLS.includes('dune-sandbox-operator'))
-  assert.ok(agentManager.BUILTIN_AGENT_SKILLS.includes('dune-host-operator'))
-  assert.ok(agentManager.BUILTIN_AGENT_SKILLS.includes('dune-leader'))
+  assert.ok(BUILTIN_AGENT_SKILLS.includes('dune-sandbox-operator'))
+  assert.ok(BUILTIN_AGENT_SKILLS.includes('dune-host-operator'))
+  assert.ok(BUILTIN_AGENT_SKILLS.includes('dune-leader'))
 
   const sourceSkillRoot = join(
     process.cwd(),
@@ -63,7 +66,7 @@ test('follower execution skills are bundled and synced for running agents', asyn
   writeFileSync(portFile, '31337\n', 'utf-8')
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId: `runtime-${agent.id}`,
@@ -76,7 +79,7 @@ test('follower execution skills are bundled and synced for running agents', asyn
       thinkingSince: 0,
     } as any)
 
-    await agentManager.redeployAllDaemons()
+    await redeployAllDaemons()
 
     const syncedSkillRoot = join(process.env.DATA_DIR!, 'agents', agent.id, '.dune', '.claude', 'skills', 'dune-sandbox-operator')
     assert.equal(statSync(syncedSkillRoot).isDirectory(), true)
@@ -100,7 +103,7 @@ test('follower execution skills are bundled and synced for running agents', asyn
     const syncedLeaderSkillRoot = join(process.env.DATA_DIR!, 'agents', agent.id, '.dune', '.claude', 'skills', 'dune-leader')
     assert.equal(existsSync(syncedLeaderSkillRoot), false)
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
 
     if (hadPortFile) {
       writeFileSync(portFile, previousPortValue, 'utf-8')
@@ -141,7 +144,7 @@ test('leader agents receive dune-leader during skill sync', async () => {
   writeFileSync(portFile, '31337\n', 'utf-8')
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId: `runtime-${agent.id}`,
@@ -154,7 +157,7 @@ test('leader agents receive dune-leader during skill sync', async () => {
       thinkingSince: 0,
     } as any)
 
-    await agentManager.redeployAllDaemons()
+    await redeployAllDaemons()
 
     const syncedLeaderSkillRoot = join(process.env.DATA_DIR!, 'agents', agent.id, '.dune', '.claude', 'skills', 'dune-leader')
     assert.equal(statSync(syncedLeaderSkillRoot).isDirectory(), true)
@@ -169,7 +172,7 @@ test('leader agents receive dune-leader during skill sync', async () => {
     const syncedHostSkillRoot = join(process.env.DATA_DIR!, 'agents', agent.id, '.dune', '.claude', 'skills', 'dune-host-operator')
     assert.equal(existsSync(syncedHostSkillRoot), true)
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
 
     if (hadPortFile) {
       writeFileSync(portFile, previousPortValue, 'utf-8')

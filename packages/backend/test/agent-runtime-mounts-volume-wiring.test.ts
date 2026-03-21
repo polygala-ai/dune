@@ -9,7 +9,8 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-agent-runtime-mounts-volume-wiring')
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const mountStore = await import('../src/storage/agent-runtime-mount-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __buildAgentRuntimeBaseVolumesForTests, __buildAgentRuntimeVolumesForTests } = await import('../src/domains/agents/host-paths.js')
 
 const db = getDb()
 
@@ -48,8 +49,8 @@ test('runtime volume wiring includes configured agent mounts with readOnly mappi
       readOnly: false,
     })
 
-    const base = agentManager.__buildAgentRuntimeBaseVolumesForTests(agent.id)
-    const merged = agentManager.__buildAgentRuntimeVolumesForTests(agent.id, base)
+    const base = __buildAgentRuntimeBaseVolumesForTests(agent.id)
+    const merged = __buildAgentRuntimeVolumesForTests(agent.id, base)
 
     assert.equal(merged.length, 3)
     assert.equal(merged[0]?.guestPath, '/config/.dune')
@@ -78,7 +79,7 @@ test('runtime volume wiring fails fast when configured host path no longer exist
   rmSync(hostDir, { recursive: true, force: true })
 
   assert.throws(
-    () => agentManager.__buildAgentRuntimeVolumesForTests(agent.id, []),
+    () => __buildAgentRuntimeVolumesForTests(agent.id, []),
     /invalid_runtime_mount:.*:host_path_not_found/,
   )
 })
@@ -90,7 +91,7 @@ test('default runtime base volumes use only directory-backed mounts', () => {
     personality: 'runtime base volume wiring',
   })
 
-  const baseVolumes = agentManager.__buildAgentRuntimeBaseVolumesForTests(agent.id)
+  const baseVolumes = __buildAgentRuntimeBaseVolumesForTests(agent.id)
   assert.equal(baseVolumes.length, 1)
   assert.equal(baseVolumes[0]?.guestPath, '/config/.dune')
   assert.equal(existsSync(join(process.env.DATA_DIR!, 'agents', agent.id, '.dune', '.claude.json')), true)

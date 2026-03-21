@@ -3,8 +3,14 @@ import * as broadcast from '../broadcast.js'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentLogStore from '../../storage/agent-log-store.js'
 import * as channelStore from '../../storage/channel-store.js'
-import * as agentManager from '../../agents/agent-manager.js'
-import * as hostOperatorService from '../../host-operator/host-operator-service.js'
+import { destroyAgentRuntimeSandbox } from '../../domains/agents/runtime-sandbox.js'
+import { ensureAgentRunning, stopAgent, interruptAgentWorkflow, cancelStartup } from '../../domains/agents/lifecycle.js'
+import { reconcileAllRunningCommunicationDaemons, redeployAllDaemons } from '../../domains/agents/daemon-sync.js'
+import { isAgentRunning } from '../../domains/agents/runtime-state.js'
+import { listSkills, assembleSystemPrompt } from '../../domains/agents/prompt-builder.js'
+import { takeScreenshot, getAgentScreen, debugExec } from '../../domains/agents/screen.js'
+import { sendMessage } from '../../domains/agents/messaging.js'
+import * as hostOperatorService from '../../domains/host/gui-service.js'
 import { config } from '../../config.js'
 import {
   normalizeAgentRole,
@@ -79,7 +85,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     const agentId = params.id as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    await agentManager.destroyAgentRuntimeSandbox(agentId)
+    await destroyAgentRuntimeSandbox(agentId)
     const ok = agentStore.deleteAgent(agentId)
     if (!ok) throw new Error('not_found')
     broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'deleted' } })
@@ -89,7 +95,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.start', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    await agentManager.ensureAgentRunning(agent.id)
+    await ensureAgentRunning(agent.id)
     broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'idle' } })
     return { ok: true, status: 'idle' }
   })
@@ -97,7 +103,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.stop', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    await agentManager.stopAgent(agent.id)
+    await stopAgent(agent.id)
     broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
     return { ok: true, status: 'stopped' }
   })
@@ -105,7 +111,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.interrupt', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    const interrupted = await agentManager.interruptAgentWorkflow(agent.id)
+    const interrupted = await interruptAgentWorkflow(agent.id)
     const status = agentStore.getAgent(agent.id)?.status || agent.status
     return { ok: true, interrupted, status }
   })
@@ -113,7 +119,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.cancelStart', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    const cancelled = agentManager.cancelStartup(agent.id)
+    const cancelled = cancelStartup(agent.id)
     if (!cancelled) throw new Error('No startup in progress')
     return { ok: true }
   })
@@ -148,7 +154,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
         let timeoutHandle: ReturnType<typeof setTimeout> | null = null
         try {
           await Promise.race([
-            agentManager.ensureAgentRunning(agent.id),
+            ensureAgentRunning(agent.id),
             new Promise<never>((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error(`startup_timeout: exceeded ${startupTimeoutMs}ms`)), startupTimeoutMs)
               ;(timeoutHandle as any).unref()
@@ -158,7 +164,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
           results[index] = { id: agent.id, name: agent.name, status: 'idle' }
         } catch (err: any) {
           const errorMessage = err?.message || 'unknown startup failure'
-          if (errorMessage.startsWith('startup_timeout:')) agentManager.cancelStartup(agent.id)
+          if (errorMessage.startsWith('startup_timeout:')) cancelStartup(agent.id)
           results[index] = { id: agent.id, name: agent.name, status: 'error', error: errorMessage }
         } finally {
           if (timeoutHandle) clearTimeout(timeoutHandle)
@@ -166,7 +172,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
       }
     })
     await Promise.all(workers)
-    void agentManager.reconcileAllRunningCommunicationDaemons().catch((err: any) => {
+    void reconcileAllRunningCommunicationDaemons().catch((err: any) => {
       console.warn(`[agents/start-all] reconcile daemons failed: ${err?.message || err}`)
     })
     return results
@@ -175,8 +181,8 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.stopAll', async () => {
     const agents = agentStore.listAgents()
     for (const agent of agents) {
-      if (agentManager.isAgentRunning(agent.id)) {
-        await agentManager.stopAgent(agent.id)
+      if (isAgentRunning(agent.id)) {
+        await stopAgent(agent.id)
         broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
       }
     }
@@ -184,7 +190,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   })
 
   h('agents.redeployDaemons', async () => {
-    await agentManager.redeployAllDaemons()
+    await redeployAllDaemons()
     return { ok: true }
   })
 
@@ -195,13 +201,13 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   h('agents.getSkills', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    return agentManager.listSkills(agent)
+    return listSkills(agent)
   })
 
   h('agents.getSystemPrompt', async (params) => {
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
-    return { prompt: agentManager.assembleSystemPrompt(agent.id) }
+    return { prompt: assembleSystemPrompt(agent.id) }
   })
 
   h('agents.getLogs', async (params) => {
@@ -217,28 +223,28 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
   })
 
   h('agents.getScreenshot', async (params) => {
-    return agentManager.takeScreenshot(params.id as string)
+    return takeScreenshot(params.id as string)
   })
 
   h('agents.getScreen', async (params) => {
-    const screen = agentManager.getAgentScreen(params.id as string)
+    const screen = getAgentScreen(params.id as string)
     if (!screen) throw new Error('not_found')
     return screen
   })
 
   h('agents.exec', async (params) => {
-    return agentManager.debugExec(params.id as string, params.cmd as string, (params.args as string[]) || [])
+    return debugExec(params.id as string, params.cmd as string, (params.args as string[]) || [])
   })
 
   h('agents.dm', async (params) => {
     const agentId = params.agentId as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    if (!agentManager.isAgentRunning(agentId)) throw new Error('Agent not running')
+    if (!isAgentRunning(agentId)) throw new Error('Agent not running')
     const content = typeof params.content === 'string' ? params.content.trim() : ''
     if (!content) throw new Error('content required')
     const clientRequestId = typeof params.clientRequestId === 'string' ? params.clientRequestId.trim() : ''
-    const response = await agentManager.sendMessage(agentId, [{ authorName: 'User', content }], {
+    const response = await sendMessage(agentId, [{ authorName: 'User', content }], {
       source: 'dm',
       content,
       clientRequestId: clientRequestId || undefined,

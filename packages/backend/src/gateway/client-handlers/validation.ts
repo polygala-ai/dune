@@ -6,8 +6,8 @@ import type {
   SelectedModelProvider,
 } from '@dune/shared'
 import * as agentStore from '../../storage/agent-store.js'
-import * as mailboxService from '../../mailbox/mailbox-service.js'
-import type * as agentManager from '../../agents/agent-manager.js'
+import * as mailboxService from '../../domains/mailbox/mailbox-service.js'
+import type { InputMetadata } from '../../domains/agents/constants.js'
 import { join } from 'node:path'
 import { config } from '../../config.js'
 
@@ -66,7 +66,7 @@ export function getAuthorName(agentMap: Map<string, { name: string }>, authorId:
 export function buildChannelInputMetadata(
   agentMap: Map<string, { name: string }>,
   channels: mailboxService.MailboxChannelMessages[],
-): agentManager.InputMetadata {
+): InputMetadata {
   return {
     source: 'channel',
     channels: channels.map((channel) => ({

@@ -1,7 +1,8 @@
 import type { Handler } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentRuntimeMountStore from '../../storage/agent-runtime-mount-store.js'
-import * as agentManager from '../../agents/agent-manager.js'
+import { isAgentRunning } from '../../domains/agents/runtime-state.js'
+import { resetStoppedAgentRuntimeSandbox } from '../../domains/agents/runtime-sandbox.js'
 import {
   HostDirectoryPickerError,
   pickHostDirectory,
@@ -18,13 +19,13 @@ export function registerMountHandlers(h: (method: string, fn: Handler) => void):
     const agentId = params.id as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    if (agentManager.isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
+    if (isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
     const created = agentRuntimeMountStore.createAgentRuntimeMount(agentId, {
       hostPath: String(params.hostPath || ''),
       guestPath: String(params.guestPath || ''),
       readOnly: params.readOnly === undefined ? true : !!params.readOnly,
     })
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
+    await resetStoppedAgentRuntimeSandbox(agentId)
     return created
   })
 
@@ -33,14 +34,14 @@ export function registerMountHandlers(h: (method: string, fn: Handler) => void):
     const mountId = params.mountId as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    if (agentManager.isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
+    if (isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
     const updated = agentRuntimeMountStore.updateAgentRuntimeMount(agentId, mountId, {
       hostPath: params.hostPath === undefined ? undefined : String(params.hostPath || ''),
       guestPath: params.guestPath === undefined ? undefined : String(params.guestPath || ''),
       readOnly: params.readOnly === undefined ? undefined : !!params.readOnly,
     })
     if (!updated) throw new Error('not_found')
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
+    await resetStoppedAgentRuntimeSandbox(agentId)
     return updated
   })
 
@@ -49,10 +50,10 @@ export function registerMountHandlers(h: (method: string, fn: Handler) => void):
     const mountId = params.mountId as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    if (agentManager.isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
+    if (isAgentRunning(agentId)) throw new Error('agent_running_stop_required')
     const deleted = agentRuntimeMountStore.deleteAgentRuntimeMount(agentId, mountId)
     if (!deleted) throw new Error('not_found')
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
+    await resetStoppedAgentRuntimeSandbox(agentId)
   })
 
   h('agents.selectMountHostDir', async (params) => {

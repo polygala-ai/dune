@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 process.env.DATA_DIR = join(tmpdir(), 'dune-sandbox-readonly')
 
 const { getDb } = await import('../src/storage/database.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
+const { createBox, getBox, patchBox } = await import('../src/domains/sandboxes/lifecycle.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
 const { app } = await import('./_test-app.js')
 
@@ -26,7 +26,7 @@ test('read-only sandbox blocks mutating operations and returns managed lifecycle
   clearSandboxTables()
 
   const identity = { actorType: 'human' as const, actorId: 'readonly-user' }
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'Readonly Simulation',
     durability: 'persistent',
     autoRemove: false,
@@ -37,13 +37,13 @@ test('read-only sandbox blocks mutating operations and returns managed lifecycle
     readOnlyReason: 'managed_by_agent_lifecycle',
   })
 
-  const readonlyBox = await sandboxManager.getBox(identity, created.boxId)
+  const readonlyBox = await getBox(identity, created.boxId)
   assert.ok(readonlyBox)
   assert.equal(readonlyBox?._dune.readOnly, true)
   assert.equal(readonlyBox?._dune.readOnlyReason, 'managed_by_agent_lifecycle')
 
   await assert.rejects(
-    () => sandboxManager.patchBox(identity, created.boxId, { name: 'Should fail' }),
+    () => patchBox(identity, created.boxId, { name: 'Should fail' }),
     /managed_by_agent_lifecycle/,
   )
 

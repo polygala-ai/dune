@@ -7,7 +7,8 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-dm-client-request-id-${Date.no
 
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests } = await import('../src/domains/agents/runtime-state.js')
 const { app } = await import('./_test-app.js')
 
 const db = getDb()
@@ -72,7 +73,7 @@ test.beforeEach(() => {
 test.afterEach(() => {
   const agents = agentStore.listAgents()
   for (const agent of agents) {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })
 
@@ -82,7 +83,7 @@ test('POST /api/agents/:id/dm persists clientRequestId on the emitted user_messa
     personality: 'DM log test',
   })
 
-  agentManager.__setRunningAgentForTests(agent.id, {
+  __setRunningAgentForTests(agent.id, {
     box: createFakeStreamingBox(),
     agent: { ...agent, status: 'idle' },
     sandboxId: `box-${agent.id}`,

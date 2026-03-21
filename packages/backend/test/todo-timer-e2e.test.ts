@@ -8,8 +8,8 @@ process.env.DATA_DIR = join(tmpdir(), `dune-todo-timer-${Date.now()}`)
 
 const { getDb } = await import('../src/storage/database.js')
 const todoStore = await import('../src/storage/todo-store.js')
-const { armTimer, clearTimer, reloadTimers, setNotifier, _reset } = await import('../src/todos/todo-timer.js')
-const { MAX_SINGLE_TIMER_MS } = await import('../src/todos/due-at.js')
+const { armTimer, clearTimer, reloadTimers, setNotifier, _reset } = await import('../src/domains/todos/todo-timer.js')
+const { MAX_SINGLE_TIMER_MS } = await import('../src/domains/todos/due-at.js')
 
 const db = getDb()
 

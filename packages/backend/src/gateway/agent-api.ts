@@ -1,5 +1,6 @@
 import type { HandlerMap, Handler, CallContext } from './protocol.js'
-import { clientHandlers } from './client-api.js'
+import { buildClientHandlers } from './client-handlers/index.js'
+const clientHandlers = buildClientHandlers()
 
 // ── Agent Handler Map ─────────────────────────────────────────────────
 // Explicit allowlist of methods agents can call on /ws/agent.

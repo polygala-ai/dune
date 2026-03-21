@@ -2,7 +2,7 @@ import { LitElement, html, nothing } from 'lit'
 import { customElement, property, state, query as queryEl } from 'lit/decorators.js'
 import type { AgentLogEntry } from '@dune/shared'
 import { profilePanelStyles } from './profile-panel.css.js'
-import './agent-log-viewer.js'
+import './log-viewer.js'
 
 const LOG_WRAP_MODE_STORAGE_KEY = 'dune.ui.agentLogs.wrapMode'
 

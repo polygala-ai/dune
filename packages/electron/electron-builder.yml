@@ -33,7 +33,7 @@ extraResources:
     filter:
       - "**/*"
 
-  - from: ../backend/src/agents/mcp
+  - from: ../backend/src/domains/agents/mcp
     to: backend/agent-mcp
     filter:
       - "**/*.py"

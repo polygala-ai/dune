@@ -8,7 +8,9 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-runtime-host-layout-${Date.now
 
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __ensureAgentRuntimeHostPathsForTests } = await import('../src/domains/agents/host-paths.js')
+const { __prepareAgentConfigFacadeInBoxForTests } = await import('../src/domains/agents/lifecycle.js')
 
 const db = getDb()
 
@@ -171,7 +173,7 @@ test('legacy-only host data is migrated into the .dune root', () => {
   writeText(join(agentRoot, '.claude', 'settings.json'), '{"env":{"A":"1"}}\n')
   writeText(join(agentRoot, '.claude.json'), '{"session":"legacy"}\n')
 
-  const hostPaths = agentManager.__ensureAgentRuntimeHostPathsForTests(agent.id)
+  const hostPaths = __ensureAgentRuntimeHostPathsForTests(agent.id)
 
   assert.equal(hostPaths.duneRootHostPath, join(agentRoot, '.dune'))
   assert.equal(readFileSync(join(agentRoot, '.dune', 'memory', 'notes.md'), 'utf-8'), 'legacy-memory')
@@ -196,7 +198,7 @@ test('existing .dune data wins and legacy entries are left untouched', () => {
   writeText(join(agentRoot, '.dune', 'memory', 'notes.md'), 'dune-memory')
   writeText(join(agentRoot, '.dune', '.claude.json'), '{"session":"dune"}\n')
 
-  agentManager.__ensureAgentRuntimeHostPathsForTests(agent.id)
+  __ensureAgentRuntimeHostPathsForTests(agent.id)
 
   assert.equal(readFileSync(join(agentRoot, '.dune', 'memory', 'notes.md'), 'utf-8'), 'dune-memory')
   assert.equal(readFileSync(join(agentRoot, '.dune', '.claude.json'), 'utf-8'), '{"session":"dune"}\n')
@@ -215,7 +217,7 @@ test('partial migration moves only missing destinations', () => {
   writeText(join(agentRoot, '.claude', 'legacy.txt'), 'legacy-claude')
   writeText(join(agentRoot, '.dune', '.claude', 'marker.txt'), 'existing-dune-claude')
 
-  agentManager.__ensureAgentRuntimeHostPathsForTests(agent.id)
+  __ensureAgentRuntimeHostPathsForTests(agent.id)
 
   assert.equal(readFileSync(join(agentRoot, '.dune', 'miniapps', 'legacy', 'app.json'), 'utf-8'), '{"name":"legacy"}\n')
   assert.equal(existsSync(join(agentRoot, 'miniapps')), false)
@@ -226,7 +228,7 @@ test('partial migration moves only missing destinations', () => {
 test('config facade creates compatibility symlinks backed by /config/.dune', async () => {
   const box = new FakeConfigFacadeBox()
 
-  await agentManager.__prepareAgentConfigFacadeInBoxForTests(box as any)
+  await __prepareAgentConfigFacadeInBoxForTests(box as any)
 
   assert.equal(box.symlinkTarget('/config/memory'), '/config/.dune/memory')
   assert.equal(box.symlinkTarget('/config/miniapps'), '/config/.dune/miniapps')
@@ -238,7 +240,7 @@ test('config facade creates compatibility symlinks backed by /config/.dune', asy
 test('writes through compatibility paths land in the mounted .dune tree', async () => {
   const box = new FakeConfigFacadeBox()
 
-  await agentManager.__prepareAgentConfigFacadeInBoxForTests(box as any)
+  await __prepareAgentConfigFacadeInBoxForTests(box as any)
   await box.exec('python3', ['-c', 'import sys; open(sys.argv[1],"w").write(sys.argv[2])', '/config/.claude.json', '{"state":1}\n'])
   await box.exec('python3', ['-c', 'import sys; open(sys.argv[1],"w").write(sys.argv[2])', '/config/.claude/settings.json', '{"env":{"B":"2"}}\n'])
 

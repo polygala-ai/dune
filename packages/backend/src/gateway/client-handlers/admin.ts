@@ -1,6 +1,6 @@
 import type { Handler } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
-import * as hostOperatorService from '../../host-operator/host-operator-service.js'
+import * as hostOperatorService from '../../domains/host/gui-service.js'
 
 export function registerAdminHandlers(h: (method: string, fn: Handler) => void): void {
   h('admin.listPendingHostOp', async () => {

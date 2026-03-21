@@ -30,7 +30,7 @@ export const config = {
   frontendDistPath: resolveFromRepoRoot(process.env.FRONTEND_DIST_PATH || './packages/frontend/dist'),
   hostOperatorHelperPath: resolveFromRepoRoot(process.env.HOST_OPERATOR_HELPER_PATH || './packages/backend/bin/dune-host-operator-helper'),
   agentSkillsPath: process.env.AGENT_SKILLS_PATH || join(backendPackageRoot, 'src', 'agent-skills'),
-  agentMcpPath: process.env.AGENT_MCP_PATH || join(backendPackageRoot, 'src', 'agents', 'mcp'),
+  agentMcpPath: process.env.AGENT_MCP_PATH || join(backendPackageRoot, 'src', 'domains', 'agents', 'mcp'),
   agentPromptsPath: process.env.AGENT_PROMPTS_PATH || join(backendPackageRoot, 'src', 'agent-prompts'),
   boxliteDataPath,
   boxliteHome: ensureBoxliteHome(dataRoot),

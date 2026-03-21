@@ -55,7 +55,7 @@ export function getAgentMcpPath(): string {
   if (isPackaged()) {
     return join(process.resourcesPath!, 'backend', 'agent-mcp')
   }
-  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'agents', 'mcp')
+  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'domains', 'agents', 'mcp')
 }
 
 export function getAgentPromptsPath(): string {

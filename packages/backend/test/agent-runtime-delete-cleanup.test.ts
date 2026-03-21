@@ -8,7 +8,8 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-agent-runtime-delete')
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __setRuntimeForTests } = await import('../src/domains/agents/runtime-state.js')
 const { app } = await import('./_test-app.js')
 
 const db = getDb()
@@ -39,7 +40,7 @@ test('DELETE /api/agents/:id removes persistent runtime sandbox and state', asyn
 
   const removed: string[] = []
   try {
-    agentManager.__setRuntimeForTests({
+    __setRuntimeForTests({
       remove: async (sandboxId: string) => {
         removed.push(sandboxId)
       },
@@ -51,7 +52,7 @@ test('DELETE /api/agents/:id removes persistent runtime sandbox and state', asyn
     assert.equal(agentStore.getAgent(agent.id), undefined)
     assert.equal(runtimeStore.getAgentRuntimeState(agent.id), null)
   } finally {
-    agentManager.__setRuntimeForTests(null)
+    __setRuntimeForTests(null)
   }
 })
 
@@ -71,7 +72,7 @@ test('DELETE /api/agents/:id fails if runtime sandbox cleanup fails', async () =
   })
 
   try {
-    agentManager.__setRuntimeForTests({
+    __setRuntimeForTests({
       remove: async () => {
         throw new Error('simulated remove failure')
       },
@@ -94,6 +95,6 @@ test('DELETE /api/agents/:id fails if runtime sandbox cleanup fails', async () =
     assert.ok(agentStore.getAgent(agent.id))
     assert.ok(runtimeStore.getAgentRuntimeState(agent.id))
   } finally {
-    agentManager.__setRuntimeForTests(null)
+    __setRuntimeForTests(null)
   }
 })

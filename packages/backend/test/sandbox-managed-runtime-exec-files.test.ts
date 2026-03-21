@@ -10,8 +10,10 @@ const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+const { createExec, getExec, getExecEvents, listExecs } = await import('../src/domains/sandboxes/exec.js')
+const { downloadFileContent, importHostPath, listFsEntries, readFsFileContent, uploadFileContent } = await import('../src/domains/sandboxes/files.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests } = await import('../src/domains/agents/runtime-state.js')
 
 const db = getDb()
 
@@ -193,7 +195,7 @@ test('system actor can run exec/events/files/import on managed runtime sandboxes
   writeFileSync(hostImportPath, 'from-host-import', 'utf-8')
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId,
@@ -206,34 +208,34 @@ test('system actor can run exec/events/files/import on managed runtime sandboxes
       thinkingSince: 0,
     } as any)
 
-    const created = await sandboxManager.createExec(system, sandboxId, {
+    const created = await createExec(system, sandboxId, {
       command: 'echo',
       args: ['hello-runtime'],
       env: {},
     })
     assert.ok(created)
 
-    let resolvedExec = await sandboxManager.getExec(system, sandboxId, created!.executionId)
+    let resolvedExec = await getExec(system, sandboxId, created!.executionId)
     const deadline = Date.now() + 2_000
     while (resolvedExec?.status === 'running' && Date.now() < deadline) {
       await new Promise((resolveWait) => setTimeout(resolveWait, 20))
-      resolvedExec = await sandboxManager.getExec(system, sandboxId, created!.executionId)
+      resolvedExec = await getExec(system, sandboxId, created!.executionId)
     }
 
     assert.ok(resolvedExec)
     assert.equal(resolvedExec?.status, 'completed')
     assert.match(resolvedExec?.stdout || '', /hello-runtime/)
 
-    const list = await sandboxManager.listExecs(system, sandboxId)
+    const list = await listExecs(system, sandboxId)
     assert.ok(list)
     assert.ok((list?.execs || []).some((item) => item.executionId === created?.executionId))
 
-    const events = await sandboxManager.getExecEvents(system, sandboxId, created!.executionId, 0, 50)
+    const events = await getExecEvents(system, sandboxId, created!.executionId, 0, 50)
     assert.ok(events)
     assert.ok((events || []).some((event) => event.eventType === 'stdout'))
     assert.ok((events || []).some((event) => event.eventType === 'exit'))
 
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       system,
       sandboxId,
       '/workspace/note.txt',
@@ -241,20 +243,20 @@ test('system actor can run exec/events/files/import on managed runtime sandboxes
       true,
     )
 
-    const downloaded = await sandboxManager.downloadFileContent(system, sandboxId, '/workspace/note.txt')
+    const downloaded = await downloadFileContent(system, sandboxId, '/workspace/note.txt')
     assert.ok(downloaded)
     assert.equal(Buffer.from(downloaded!.contentBase64, 'base64').toString('utf-8'), 'runtime-file-content')
 
-    await sandboxManager.importHostPath(system, sandboxId, {
+    await importHostPath(system, sandboxId, {
       hostPath: hostImportPath,
       destPath: '/workspace/imported.txt',
     })
 
-    const imported = await sandboxManager.downloadFileContent(system, sandboxId, '/workspace/imported.txt')
+    const imported = await downloadFileContent(system, sandboxId, '/workspace/imported.txt')
     assert.ok(imported)
     assert.equal(Buffer.from(imported!.contentBase64, 'base64').toString('utf-8'), 'from-host-import')
 
-    const fsList = await sandboxManager.listFsEntries(system, sandboxId, '/workspace', {
+    const fsList = await listFsEntries(system, sandboxId, '/workspace', {
       includeHidden: false,
       limit: 200,
     })
@@ -262,12 +264,12 @@ test('system actor can run exec/events/files/import on managed runtime sandboxes
     assert.ok(fsList?.entries.some((entry) => entry.path === '/workspace/note.txt'))
     assert.ok(fsList?.entries.some((entry) => entry.path === '/workspace/imported.txt'))
 
-    const fsPreview = await sandboxManager.readFsFileContent(system, sandboxId, '/workspace/note.txt', 8)
+    const fsPreview = await readFsFileContent(system, sandboxId, '/workspace/note.txt', 8)
     assert.ok(fsPreview)
     assert.equal(fsPreview?.truncated, true)
     assert.equal(Buffer.from(fsPreview?.contentBase64 || '', 'base64').toString('utf-8'), 'runtime-')
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
     rmSync(hostImportDir, { recursive: true, force: true })
   }
 })
@@ -308,7 +310,7 @@ test('file operations fall back to /bin/sh when bash is unavailable', async () =
   writeFileSync(hostImportPath, 'fallback-host-import', 'utf-8')
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId,
@@ -321,7 +323,7 @@ test('file operations fall back to /bin/sh when bash is unavailable', async () =
       thinkingSince: 0,
     } as any)
 
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       system,
       sandboxId,
       '/workspace/fallback-note.txt',
@@ -329,20 +331,20 @@ test('file operations fall back to /bin/sh when bash is unavailable', async () =
       true,
     )
 
-    const downloaded = await sandboxManager.downloadFileContent(system, sandboxId, '/workspace/fallback-note.txt')
+    const downloaded = await downloadFileContent(system, sandboxId, '/workspace/fallback-note.txt')
     assert.ok(downloaded)
     assert.equal(Buffer.from(downloaded!.contentBase64, 'base64').toString('utf-8'), 'fallback-content')
 
-    await sandboxManager.importHostPath(system, sandboxId, {
+    await importHostPath(system, sandboxId, {
       hostPath: hostImportPath,
       destPath: '/workspace/fallback-imported.txt',
     })
 
-    const imported = await sandboxManager.downloadFileContent(system, sandboxId, '/workspace/fallback-imported.txt')
+    const imported = await downloadFileContent(system, sandboxId, '/workspace/fallback-imported.txt')
     assert.ok(imported)
     assert.equal(Buffer.from(imported!.contentBase64, 'base64').toString('utf-8'), 'fallback-host-import')
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
     rmSync(hostImportDir, { recursive: true, force: true })
   }
 })
@@ -378,7 +380,7 @@ test('file operations return deterministic error when no shell is available', as
   const system = { actorType: 'system' as const, actorId: 'agent:operator' }
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId,
@@ -392,7 +394,7 @@ test('file operations return deterministic error when no shell is available', as
     } as any)
 
     await assert.rejects(
-      () => sandboxManager.uploadFileContent(
+      () => uploadFileContent(
         system,
         sandboxId,
         '/workspace/no-shell.txt',
@@ -402,6 +404,6 @@ test('file operations return deterministic error when no shell is available', as
       /no_compatible_shell/,
     )
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })

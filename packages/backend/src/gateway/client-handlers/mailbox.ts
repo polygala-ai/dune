@@ -1,7 +1,8 @@
 import type { Handler } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
-import * as agentManager from '../../agents/agent-manager.js'
-import * as mailboxService from '../../mailbox/mailbox-service.js'
+import { isAgentRunning } from '../../domains/agents/runtime-state.js'
+import { sendMessage } from '../../domains/agents/messaging.js'
+import * as mailboxService from '../../domains/mailbox/mailbox-service.js'
 import {
   getAgentMaps,
   getAuthorName,
@@ -53,13 +54,13 @@ export function registerMailboxHandlers(h: (method: string, fn: Handler) => void
     const agentId = params.id as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')
-    if (!agentManager.isAgentRunning(agentId)) throw new Error('Agent not running')
+    if (!isAgentRunning(agentId)) throw new Error('Agent not running')
 
     if (params.mode === 'mailbox') {
       const lease = mailboxService.ensureMailboxLease(agentId)
       if (!lease) return { ok: true, response: '' }
       try {
-        const response = await agentManager.sendMessage(
+        const response = await sendMessage(
           agentId,
           [{ authorName: 'System', content: buildMailboxPrompt(lease.messageCount) }],
           { source: 'mailbox', mailbox: { unreadCount: lease.messageCount, batchId: lease.batchId, expiresAt: lease.expiresAt } },
@@ -106,7 +107,7 @@ export function registerMailboxHandlers(h: (method: string, fn: Handler) => void
       if (lastMessage) agentStore.setReadCursor(agentId, channel.channelId, lastMessage.timestamp)
     }
 
-    const response = await agentManager.sendMessage(
+    const response = await sendMessage(
       agentId,
       [{ authorName: 'System', content: promptParts.join('\n') }],
       buildChannelInputMetadata(agentMap, relevantChannels),

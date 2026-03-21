@@ -1,6 +1,6 @@
 import type { Handler, CallContext } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
-import * as hostOperatorService from '../../host-operator/host-operator-service.js'
+import * as hostOperatorService from '../../domains/host/gui-service.js'
 import * as hostGrantStore from '../../storage/host-grant-store.js'
 import type { HostOperatorCreateRequest } from '@dune/shared'
 

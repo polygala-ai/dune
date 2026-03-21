@@ -1,5 +1,5 @@
 import { WebSocket } from 'ws'
-import * as sandboxManager from '../sandboxes/sandbox-manager.js'
+import { getTerminalBox } from '../domains/sandboxes/terminal.js'
 
 export async function openTerminal(
   ws: WebSocket,
@@ -14,7 +14,7 @@ export async function openTerminal(
 
   let nativeBox: any
   try {
-    nativeBox = await sandboxManager.getTerminalBox({ actorType, actorId }, boxId)
+    nativeBox = await getTerminalBox({ actorType, actorId }, boxId)
   } catch (err: any) {
     ws.close(1011, err?.message || 'Failed to get terminal box')
     return

@@ -7,7 +7,10 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-interrupt-${Date.now()}`)
 
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests, isAgentRunning } = await import('../src/domains/agents/runtime-state.js')
+const { interruptAgentWorkflow } = await import('../src/domains/agents/lifecycle.js')
+const { sendMessage } = await import('../src/domains/agents/messaging.js')
 
 const db = getDb()
 
@@ -81,7 +84,7 @@ test.beforeEach(() => {
 test.afterEach(() => {
   const agents = agentStore.listAgents()
   for (const agent of agents) {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })
 
@@ -107,9 +110,9 @@ test('interruptAgentWorkflow cancels the active turn without stopping the agent'
     interruptRequested: false,
   } as any
 
-  agentManager.__setRunningAgentForTests(agent.id, running)
+  __setRunningAgentForTests(agent.id, running)
 
-  const sendPromise = agentManager.sendMessage(
+  const sendPromise = sendMessage(
     agent.id,
     [{ authorName: 'User', content: 'Start a long task' }],
     { source: 'dm', content: 'Start a long task' },
@@ -122,13 +125,13 @@ test('interruptAgentWorkflow cancels the active turn without stopping the agent'
 
   assert.ok(running.currentExecution, 'expected a live execution before interrupting')
 
-  const interrupted = await agentManager.interruptAgentWorkflow(agent.id)
+  const interrupted = await interruptAgentWorkflow(agent.id)
   const result = await sendPromise
 
   assert.equal(interrupted, true)
   assert.equal(streaming.wasKilled(), true)
   assert.equal(result, '[INTERRUPTED]')
-  assert.equal(agentManager.isAgentRunning(agent.id), true)
+  assert.equal(isAgentRunning(agent.id), true)
   assert.equal(agentStore.getAgent(agent.id)?.status, 'idle')
   assert.equal(running.currentExecution, null)
 })

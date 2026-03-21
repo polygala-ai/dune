@@ -1,6 +1,6 @@
 import type { Handler } from '../protocol.js'
 import * as claudeSettingsStore from '../../storage/claude-settings-store.js'
-import * as agentManager from '../../agents/agent-manager.js'
+import { syncClaudeSettingsForRunningAgents } from '../../domains/agents/settings-sync.js'
 import { config } from '../../config.js'
 import { parseClaudeSettingsUpdate } from './validation.js'
 
@@ -13,7 +13,7 @@ export function registerSettingsHandlers(h: (method: string, fn: Handler) => voi
     const parsed = parseClaudeSettingsUpdate(params)
     if (!parsed.value) throw new Error(parsed.error || 'Invalid JSON body')
     const summary = claudeSettingsStore.patchClaudeSettings(parsed.value)
-    await agentManager.syncClaudeSettingsForRunningAgents()
+    await syncClaudeSettingsForRunningAgents()
     return summary
   })
 
