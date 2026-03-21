@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit'
 import { customElement, property, query, state } from 'lit/decorators.js'
 import type { Message, Agent, Channel, SelectedModelProvider } from '@dune/shared'
-import type { MentionPopup } from '../messages/mention-popup.js'
+import type { MentionPopup } from './mention-popup.js'
 import './codex-composer.js'
 import type {
   CodexComposer,

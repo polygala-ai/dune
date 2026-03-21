@@ -2,7 +2,7 @@ import type { Handler } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
 import { isAgentRunning } from '../../domains/agents/runtime-state.js'
 import { sendMessage } from '../../domains/agents/messaging.js'
-import * as mailboxService from '../../domains/mailbox/mailbox-service.js'
+import * as mailboxService from '../../domains/agents/mailbox.js'
 import {
   getAgentMaps,
   getAuthorName,

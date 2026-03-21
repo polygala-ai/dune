@@ -3,7 +3,7 @@ import * as channelStore from '../../storage/channel-store.js'
 import * as messageStore from '../../storage/message-store.js'
 import { isAgentRunning } from './runtime-state.js'
 import { sendMessage } from './messaging.js'
-import * as mailboxService from '../mailbox/mailbox-service.js'
+import * as mailboxService from './mailbox.js'
 import { sendToChannel as broadcastToChannel } from '../../gateway/broadcast.js'
 import type { Message } from '@dune/shared'
 

@@ -34,7 +34,7 @@ test('follower execution skills are bundled and synced for running agents', asyn
   const sourceSkillRoot = join(
     process.cwd(),
     'src',
-    'agent-skills',
+    'domains/agents/skills',
     'dune-sandbox-operator',
   )
   assert.equal(statSync(sourceSkillRoot).isDirectory(), true)

@@ -1,6 +1,6 @@
 import * as agentStore from '../../storage/agent-store.js'
 import * as todoStore from '../../storage/todo-store.js'
-import { isValidDueAtMs } from '../todos/due-at.js'
+import { isValidDueAtMs } from './due-at.js'
 import type { Agent, Todo } from '@dune/shared'
 import {
   TODO_HANDOFF_MEMORY_PATH,

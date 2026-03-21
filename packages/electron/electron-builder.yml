@@ -28,7 +28,7 @@ extraResources:
     filter:
       - "dune-host-operator-helper"
 
-  - from: ../backend/src/agent-skills
+  - from: ../backend/src/domains/agents/skills
     to: backend/agent-skills
     filter:
       - "**/*"
@@ -38,7 +38,7 @@ extraResources:
     filter:
       - "**/*.py"
 
-  - from: ../backend/src/agent-prompts
+  - from: ../backend/src/domains/agents/prompts
     to: backend/agent-prompts
     filter:
       - "**/*"

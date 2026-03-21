@@ -89,15 +89,15 @@ test('bundled asset resolver falls back from dist to src assets', () => {
   const backendRoot = process.cwd()
 
   assert.equal(
-    __resolveBundledAssetDirForTests('agent-skills', resolve(backendRoot, 'dist')),
-    resolve(backendRoot, 'src', 'agent-skills'),
+    __resolveBundledAssetDirForTests('agents/skills', resolve(backendRoot, 'dist')),
+    resolve(backendRoot, 'src', 'domains', 'agents', 'skills'),
   )
   assert.equal(
-    __resolveBundledAssetDirForTests('agent-prompts', resolve(backendRoot, 'dist')),
-    resolve(backendRoot, 'src', 'agent-prompts'),
+    __resolveBundledAssetDirForTests('agents/prompts', resolve(backendRoot, 'dist')),
+    resolve(backendRoot, 'src', 'domains', 'agents', 'prompts'),
   )
   assert.equal(
     __resolveBundledAssetDirForTests('agent-mcp', resolve(backendRoot, 'dist')),
-    resolve(backendRoot, 'src', 'agents', 'mcp'),
+    resolve(backendRoot, 'src', 'domains', 'agents', 'mcp'),
   )
 })

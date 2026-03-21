@@ -6,7 +6,7 @@ import type {
   SelectedModelProvider,
 } from '@dune/shared'
 import * as agentStore from '../../storage/agent-store.js'
-import * as mailboxService from '../../domains/mailbox/mailbox-service.js'
+import * as mailboxService from '../../domains/agents/mailbox.js'
 import type { InputMetadata } from '../../domains/agents/constants.js'
 import { join } from 'node:path'
 import { config } from '../../config.js'

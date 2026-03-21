@@ -1,8 +1,8 @@
 import type { Handler } from '../protocol.js'
 import * as broadcast from '../broadcast.js'
 import * as todoStore from '../../storage/todo-store.js'
-import * as todoTimer from '../../domains/todos/todo-timer.js'
-import { parseAndValidateDueAt } from '../../domains/todos/due-at.js'
+import * as todoTimer from '../../domains/agents/todo-timer.js'
+import { parseAndValidateDueAt } from '../../domains/agents/due-at.js'
 
 export function registerTodoHandlers(h: (method: string, fn: Handler) => void): void {
   h('todos.list', async (params) => {

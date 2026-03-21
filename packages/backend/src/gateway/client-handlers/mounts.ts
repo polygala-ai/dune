@@ -6,7 +6,7 @@ import { resetStoppedAgentRuntimeSandbox } from '../../domains/agents/runtime-sa
 import {
   HostDirectoryPickerError,
   pickHostDirectory,
-} from '../../utils/host-directory-picker.js'
+} from '../../domains/host/directory-picker.js'
 
 export function registerMountHandlers(h: (method: string, fn: Handler) => void): void {
   h('agents.listMounts', async (params) => {

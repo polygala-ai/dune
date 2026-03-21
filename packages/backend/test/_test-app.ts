@@ -7,7 +7,7 @@
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { adminHostOperatorApi } from '../src/api/admin.js'
+import { adminHostOperatorApi } from '../src/domains/host/admin.js'
 
 export const app = new Hono()
 app.use('/*', cors())

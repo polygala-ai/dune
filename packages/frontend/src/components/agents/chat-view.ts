@@ -10,13 +10,13 @@ import { highlightCodeBlocks } from '../../utils/shiki-highlighter.js'
 import { renderMathBlocks } from '../../utils/katex-renderer.js'
 import { renderMermaidBlocks } from '../../utils/mermaid-renderer.js'
 import { uiPreferences } from '../../state/ui-preferences.js'
-import '../layout/codex-composer.js'
+import '../messages/codex-composer.js'
 import type {
   CodexComposer,
   CodexComposerAddAction,
   CodexComposerAddActionDetail,
   CodexComposerKeydownDetail,
-} from '../layout/codex-composer.js'
+} from '../messages/codex-composer.js'
 import './mounts-panel.js'
 import './memory-editor.js'
 import './host-settings.js'

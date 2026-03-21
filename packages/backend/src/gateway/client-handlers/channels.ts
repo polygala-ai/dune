@@ -4,7 +4,7 @@ import * as channelStore from '../../storage/channel-store.js'
 import * as messageStore from '../../storage/message-store.js'
 import * as agentStore from '../../storage/agent-store.js'
 import { onNewMessage } from '../../domains/agents/orchestrator.js'
-import { parseMentions } from '../../utils/mentions.js'
+import { parseMentions } from '../../domains/agents/mentions.js'
 
 export function registerChannelHandlers(h: (method: string, fn: Handler) => void): void {
   h('channels.list', async () => {

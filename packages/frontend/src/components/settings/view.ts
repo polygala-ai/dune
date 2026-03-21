@@ -2,9 +2,9 @@ import { LitElement, html } from 'lit'
 import { customElement, property, state } from 'lit/decorators.js'
 import type { ClaudeSettings } from '@dune/shared'
 import type { ThemeMode } from '../../state/ui-preferences.js'
-import { settingsViewStyles } from './settings-view.css.js'
-import './settings-model-section.js'
-import './settings-slack-section.js'
+import { settingsViewStyles } from './view.css.js'
+import './model-section.js'
+import './slack-section.js'
 
 type SettingsSection = 'general' | 'model' | 'integrations'
 

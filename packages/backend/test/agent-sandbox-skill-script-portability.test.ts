@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
 test('sandbox-api skill script is portable on host bash without bad substitution', () => {
-  const scriptPath = resolve('src/agent-skills/dune-sandbox-operator/scripts/sandbox-api.sh')
+  const scriptPath = resolve('src/domains/agents/skills/dune-sandbox-operator/scripts/sandbox-api.sh')
   const result = spawnSync('bash', [scriptPath, 'GET', '/sandboxes/v1/boxes', '--max-time', '0.1'], {
     env: {
       ...process.env,

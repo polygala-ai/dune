@@ -48,7 +48,7 @@ export function getAgentSkillsPath(): string {
   if (isPackaged()) {
     return join(process.resourcesPath!, 'backend', 'agent-skills')
   }
-  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'agent-skills')
+  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'domains', 'agents', 'skills')
 }
 
 export function getAgentMcpPath(): string {
@@ -62,7 +62,7 @@ export function getAgentPromptsPath(): string {
   if (isPackaged()) {
     return join(process.resourcesPath!, 'backend', 'agent-prompts')
   }
-  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'agent-prompts')
+  return resolve(getRepoRoot(), 'packages', 'backend', 'src', 'domains', 'agents', 'prompts')
 }
 
 export function getHostOperatorHelperPath(): string {

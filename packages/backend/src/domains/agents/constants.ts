@@ -12,9 +12,9 @@ export const BACKEND_RUNTIME_ROOT = resolve(__dirname, '..')
 export function resolveBundledAssetDir(relativeDir: string, runtimeRoot = BACKEND_RUNTIME_ROOT): string {
   // Check config-provided paths first (used by Electron packaged mode)
   const configPaths: Record<string, string | undefined> = {
-    'agent-skills': config.agentSkillsPath,
+    'agents/skills': config.agentSkillsPath,
     'agent-mcp': config.agentMcpPath,
-    'agent-prompts': config.agentPromptsPath,
+    'agents/prompts': config.agentPromptsPath,
   }
   const configPath = configPaths[relativeDir]
   if (configPath && existsSync(configPath)) return configPath
@@ -79,14 +79,14 @@ export const MCP_CONFIG = JSON.stringify({
 
 /** System prompt file path inside the container (per-agent, written before each CLI call). */
 export const SYSTEM_PROMPT_DIR = '/tmp'
-export const AGENT_PROMPTS_SOURCE_DIR = resolveBundledAssetDir('agent-prompts')
+export const AGENT_PROMPTS_SOURCE_DIR = resolveBundledAssetDir('agents/prompts')
 export const SYSTEM_PROMPT_TEMPLATE_PATH = join(AGENT_PROMPTS_SOURCE_DIR, 'system.md')
 export const NGINX_CONFIG_CANDIDATES = [
   '/etc/nginx/sites-available/default',
   '/etc/nginx/http.d/default.conf',
 ]
 export const NGINX_WEBSOCKET_ANCHOR = '  location /websocket'
-export const AGENT_SKILLS_SOURCE_DIR = resolveBundledAssetDir('agent-skills')
+export const AGENT_SKILLS_SOURCE_DIR = resolveBundledAssetDir('agents/skills')
 export const AGENT_SKILLS_VOLUME_PATH = `${AGENT_CLAUDE_VOLUME_PATH}/skills`
 export const CLAUDE_SETTINGS_PATH = `${AGENT_CLAUDE_VOLUME_PATH}/settings.json`
 

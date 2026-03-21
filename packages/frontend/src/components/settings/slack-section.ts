@@ -2,7 +2,7 @@ import { LitElement, html, nothing } from 'lit'
 import { customElement, state } from 'lit/decorators.js'
 import type { SlackSettings, Agent, Channel } from '@dune/shared'
 import { getSlackSettings, updateSlackSettings, disconnectSlack, syncAgentToSlack, unsyncAgentFromSlack, syncAllAgentsToSlack, syncAllChannelsToSlack, syncChannelToSlack, unsyncChannelFromSlack, listSlackChannelLinks, listAgents, listChannels } from '../../services/rpc.js'
-import { settingsViewStyles } from './settings-view.css.js'
+import { settingsViewStyles } from './view.css.js'
 
 @customElement('settings-slack-section')
 export class SettingsSlackSection extends LitElement {

@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import * as agentStore from '../storage/agent-store.js'
-import * as hostOperatorService from '../domains/host/gui-service.js'
+import * as agentStore from '../../storage/agent-store.js'
+import * as hostOperatorService from './gui-service.js'
 import type { HostOperatorDecisionRequest } from '@dune/shared'
 
 export const adminHostOperatorApi = new Hono()
