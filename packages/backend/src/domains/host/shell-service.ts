@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { statSync } from 'node:fs'
-import { sendToAll as broadcastAll } from '../../gateway/broadcast.js'
+import { emit } from '../../gateway/events.js'
 import * as hostCommandStore from '../../storage/host-command-store.js'
 import type {
   HostCommandDecisionType,
@@ -70,7 +70,7 @@ export function normalizeHostCommandCwd(scope: HostCommandScopeType, cwd: string
 function notifyRequestUpdate(request: HostCommandRequest): void {
   requestEvents.emit(request.requestId)
   const eventType = request.status === 'pending' ? 'host-command:pending' : 'host-command:updated'
-  broadcastAll({
+  emit({
     type: eventType,
     payload: request,
   })

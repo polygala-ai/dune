@@ -1,7 +1,7 @@
 import { SimpleBox } from '@boxlite-ai/boxlite'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentLogStore from '../../storage/agent-log-store.js'
-import { sendToAll as broadcastAll } from '../../gateway/broadcast.js'
+import { emit } from '../../gateway/events.js'
 import { createBoxliteRuntime } from '../../boxlite/runtime.js'
 import { newEventId } from '../../utils/ids.js'
 import { timedExec } from './container-exec.js'
@@ -54,9 +54,9 @@ export function __setRuntimeForTests(nextRuntime: any | null): void {
 const thinkingWatchdogTimer = setInterval(() => {
   const now = Date.now()
   for (const [agentId, running] of runningAgents) {
-    if (running.thinkingSince > 0 && (now - running.thinkingSince) > THINKING_WATCHDOG_MS) {
-      console.warn(`[watchdog] Agent ${agentId} stuck in thinking for ${Math.round((now - running.thinkingSince) / 1000)}s — resetting to error`)
-      running.thinkingSince = 0
+    if (running.execution.thinkingSince > 0 && (now - running.execution.thinkingSince) > THINKING_WATCHDOG_MS) {
+      console.warn(`[watchdog] Agent ${agentId} stuck in thinking for ${Math.round((now - running.execution.thinkingSince) / 1000)}s — resetting to error`)
+      running.execution.thinkingSince = 0
       setAgentStatus(agentId, 'error', { source: 'thinking-watchdog', reason: 'thinking timeout exceeded' })
       // Try to clean up busy flag
       timedExec(running.box, 'rm', ['-f', '/tmp/agent-busy'], { DISPLAY: ':1' }, 10_000).catch(() => {})
@@ -64,6 +64,18 @@ const thinkingWatchdogTimer = setInterval(() => {
   }
 }, 30_000)  // check every 30s
 thinkingWatchdogTimer.unref()
+
+// ── Status transition validation ─────────────────────────────────────────
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  stopped: ['starting'],
+  starting: ['idle', 'error', 'stopped'],
+  idle: ['thinking', 'stopping', 'stopped', 'error'],
+  thinking: ['responding', 'idle', 'error', 'stopped'],
+  responding: ['idle', 'error', 'stopped'],
+  stopping: ['stopped'],
+  error: ['idle', 'stopped', 'starting'],
+}
 
 // ── Status + logging helpers ────────────────────────────────────────────
 
@@ -83,9 +95,20 @@ export function setAgentStatus(
 ): void {
   const shouldBroadcast = options.broadcast ?? true
   const shouldLogRuntime = options.logRuntime ?? true
+
+  // Validate status transition
+  const currentAgent = agentStore.getAgent(agentId)
+  if (currentAgent) {
+    const currentStatus = currentAgent.status
+    const allowed = VALID_TRANSITIONS[currentStatus]
+    if (allowed && !allowed.includes(status)) {
+      console.warn(`[status] Invalid transition for agent ${agentId}: ${currentStatus} → ${status} (source: ${options.source ?? 'unknown'})`)
+    }
+  }
+
   agentStore.updateAgentStatus(agentId, status)
   if (shouldBroadcast) {
-    broadcastAll({ type: 'agent:status', payload: { agentId, status } })
+    emit({ type: 'agent:status', payload: { agentId, status } })
   }
   if (shouldLogRuntime) {
     const message = options.reason ? `${status} (${options.reason})` : status
@@ -100,7 +123,7 @@ export function setAgentStatus(
 export function emitAgentLogEntries(agentId: string, entries: AgentLogEntry[]): void {
   if (entries.length === 0) return
   agentLogStore.addAgentLogs(agentId, entries)
-  broadcastAll({ type: 'agent:log', payload: { agentId, entries } })
+  emit({ type: 'agent:log', payload: { agentId, entries } })
 }
 
 export function emitRuntimeLog(

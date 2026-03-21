@@ -70,13 +70,12 @@ test('follower execution skills are bundled and synced for running agents', asyn
       box: fakeBox as any,
       agent,
       sandboxId: `runtime-${agent.id}`,
-      guiHttpPort: 49001,
-      guiHttpsPort: 49002,
-      backendUrl: '',
+      ports: { http: 49001, https: 49002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     await redeployAllDaemons()
@@ -148,13 +147,12 @@ test('leader agents receive dune-leader during skill sync', async () => {
       box: fakeBox as any,
       agent,
       sandboxId: `runtime-${agent.id}`,
-      guiHttpPort: 49011,
-      guiHttpsPort: 49012,
-      backendUrl: '',
+      ports: { http: 49011, https: 49012 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     await redeployAllDaemons()

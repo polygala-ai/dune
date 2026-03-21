@@ -26,8 +26,8 @@ export function getAgentScreen(agentId: string): { guiHttpPort: number; guiHttps
   const running = runningAgents.get(agentId)
   if (!running) return null
   return {
-    guiHttpPort: running.guiHttpPort,
-    guiHttpsPort: running.guiHttpsPort,
+    guiHttpPort: running.ports.http,
+    guiHttpsPort: running.ports.https,
     width: DISPLAY_WIDTH,
     height: DISPLAY_HEIGHT,
   }
@@ -36,7 +36,7 @@ export function getAgentScreen(agentId: string): { guiHttpPort: number; guiHttps
 export function getAgentHttpBaseUrl(agentId: string): string | null {
   const running = runningAgents.get(agentId)
   if (!running) return null
-  return `http://localhost:${running.guiHttpPort}`
+  return `http://localhost:${running.ports.http}`
 }
 
 /** Debug: run a command in the agent's box and return the result. */

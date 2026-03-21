@@ -1,5 +1,5 @@
 import type { Handler, CallContext } from '../protocol.js'
-import * as broadcast from '../broadcast.js'
+import { emit } from '../events.js'
 import * as channelStore from '../../storage/channel-store.js'
 import * as messageStore from '../../storage/message-store.js'
 import * as agentStore from '../../storage/agent-store.js'
@@ -16,7 +16,7 @@ export function registerChannelHandlers(h: (method: string, fn: Handler) => void
     if (!name) throw new Error('Channel name is required')
     const creatorId = typeof params.creatorId === 'string' ? params.creatorId.trim() || undefined : undefined
     const channel = channelStore.createChannel({ name, description: params.description as string | undefined, creatorId })
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'created' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'created' } })
     return channel
   })
 
@@ -40,14 +40,14 @@ export function registerChannelHandlers(h: (method: string, fn: Handler) => void
     }
     const channel = channelStore.updateChannel(id as string, data)
     if (!channel) throw new Error('not_found')
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'updated' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'updated' } })
     return channel
   })
 
   h('channels.delete', async (params) => {
     const ok = channelStore.deleteChannel(params.id as string)
     if (!ok) throw new Error('not_found')
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'deleted' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['channels'], reason: 'deleted' } })
     return { ok: true }
   })
 

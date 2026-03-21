@@ -419,7 +419,7 @@ export function queueTodoReminderIfNeeded(
 
 const todoReminderSweepTimer = setInterval(() => {
   for (const [agentId, running] of runningAgents) {
-    if (!running.hasSession) continue
+    if (!running.session.hasSession) continue
     queueTodoReminderIfNeeded(agentId, { requireUnlocked: true })
   }
 }, TODO_REMINDER_SWEEP_INTERVAL_MS)

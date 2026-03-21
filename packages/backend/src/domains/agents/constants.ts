@@ -249,22 +249,37 @@ export type AgentRuntimeHostPaths = {
   communicationHostPath: string
 }
 
-export interface RunningAgent {
-  box: SimpleBox
-  agent: import('@dune/shared').Agent
-  sandboxId: string
-  guiHttpPort: number
-  guiHttpsPort: number
-  backendUrl: string
-  daemonAssetHash?: string
-  cliInstalled: boolean
+export type AgentSession = {
+  id: string | null
   hasSession: boolean
-  sessionId: string | null
   startedAt: number
-  thinkingSince: number  // timestamp when agent entered thinking state, 0 if not thinking
-  currentExecution: { kill: () => Promise<void> } | null
-  interruptRequested: boolean
-  interruptAbort: { promise: Promise<void>; resolve: () => void } | null
+}
+
+export type AgentExecution = {
+  handle: { kill: () => Promise<void> } | null
+  thinkingSince: number
+}
+
+export type AgentInterrupt = {
+  requested: boolean
+  abort: { promise: Promise<void>; resolve: () => void } | null
+}
+
+export type AgentDaemon = {
+  assetHash: string | undefined
+  backendUrl: string
+}
+
+export interface RunningAgent {
+  readonly agent: import('@dune/shared').Agent
+  readonly box: SimpleBox
+  sandboxId: string
+  readonly ports: { http: number; https: number }
+  session: AgentSession
+  execution: AgentExecution
+  interrupt: AgentInterrupt
+  daemon: AgentDaemon
+  cliInstalled: boolean
 }
 
 export type DesktopReadinessDiagnostics = {

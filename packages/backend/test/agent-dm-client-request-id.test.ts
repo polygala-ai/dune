@@ -87,13 +87,12 @@ test('POST /api/agents/:id/dm persists clientRequestId on the emitted user_messa
     box: createFakeStreamingBox(),
     agent: { ...agent, status: 'idle' },
     sandboxId: `box-${agent.id}`,
-    guiHttpPort: 3900,
-    guiHttpsPort: 3901,
-    backendUrl: 'http://localhost:3000',
+    ports: { http: 3900, https: 3901 },
+    session: { id: null, hasSession: false, startedAt: Date.now() },
+    execution: { handle: null, thinkingSince: 0 },
+    interrupt: { requested: false, abort: null },
+    daemon: { assetHash: undefined, backendUrl: 'http://localhost:3000' },
     cliInstalled: true,
-    hasSession: false,
-    startedAt: Date.now(),
-    thinkingSince: 0,
   } as any)
 
   const clientRequestId = 'stash-req-123'

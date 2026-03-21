@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { config } from '../../config.js'
-import { sendToAll as broadcastAll } from '../../gateway/broadcast.js'
+import { emit } from '../../gateway/events.js'
 import * as hostOperatorStore from '../../storage/host-operator-store.js'
 import {
   createDefaultHostOperatorProvider,
@@ -307,18 +307,18 @@ function notifyRequestUpdate(request: HostOperatorRequest): void {
       if (fromSlack) {
         approval.postApprovalRequest(request)
       } else {
-        broadcastAll({ type: 'host-operator:pending', payload: request })
+        emit({ type: 'host-operator:pending', payload: request })
       }
     } else {
       // Status updates: always broadcast both (keeps state in sync, no modal triggered)
-      broadcastAll({ type: 'host-operator:updated', payload: request })
+      emit({ type: 'host-operator:updated', payload: request })
       if (request.decision) approval.updateApprovalMessage(request)
     }
   }).catch((err) => {
     console.error('[host-operator] Failed to notify Slack:', err)
     // Fallback: always broadcast to WS so UI isn't stuck
     const eventType = request.status === 'pending' ? 'host-operator:pending' : 'host-operator:updated'
-    broadcastAll({ type: eventType, payload: request })
+    emit({ type: eventType, payload: request })
   })
 }
 

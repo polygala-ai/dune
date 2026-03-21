@@ -104,7 +104,7 @@ export async function ensureRuntimeSandboxRunning(sandboxId: string): Promise<{ 
 
   upsertManagedRuntimeShadow(agentId, running.sandboxId, {
     status: 'running',
-    startedAt: running.startedAt || Date.now(),
+    startedAt: running.session.startedAt || Date.now(),
     stoppedAt: null,
   })
 
@@ -267,7 +267,7 @@ export async function listRunningAgentSandboxes(): Promise<Array<{
       sandboxId,
       agentId,
       status: 'running',
-      startedAt: running.startedAt || Date.now(),
+      startedAt: running.session.startedAt || Date.now(),
       name: `${running.agent.name} runtime`,
     })
   }

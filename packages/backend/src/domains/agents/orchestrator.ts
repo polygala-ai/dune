@@ -4,7 +4,7 @@ import * as messageStore from '../../storage/message-store.js'
 import { isAgentRunning } from './runtime-state.js'
 import { sendMessage } from './messaging.js'
 import * as mailboxService from './mailbox.js'
-import { sendToChannel as broadcastToChannel } from '../../gateway/broadcast.js'
+import { emitToChannel } from '../../gateway/events.js'
 import type { Message } from '@dune/shared'
 
 const MAX_CHAIN_DEPTH = 5
@@ -25,7 +25,7 @@ export async function onNewMessage(message: Message, chainDepth = 0): Promise<vo
   // Broadcast new message to WS clients (only for initial call — recursive calls
   // are already broadcast by the parent at the point of message creation)
   if (chainDepth === 0) {
-    broadcastToChannel(message.channelId, { type: 'message:new', payload: message })
+    emitToChannel(message.channelId, { type: 'message:new', payload: message })
   }
 
   // Only respond to @mentions via push (non-mention messages handled by mailbox daemon polling)
@@ -58,7 +58,7 @@ export async function onNewMessage(message: Message, chainDepth = 0): Promise<vo
     }
 
     const sysMsg = messageStore.createMessage(message.channelId, 'system', reason)
-    broadcastToChannel(message.channelId, { type: 'message:new', payload: sysMsg })
+    emitToChannel(message.channelId, { type: 'message:new', payload: sysMsg })
   }
 
   for (const agentId of respondingAgentIds) {
@@ -82,7 +82,7 @@ export async function onNewMessage(message: Message, chainDepth = 0): Promise<vo
     }
 
     // Broadcast typing indicator
-    broadcastToChannel(message.channelId, {
+    emitToChannel(message.channelId, {
       type: 'agent:typing',
       payload: { agentId, channelId: message.channelId, isTyping: true },
     })
@@ -100,14 +100,14 @@ export async function onNewMessage(message: Message, chainDepth = 0): Promise<vo
       })
       mailboxService.ackMailboxBatch(agentId, mentionLease.batchId)
       // Stop channel typing indicator after completion
-      broadcastToChannel(message.channelId, {
+      emitToChannel(message.channelId, {
         type: 'agent:typing',
         payload: { agentId, channelId: message.channelId, isTyping: false },
       })
     } catch (err) {
       console.error(`Agent ${agent.name} failed to respond:`, err)
       mailboxService.expireMailboxBatch(agentId, mentionLease.batchId)
-      broadcastToChannel(message.channelId, {
+      emitToChannel(message.channelId, {
         type: 'agent:typing',
         payload: { agentId, channelId: message.channelId, isTyping: false },
       })

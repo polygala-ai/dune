@@ -199,13 +199,12 @@ test('system actor can run exec/events/files/import on managed runtime sandboxes
       box: fakeBox as any,
       agent,
       sandboxId,
-      guiHttpPort: 48001,
-      guiHttpsPort: 48002,
-      backendUrl: '',
+      ports: { http: 48001, https: 48002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     const created = await createExec(system, sandboxId, {
@@ -314,13 +313,12 @@ test('file operations fall back to /bin/sh when bash is unavailable', async () =
       box: fakeBox as any,
       agent,
       sandboxId,
-      guiHttpPort: 48101,
-      guiHttpsPort: 48102,
-      backendUrl: '',
+      ports: { http: 48101, https: 48102 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     await uploadFileContent(
@@ -384,13 +382,12 @@ test('file operations return deterministic error when no shell is available', as
       box: fakeBox as any,
       agent,
       sandboxId,
-      guiHttpPort: 48201,
-      guiHttpsPort: 48202,
-      backendUrl: '',
+      ports: { http: 48201, https: 48202 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     await assert.rejects(

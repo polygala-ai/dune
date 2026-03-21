@@ -2,7 +2,7 @@ import { SimpleBox } from '@boxlite-ai/boxlite'
 import { createServer } from 'node:net'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentRuntimeStore from '../../storage/agent-runtime-store.js'
-import { sendToAll as broadcastAll } from '../../gateway/broadcast.js'
+import { emit } from '../../gateway/events.js'
 import { clearGrantsForAgent } from '../host/gui-service.js'
 import { config } from '../../config.js'
 import { retriedExec, execChecked } from './container-exec.js'
@@ -291,8 +291,8 @@ export async function ensureAgentRunning(agentId: string): Promise<{
   const running = runningAgents.get(agentId)
   if (running) {
     return {
-      guiHttpPort: running.guiHttpPort,
-      guiHttpsPort: running.guiHttpsPort,
+      guiHttpPort: running.ports.http,
+      guiHttpsPort: running.ports.https,
       width: DISPLAY_WIDTH,
       height: DISPLAY_HEIGHT,
     }
@@ -555,26 +555,33 @@ export async function startAgent(agentId: string): Promise<void> {
       box,
       agent,
       sandboxId: runtimeState.sandboxId,
-      guiHttpPort,
-      guiHttpsPort,
-      backendUrl,
-      daemonAssetHash: daemonAssets.assetHash,
+      ports: { http: guiHttpPort, https: guiHttpsPort },
+      session: {
+        id: runtimeState.sessionId,
+        hasSession: runtimeState.hasSession,
+        startedAt,
+      },
+      execution: {
+        handle: null,
+        thinkingSince: 0,
+      },
+      interrupt: {
+        requested: false,
+        abort: null,
+      },
+      daemon: {
+        assetHash: daemonAssets.assetHash,
+        backendUrl,
+      },
       cliInstalled: true,
-      hasSession: runtimeState.hasSession,
-      sessionId: runtimeState.sessionId,
-      startedAt,
-      thinkingSince: 0,
-      currentExecution: null,
-      interruptRequested: false,
-      interruptAbort: null,
     })
 
     setAgentStatus(agentId, 'idle', { source: 'start-agent', broadcast: false })
     emitStartupLog(agentId, 'Agent ready')
 
-    broadcastAll({
+    emit({
       type: 'agent:screen',
-      payload: { agentId, guiHttpPort, guiHttpsPort, width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
+      payload: { agentId, guiHttpPort: guiHttpPort, guiHttpsPort: guiHttpsPort, width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
     })
   } catch (err) {
     if (box) {
@@ -613,7 +620,7 @@ export async function startAgent(agentId: string): Promise<void> {
 export async function stopAgent(agentId: string): Promise<void> {
   const running = runningAgents.get(agentId)
   if (running) {
-    if (running.hasSession) {
+    if (running.session.hasSession) {
       try {
         setAgentStatus(agentId, 'stopping', { source: 'stop-agent' })
 
@@ -629,9 +636,9 @@ export async function stopAgent(agentId: string): Promise<void> {
       }
     }
 
-    if (running.currentExecution) {
-      try { await running.currentExecution.kill() } catch {}
-      running.currentExecution = null
+    if (running.execution.handle) {
+      try { await running.execution.handle.kill() } catch {}
+      running.execution.handle = null
     }
     agentLocks.delete(agentId)
 
@@ -662,23 +669,23 @@ export async function stopAgent(agentId: string): Promise<void> {
 export async function interruptAgentWorkflow(agentId: string): Promise<boolean> {
   const running = runningAgents.get(agentId)
   if (!running) return false
-  const hasActiveTurn = Boolean(running.currentExecution) || running.thinkingSince > 0 || agentLocks.has(agentId)
+  const hasActiveTurn = Boolean(running.execution.handle) || running.execution.thinkingSince > 0 || agentLocks.has(agentId)
   if (!hasActiveTurn) return false
 
-  running.interruptRequested = true
+  running.interrupt.requested = true
   triggerInterruptSignals(agentId, running)
 
   // Safety net: if the abort signal + kill didn't finalize within 3s, force-reset
   setTimeout(() => {
     const current = runningAgents.get(agentId)
-    if (!current || !current.interruptRequested) return
+    if (!current || !current.interrupt.requested) return
     const agent = agentStore.getAgent(agentId)
     if (!agent || (agent.status !== 'thinking' && agent.status !== 'responding')) return
     console.warn(`[${agentId}] Interrupt safety timeout — force-resetting to idle`)
-    current.thinkingSince = 0
-    current.currentExecution = null
-    current.interruptRequested = false
-    current.interruptAbort = null
+    current.execution.thinkingSince = 0
+    current.execution.handle = null
+    current.interrupt.requested = false
+    current.interrupt.abort = null
     agentLocks.delete(agentId)
     setAgentStatus(agentId, 'idle', { source: 'interrupt-timeout', reason: 'interrupt did not finalize within 3s' })
     emitAgentLogEntries(agentId, [{

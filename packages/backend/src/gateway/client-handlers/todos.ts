@@ -1,5 +1,5 @@
 import type { Handler } from '../protocol.js'
-import * as broadcast from '../broadcast.js'
+import { emit } from '../events.js'
 import * as todoStore from '../../storage/todo-store.js'
 import * as todoTimer from '../../domains/agents/todo-timer.js'
 import { parseAndValidateDueAt } from '../../domains/agents/due-at.js'
@@ -18,7 +18,7 @@ export function registerTodoHandlers(h: (method: string, fn: Handler) => void): 
     if (!parsedDueAt.ok) throw new Error(parsedDueAt.error!)
     const todo = todoStore.createTodo({ agentId: agentId as string, title: title as string, description: description as string | undefined, dueAt: parsedDueAt.value! })
     todoTimer.armTimer(todo.id, todo.dueAt)
-    broadcast.sendToAll({ type: 'todo:change', payload: todo })
+    emit({ type: 'todo:change', payload: todo })
     return todo
   })
 
@@ -35,7 +35,7 @@ export function registerTodoHandlers(h: (method: string, fn: Handler) => void): 
       todoTimer.clearTimer(id as string)
       if (updated.status === 'pending' && updated.dueAt) todoTimer.armTimer(id as string, updated.dueAt)
     }
-    broadcast.sendToAll({ type: 'todo:change', payload: updated })
+    emit({ type: 'todo:change', payload: updated })
     return updated
   })
 
@@ -44,7 +44,7 @@ export function registerTodoHandlers(h: (method: string, fn: Handler) => void): 
     const deleted = todoStore.deleteTodo(id)
     if (!deleted) throw new Error('not_found')
     todoTimer.clearTimer(id)
-    broadcast.sendToAll({ type: 'todo:delete', payload: { id, agentId: deleted.agentId } })
+    emit({ type: 'todo:delete', payload: { id, agentId: deleted.agentId } })
     return { ok: true }
   })
 }

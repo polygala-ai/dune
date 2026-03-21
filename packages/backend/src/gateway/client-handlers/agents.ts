@@ -1,5 +1,5 @@
 import type { Handler } from '../protocol.js'
-import * as broadcast from '../broadcast.js'
+import { emit } from '../events.js'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentLogStore from '../../storage/agent-log-store.js'
 import * as channelStore from '../../storage/channel-store.js'
@@ -42,7 +42,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     const agent = agentStore.createAgent(body as any)
     const general = channelStore.getChannelByName('general')
     if (general) channelStore.subscribeAgent(agent.id, general.id)
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'created' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'created' } })
     return agent
   })
 
@@ -77,7 +77,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     if (existing.hostOperatorApprovalMode !== 'dangerously-skip' && agent.hostOperatorApprovalMode === 'dangerously-skip') {
       await hostOperatorService.autoApprovePendingHostOperatorRequestsForAgent(agent)
     }
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'updated' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'updated' } })
     return agent
   })
 
@@ -88,7 +88,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     await destroyAgentRuntimeSandbox(agentId)
     const ok = agentStore.deleteAgent(agentId)
     if (!ok) throw new Error('not_found')
-    broadcast.sendToAll({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'deleted' } })
+    emit({ type: 'workspace:invalidate', payload: { resources: ['agents'], reason: 'deleted' } })
     return { ok: true }
   })
 
@@ -96,7 +96,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
     await ensureAgentRunning(agent.id)
-    broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'idle' } })
+    emit({ type: 'agent:status', payload: { agentId: agent.id, status: 'idle' } })
     return { ok: true, status: 'idle' }
   })
 
@@ -104,7 +104,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     const agent = agentStore.getAgent(params.id as string)
     if (!agent) throw new Error('not_found')
     await stopAgent(agent.id)
-    broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
+    emit({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
     return { ok: true, status: 'stopped' }
   })
 
@@ -160,7 +160,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
               ;(timeoutHandle as any).unref()
             }),
           ])
-          broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'idle' } })
+          emit({ type: 'agent:status', payload: { agentId: agent.id, status: 'idle' } })
           results[index] = { id: agent.id, name: agent.name, status: 'idle' }
         } catch (err: any) {
           const errorMessage = err?.message || 'unknown startup failure'
@@ -183,7 +183,7 @@ export function registerAgentHandlers(h: (method: string, fn: Handler) => void):
     for (const agent of agents) {
       if (isAgentRunning(agent.id)) {
         await stopAgent(agent.id)
-        broadcast.sendToAll({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
+        emit({ type: 'agent:status', payload: { agentId: agent.id, status: 'stopped' } })
       }
     }
     return { ok: true }

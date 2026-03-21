@@ -162,7 +162,7 @@ export async function reconcileCommunicationDaemons(
   let shouldRestart = force
 
   if (!shouldRestart) {
-    shouldRestart = daemonAssetHash !== (running.daemonAssetHash || '')
+    shouldRestart = daemonAssetHash !== (running.daemon.assetHash || '')
   }
 
   if (!shouldRestart) {
@@ -170,8 +170,8 @@ export async function reconcileCommunicationDaemons(
     shouldRestart = !processStatus.listenerRunning
   }
 
-  running.backendUrl = wsUrl
-  running.daemonAssetHash = daemonAssetHash
+  running.daemon.backendUrl = wsUrl
+  running.daemon.assetHash = daemonAssetHash
 
   if (!shouldRestart) {
     return false

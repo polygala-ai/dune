@@ -150,13 +150,12 @@ test('running sandbox overlay prefers persisted sandbox id', async () => {
       box: fakeBox as any,
       agent,
       sandboxId: 'box-from-running-map',
-      guiHttpPort: 42001,
-      guiHttpsPort: 42002,
-      backendUrl: '',
+      ports: { http: 42001, https: 42002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     const running = await listRunningAgentSandboxes()

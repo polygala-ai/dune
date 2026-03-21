@@ -119,8 +119,8 @@ export function __getStopAgentShutdownPromptForTests(): string {
 // ── Interrupt helpers ───────────────────────────────────────────────────
 
 export function triggerInterruptSignals(agentId: string, running: RunningAgent): void {
-  if (running.currentExecution) {
-    running.currentExecution.kill().then(() => {
+  if (running.execution.handle) {
+    running.execution.handle.kill().then(() => {
       console.log(`[${agentId}] execution.kill() succeeded`)
     }).catch((err: any) => {
       console.warn(`[${agentId}] execution.kill() failed: ${err?.message || err}`)
@@ -143,21 +143,21 @@ export function triggerInterruptSignals(agentId: string, running: RunningAgent):
   })
 
   // Resolve the abort signal so streamingExec unblocks immediately
-  if (running.interruptAbort) {
-    running.interruptAbort.resolve()
-    running.interruptAbort = null
+  if (running.interrupt.abort) {
+    running.interrupt.abort.resolve()
+    running.interrupt.abort = null
   }
 }
 
 export function finalizeInterruptedRun(agentId: string, running: RunningAgent, metadata: Record<string, unknown> = {}, sessionId?: string): string {
-  running.hasSession = true
+  running.session.hasSession = true
   if (sessionId) {
-    running.sessionId = sessionId
+    running.session.id = sessionId
     agentRuntimeStore.setAgentRuntimeSessionId(agentId, sessionId)
   } else {
     agentRuntimeStore.setAgentRuntimeHasSession(agentId, true)
   }
-  running.thinkingSince = 0
+  running.execution.thinkingSince = 0
   emitRuntimeLog(agentId, 'lifecycle', 'claude_cli_interrupted', metadata)
   emitAgentLogEntries(agentId, [{
     id: newEventId(),
@@ -199,12 +199,12 @@ export async function _sendMessageInner(
   messages: Array<{ authorName: string; content: string }>,
   metadata?: InputMetadata,
 ): Promise<string> {
-  running.interruptRequested = false
+  running.interrupt.requested = false
   let abortResolve: () => void
   const abortPromise = new Promise<void>((resolve) => { abortResolve = resolve })
-  running.interruptAbort = { promise: abortPromise, resolve: abortResolve! }
+  running.interrupt.abort = { promise: abortPromise, resolve: abortResolve! }
   setAgentStatus(agentId, 'thinking', { source: 'send-message' })
-  running.thinkingSince = Date.now()
+  running.execution.thinkingSince = Date.now()
 
   // Set busy flag so mailbox daemon skips polling during CLI invocation
   await retriedExec(running.box, 'touch', ['/tmp/agent-busy'], { DISPLAY: ':1' }, 10_000).catch(() => {})
@@ -286,24 +286,24 @@ export async function _sendMessageInner(
 
     const oauthToken = buildClaudeCliAuthEnvValues().CLAUDE_CODE_OAUTH_TOKEN || ''
     const modelId = resolveClaudeModelId(currentAgent)
-    const usePlanMode = currentAgent.workMode === 'plan-first' && !running.hasSession
-    const turnSessionId = running.sessionId || randomUUID()
+    const usePlanMode = currentAgent.workMode === 'plan-first' && !running.session.hasSession
+    const turnSessionId = running.session.id || randomUUID()
     const cliCmd = buildClaudeCliCommand({
       agentId,
       promptFile,
       systemPromptFile,
-      hasSession: running.hasSession,
+      hasSession: running.session.hasSession,
       oauthToken,
       modelId,
-      wsUrl: running.backendUrl,
+      wsUrl: running.daemon.backendUrl,
       ...(usePlanMode ? { permissionMode: 'plan' as const } : {}),
-      ...(running.sessionId ? { resumeSessionId: running.sessionId } : { sessionId: turnSessionId }),
+      ...(running.session.id ? { resumeSessionId: running.session.id } : { sessionId: turnSessionId }),
     })
 
     console.log(`[${agentId}] Starting claude -p (prompt length: ${fullPrompt.length})...`)
     emitRuntimeLog(agentId, 'lifecycle', 'claude_cli_start', {
       promptLength: fullPrompt.length,
-      hasSession: running.hasSession,
+      hasSession: running.session.hasSession,
     })
 
     let fullResponse = ''
@@ -341,15 +341,15 @@ export async function _sendMessageInner(
       },
       300_000,
       (cb) => {
-        running.currentExecution = cb
-        if (cb && running.interruptRequested) {
+        running.execution.handle = cb
+        if (cb && running.interrupt.requested) {
           triggerInterruptSignals(agentId, running)
         }
       },
-      running.interruptAbort?.promise,
+      running.interrupt.abort?.promise,
     )
 
-    if (running.interruptRequested || result.aborted) {
+    if (running.interrupt.requested || result.aborted) {
       return finalizeInterruptedRun(agentId, running, {
         exitCode: result.exitCode,
         stdoutBytes: result.stdout.length,
@@ -374,8 +374,8 @@ export async function _sendMessageInner(
       }
     }
 
-    running.hasSession = true
-    running.sessionId = turnSessionId
+    running.session.hasSession = true
+    running.session.id = turnSessionId
     agentRuntimeStore.setAgentRuntimeSessionId(agentId, turnSessionId)
 
     // Plan-first phase 2
@@ -402,8 +402,7 @@ export async function _sendMessageInner(
         hasSession: true,
         oauthToken,
         modelId,
-        agentHttpUrl: running.agentHttpUrl,
-        wsUrl: running.backendUrl,
+        wsUrl: running.daemon.backendUrl,
         resumeSessionId: turnSessionId,
       })
 
@@ -423,12 +422,12 @@ export async function _sendMessageInner(
         },
         300_000,
         (cb) => {
-          running.currentExecution = cb
-          if (cb && running.interruptRequested) {
+          running.execution.handle = cb
+          if (cb && running.interrupt.requested) {
             triggerInterruptSignals(agentId, running)
           }
         },
-        running.interruptAbort?.promise,
+        running.interrupt.abort?.promise,
       )
 
       if (execResult.stderr) {
@@ -439,7 +438,7 @@ export async function _sendMessageInner(
       fullResponse = execResponse || fullResponse
     }
 
-    running.thinkingSince = 0
+    running.execution.thinkingSince = 0
     setAgentStatus(agentId, 'idle', { source: 'send-message' })
 
     const leaderPolicyViolation = currentAgent.role === 'leader'
@@ -473,13 +472,13 @@ export async function _sendMessageInner(
 
     return fullResponse || '[NO_RESPONSE]'
   } catch (err: any) {
-    if (running.interruptRequested) {
+    if (running.interrupt.requested) {
       return finalizeInterruptedRun(agentId, running, {
         error: err?.message?.slice(0, 200) || 'unknown interrupt error',
       }, turnSessionId)
     }
     console.error(`[${agentId}] sendMessage error:`, err.message?.slice(0, 200))
-    running.thinkingSince = 0
+    running.execution.thinkingSince = 0
     const errorMessage = err.message?.slice(0, 200) || 'unknown sendMessage error'
     emitRuntimeLog(agentId, 'lifecycle', 'claude_cli_failed', { error: errorMessage })
     setAgentStatus(agentId, 'error', { source: 'send-message', reason: errorMessage })
@@ -491,9 +490,9 @@ export async function _sendMessageInner(
     }, 30_000)
     throw err
   } finally {
-    running.currentExecution = null
-    running.interruptRequested = false
-    running.interruptAbort = null
+    running.execution.handle = null
+    running.interrupt.requested = false
+    running.interrupt.abort = null
     await retriedExec(running.box, 'rm', ['-f', '/tmp/agent-busy'], { DISPLAY: ':1' }, 10_000).catch(() => {})
   }
 }

@@ -9,7 +9,7 @@ import { isAgentRunning } from '../agents/runtime-state.js'
 import { startAgent } from '../agents/lifecycle.js'
 import { sendMessage } from '../agents/messaging.js'
 import { markdownToBlocks, extractImageUrls } from './block-kit.js'
-import { sendToChannel as broadcastToChannel } from '../../gateway/broadcast.js'
+import { emitToChannel } from '../../gateway/events.js'
 import { config } from '../../config.js'
 import {
   getWebClient,
@@ -74,7 +74,7 @@ export async function handleInboundMessage(slackChannelId: string, slackUserId: 
   for (const duneChannelId of subscribedChannelIds) {
     const channelContent = `**${authorName}** (via Slack): ${fullText}`
     const msg = messageStore.createMessage(duneChannelId, 'user', channelContent)
-    broadcastToChannel(duneChannelId, { type: 'message:new', payload: msg })
+    emitToChannel(duneChannelId, { type: 'message:new', payload: msg })
   }
 
   // Track Slack thread context so host operator approvals route to this channel
@@ -92,7 +92,7 @@ export async function handleInboundMessage(slackChannelId: string, slackUserId: 
     if (response.trim()) {
       for (const duneChannelId of subscribedChannelIds) {
         const agentMsg = messageStore.createMessage(duneChannelId, agent.id, response)
-        broadcastToChannel(duneChannelId, { type: 'message:new', payload: agentMsg })
+        emitToChannel(duneChannelId, { type: 'message:new', payload: agentMsg })
       }
     }
   } catch (err) {

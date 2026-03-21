@@ -1,5 +1,6 @@
 import { getDb } from './database.js'
 import { newId } from '../utils/ids.js'
+import { parseJsonArray, boolToInt, intToBool } from './helpers.js'
 import type {
   HostCommandDecisionType,
   HostCommandRequest,
@@ -60,21 +61,11 @@ type UpdateHostCommandPatch = Partial<{
 }>
 
 function boolFromDb(value: unknown): boolean {
-  return Number(value) === 1
+  return intToBool(Number(value))
 }
 
 function boolToDb(value: boolean): number {
-  return value ? 1 : 0
-}
-
-function parseJsonArray(value: string): string[] {
-  try {
-    const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((item) => String(item))
-  } catch {
-    return []
-  }
+  return boolToInt(value)
 }
 
 function mapRow(row: any): StoredHostCommandRow {

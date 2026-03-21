@@ -72,13 +72,12 @@ test('system actor can fully operate managed runtime sandboxes while non-system 
       box: fakeBox as any,
       agent,
       sandboxId,
-      guiHttpPort: 47001,
-      guiHttpsPort: 47002,
-      backendUrl: '',
+      ports: { http: 47001, https: 47002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
     __setRuntimeForTests({

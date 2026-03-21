@@ -356,13 +356,12 @@ function setupManagedRuntime(fakeBox: FakeRuntimeBox) {
     box: fakeBox as any,
     agent,
     sandboxId,
-    guiHttpPort: 48501,
-    guiHttpsPort: 48502,
-    backendUrl: '',
+    ports: { http: 48501, https: 48502 },
+    session: { id: null, hasSession: false, startedAt: Date.now() },
+    execution: { handle: null, thinkingSince: 0 },
+    interrupt: { requested: false, abort: null },
+    daemon: { assetHash: undefined, backendUrl: '' },
     cliInstalled: true,
-    hasSession: false,
-    startedAt: Date.now(),
-    thinkingSince: 0,
   } as any)
 
   return { agent, sandboxId }

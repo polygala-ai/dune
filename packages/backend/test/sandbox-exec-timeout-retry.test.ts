@@ -167,13 +167,12 @@ function registerManagedRuntime(box: ControlledRuntimeBox): { agentId: string; s
     box: box as any,
     agent,
     sandboxId,
-    guiHttpPort,
-    guiHttpsPort,
-    backendUrl: '',
+    ports: { http: guiHttpPort, https: guiHttpsPort },
+    session: { id: null, hasSession: false, startedAt: Date.now() },
+    execution: { handle: null, thinkingSince: 0 },
+    interrupt: { requested: false, abort: null },
+    daemon: { assetHash: undefined, backendUrl: '' },
     cliInstalled: true,
-    hasSession: false,
-    startedAt: Date.now(),
-    thinkingSince: 0,
   } as any)
 
   return {
