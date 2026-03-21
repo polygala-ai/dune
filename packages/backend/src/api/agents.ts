@@ -1,47 +1,35 @@
 import { Hono } from 'hono'
-import { resolve, join, dirname } from 'node:path'
-import { mkdirSync, readdirSync, statSync, readFileSync, writeFileSync, existsSync, unlinkSync, type Dirent } from 'node:fs'
 import * as agentStore from '../storage/agent-store.js'
 import * as channelStore from '../storage/channel-store.js'
-import * as messageStore from '../storage/message-store.js'
 import * as agentLogStore from '../storage/agent-log-store.js'
-import * as agentRuntimeMountStore from '../storage/agent-runtime-mount-store.js'
 import * as miniappStore from '../storage/miniapp-store.js'
 import * as agentManager from '../agents/agent-manager.js'
 import * as mailboxService from '../mailbox/mailbox-service.js'
 import * as hostOperatorService from '../host-operator/host-operator-service.js'
 import { config } from '../config.js'
-import { sendToAll as broadcastAll, sendToChannel as broadcastToChannel } from '../gateway/broadcast.js'
+import { sendToAll as broadcastAll } from '../gateway/broadcast.js'
 import * as sandboxManager from '../sandboxes/sandbox-manager.js'
-import { parseMentions } from '../utils/mentions.js'
-import type {
-  CreateAgentMountRequest,
-  AgentRoleType,
-  AgentWorkModeType,
-  HostOperatorCreateRequest,
-  HostOperatorApprovalModeType,
-  SandboxActorTypeType,
-  UpdateAgentMountRequest,
-} from '@dune/shared'
+import type { AgentRoleType, HostOperatorCreateRequest } from '@dune/shared'
+import { agentsMemoryApi } from './agents-memory.js'
+import { agentsMountsApi } from './agents-mounts.js'
 import {
-  HostDirectoryPickerError,
-  pickHostDirectory,
-  type HostDirectoryPickResult,
-} from '../utils/host-directory-picker.js'
+  isNoResponse,
+  readOptionalJsonBody,
+  normalizeHostOperatorApprovalMode,
+  normalizeStringArray,
+  normalizeAgentRole,
+  normalizeAgentWorkMode,
+  normalizeClaudeModelId,
+  parseActor,
+  mapHostOperatorErrorToResponse,
+  getEnsureAgentRunningImpl,
+  __setEnsureAgentRunningForTests,
+  __setPickHostDirectoryForTests,
+} from './agents-validation.js'
+
+export { __setEnsureAgentRunningForTests, __setPickHostDirectoryForTests }
 
 export const agentsApi = new Hono()
-const CLAUDE_MODEL_ID_PATTERN = /^[A-Za-z0-9._:-]+$/
-
-function isNoResponse(text: string): boolean {
-  const trimmed = text.trim()
-  return trimmed === '[NO_RESPONSE]' || trimmed.endsWith('[NO_RESPONSE]')
-}
-
-async function readOptionalJsonBody(c: any): Promise<any> {
-  const raw = await c.req.raw.text()
-  if (!raw.trim()) return null
-  return JSON.parse(raw)
-}
 
 function getAgentMaps() {
   const allAgents = agentStore.listAgents()
@@ -91,101 +79,13 @@ function appendTeamRoster(promptParts: string[], allAgents: Array<{ id: string; 
 const START_ALL_MAX_CONCURRENCY = 4
 const START_ALL_TIMEOUT_GRACE_MS = 2_000
 
-type ActorIdentity = {
-  actorType: SandboxActorTypeType
-  actorId: string
-}
+// ── Mount sub-routes ──────────────────────────────────────────────────
+agentsApi.route('/', agentsMountsApi)
 
-function normalizeHostOperatorApprovalMode(value: unknown): HostOperatorApprovalModeType {
-  if (value === 'approval-required' || value === 'dangerously-skip') return value
-  throw new Error('invalid_host_operator_approval_mode')
-}
+// ── Memory sub-routes ─────────────────────────────────────────────────
+agentsApi.route('/', agentsMemoryApi)
 
-function normalizeStringArray(value: unknown, errorMessage: string): string[] {
-  if (!Array.isArray(value)) throw new Error(errorMessage)
-  return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))]
-}
-
-function normalizeAgentRole(value: unknown): AgentRoleType {
-  if (value === 'leader' || value === 'follower') return value
-  throw new Error('invalid_agent_role')
-}
-
-function normalizeAgentWorkMode(value: unknown): AgentWorkModeType {
-  if (value === 'normal' || value === 'plan-first') return value
-  throw new Error('invalid_agent_work_mode')
-}
-
-function normalizeClaudeModelId(value: unknown): string | null {
-  if (value == null) return null
-  if (typeof value !== 'string') throw new Error('invalid_model_id')
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  if (!CLAUDE_MODEL_ID_PATTERN.test(trimmed)) throw new Error('invalid_model_id')
-  return trimmed
-}
-
-type EnsureAgentRunningFn = typeof agentManager.ensureAgentRunning
-let ensureAgentRunningImpl: EnsureAgentRunningFn = (agentId) => agentManager.ensureAgentRunning(agentId)
-
-type PickHostDirectoryFn = () => Promise<HostDirectoryPickResult>
-let pickHostDirectoryImpl: PickHostDirectoryFn = () => pickHostDirectory()
-
-export function __setEnsureAgentRunningForTests(fn: EnsureAgentRunningFn | null): void {
-  ensureAgentRunningImpl = fn ?? ((agentId: string) => agentManager.ensureAgentRunning(agentId))
-}
-
-export function __setPickHostDirectoryForTests(fn: PickHostDirectoryFn | null): void {
-  pickHostDirectoryImpl = fn ?? (() => pickHostDirectory())
-}
-
-function mapAgentMountErrorToResponse(c: any, err: any) {
-  const message = String(err?.message || 'mount_error')
-  if (message === 'invalid_host_path') return c.json({ error: message }, 400)
-  if (message === 'host_path_not_found') return c.json({ error: message }, 400)
-  if (message === 'invalid_guest_path') return c.json({ error: message }, 400)
-  if (message === 'guest_path_outside_workspace') return c.json({ error: message }, 400)
-  if (message === 'reserved_guest_path_conflict') return c.json({ error: message }, 400)
-  if (message === 'guest_path_conflict') return c.json({ error: message }, 409)
-  return c.json({ error: message }, 400)
-}
-
-function parseActor(c: any): ActorIdentity {
-  const actorTypeRaw = c.req.header('X-Actor-Type')
-  const actorIdRaw = c.req.header('X-Actor-Id')
-  const actorType = actorTypeRaw === 'human' || actorTypeRaw === 'agent' || actorTypeRaw === 'system'
-    ? actorTypeRaw
-    : null
-  const actorId = typeof actorIdRaw === 'string' ? actorIdRaw.trim() : ''
-
-  if (!actorType || !actorId) {
-    throw new Error('missing_actor_identity')
-  }
-
-  return { actorType, actorId }
-}
-
-function mapHostOperatorErrorToResponse(c: any, err: any) {
-  const message = String(err?.message || 'host_operator_error')
-  if (message === 'missing_actor_identity') return c.json({ error: message }, 401)
-  if (message === 'forbidden') return c.json({ error: message }, 403)
-  if (message === 'bundle_id_not_allowed' || message === 'path_not_allowed') return c.json({ error: message }, 403)
-  if (message === 'host_operator_unavailable') return c.json({ error: message }, 503)
-  if (message === 'bundle_id_required') return c.json({ error: message }, 400)
-  if (message === 'path_required') return c.json({ error: message }, 400)
-  if (message === 'path_must_be_absolute') return c.json({ error: message }, 400)
-  if (message === 'path_not_found') return c.json({ error: message }, 400)
-  if (message === 'parent_path_not_found') return c.json({ error: message }, 400)
-  if (message === 'point_required') return c.json({ error: message }, 400)
-  if (message === 'to_point_required') return c.json({ error: message }, 400)
-  if (message === 'query_required') return c.json({ error: message }, 400)
-  if (message === 'text_required') return c.json({ error: message }, 400)
-  if (message === 'key_required') return c.json({ error: message }, 400)
-  if (message === 'url_required') return c.json({ error: message }, 400)
-  if (message === 'invalid_host_operator_request') return c.json({ error: message }, 400)
-  if (message === 'request_not_pending') return c.json({ error: message }, 409)
-  return c.json({ error: message }, 400)
-}
+// ── Agent CRUD ────────────────────────────────────────────────────────
 
 agentsApi.get('/by-name/:name', (c) => {
   const agent = agentStore.getAgentByName(c.req.param('name'))
@@ -283,7 +183,7 @@ agentsApi.post('/start-all', async (c) => {
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null
       try {
         await Promise.race([
-          ensureAgentRunningImpl(agent.id),
+          getEnsureAgentRunningImpl()(agent.id),
           new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => {
               reject(new Error(`startup_timeout: exceeded ${startupTimeoutMs}ms`))
@@ -306,7 +206,7 @@ agentsApi.post('/start-all', async (c) => {
   })
 
   await Promise.all(workers)
-  // BoxLite breaks guest→host networking when new containers start.
+  // BoxLite breaks guest->host networking when new containers start.
   // Reconcile daemons on running agents with fresh network detection.
   void agentManager.reconcileAllRunningCommunicationDaemons().catch((err: any) => {
     console.warn(`[agents/start-all] reconcile daemons failed: ${err?.message || err}`)
@@ -449,7 +349,7 @@ agentsApi.post('/apps/:agentId/:slug/action', async (c) => {
   const agentId = c.req.param('agentId')
   const slug = c.req.param('slug')
   const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ ok: false, error: 'Not found' }, 404)
+  if (!agent) return c.json({ error: 'Not found' }, 404)
 
   const app = miniappStore.getMiniApp(agent.id, slug)
   if (!app) return c.json({ ok: false, error: 'Miniapp not found' }, 404)
@@ -603,104 +503,7 @@ agentsApi.post('/:id/apps/:slug/action', async (c) => {
   }
 })
 
-agentsApi.get('/:id/mounts', (c) => {
-  const agentId = c.req.param('id')
-  const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-  return c.json(agentRuntimeMountStore.listAgentRuntimeMounts(agentId))
-})
-
-agentsApi.post('/:id/mounts/select-host-directory', async (c) => {
-  const agentId = c.req.param('id')
-  const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-  try {
-    const result = await pickHostDirectoryImpl()
-    return c.json(result, 200)
-  } catch (err: any) {
-    if (err instanceof HostDirectoryPickerError) {
-      if (err.code === 'picker_unavailable') {
-        return c.json({ error: 'folder_picker_unavailable' }, 503)
-      }
-      return c.json({ error: 'folder_picker_failed' }, 500)
-    }
-    return c.json({ error: 'folder_picker_failed' }, 500)
-  }
-})
-
-agentsApi.post('/:id/mounts', async (c) => {
-  const agentId = c.req.param('id')
-  const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-  if (agentManager.isAgentRunning(agentId)) {
-    return c.json({ error: 'agent_running_stop_required' }, 409)
-  }
-
-  try {
-    const body = await c.req.json() as CreateAgentMountRequest
-    const created = agentRuntimeMountStore.createAgentRuntimeMount(agentId, {
-      hostPath: String(body.hostPath || ''),
-      guestPath: String(body.guestPath || ''),
-      readOnly: body.readOnly === undefined ? true : !!body.readOnly,
-    })
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
-    return c.json(created, 201)
-  } catch (err: any) {
-    if (String(err?.message || '').startsWith('Failed to reset runtime sandbox')) {
-      return c.json({ error: err.message }, 500)
-    }
-    return mapAgentMountErrorToResponse(c, err)
-  }
-})
-
-agentsApi.patch('/:id/mounts/:mountId', async (c) => {
-  const agentId = c.req.param('id')
-  const mountId = c.req.param('mountId')
-  const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-  if (agentManager.isAgentRunning(agentId)) {
-    return c.json({ error: 'agent_running_stop_required' }, 409)
-  }
-
-  try {
-    const body = await c.req.json() as UpdateAgentMountRequest
-    const updated = agentRuntimeMountStore.updateAgentRuntimeMount(agentId, mountId, {
-      hostPath: body.hostPath === undefined ? undefined : String(body.hostPath || ''),
-      guestPath: body.guestPath === undefined ? undefined : String(body.guestPath || ''),
-      readOnly: body.readOnly === undefined ? undefined : !!body.readOnly,
-    })
-    if (!updated) return c.json({ error: 'not_found' }, 404)
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
-    return c.json(updated)
-  } catch (err: any) {
-    if (String(err?.message || '').startsWith('Failed to reset runtime sandbox')) {
-      return c.json({ error: err.message }, 500)
-    }
-    return mapAgentMountErrorToResponse(c, err)
-  }
-})
-
-agentsApi.delete('/:id/mounts/:mountId', async (c) => {
-  const agentId = c.req.param('id')
-  const mountId = c.req.param('mountId')
-  const agent = agentStore.getAgent(agentId)
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-  if (agentManager.isAgentRunning(agentId)) {
-    return c.json({ error: 'agent_running_stop_required' }, 409)
-  }
-
-  const deleted = agentRuntimeMountStore.deleteAgentRuntimeMount(agentId, mountId)
-  if (!deleted) return c.json({ error: 'not_found' }, 404)
-  try {
-    await agentManager.resetStoppedAgentRuntimeSandbox(agentId)
-    return c.body(null, 204)
-  } catch (err: any) {
-    if (String(err?.message || '').startsWith('Failed to reset runtime sandbox')) {
-      return c.json({ error: err.message }, 500)
-    }
-    return c.json({ error: err?.message || 'mount_error' }, 500)
-  }
-})
+// ── Agent Skills & System Prompt ─────────────────────────────────────
 
 agentsApi.get('/:id/skills', (c) => {
   const agent = agentStore.getAgent(c.req.param('id'))
@@ -718,6 +521,8 @@ agentsApi.get('/:id/system-prompt', (c) => {
     return c.json({ error: err.message }, 500)
   }
 })
+
+// ── Single Agent CRUD ────────────────────────────────────────────────
 
 agentsApi.get('/:id', (c) => {
   const agent = agentStore.getAgent(c.req.param('id'))
@@ -810,6 +615,8 @@ agentsApi.delete('/:id', async (c) => {
   })
   return c.json({ ok: true })
 })
+
+// ── Agent Lifecycle ──────────────────────────────────────────────────
 
 agentsApi.post('/:id/start', async (c) => {
   const agent = agentStore.getAgent(c.req.param('id'))
@@ -1037,125 +844,6 @@ agentsApi.post('/:id/respond', async (c) => {
     return c.json({ ok: true, response })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
-  }
-})
-
-// ── Agent Memory (flat file operations) ──────────────────────────────
-
-function getMemoryDir(agentId: string): string {
-  return join(config.agentsRoot, agentId, '.dune', 'memory')
-}
-
-function safeRelativePath(filePath: string): string | null {
-  // Prevent path traversal — must be a relative path without ..
-  const normalized = filePath.replace(/\\/g, '/')
-  if (normalized.startsWith('/') || normalized.includes('..') || normalized.includes('\0')) return null
-  return normalized
-}
-
-// List all memory files
-agentsApi.get('/:id/memory', async (c) => {
-  const agent = agentStore.getAgent(c.req.param('id'))
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-
-  const memDir = getMemoryDir(agent.id)
-  mkdirSync(memDir, { recursive: true })
-
-  const files: Array<{ path: string; size: number; modifiedAt: number }> = []
-  function walk(dir: string, prefix: string) {
-    let entries: Dirent[]
-    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
-    for (const entry of entries) {
-      const rel = prefix ? `${prefix}/${entry.name}` : entry.name
-      if (entry.isDirectory()) {
-        walk(join(dir, entry.name), rel)
-      } else if (entry.name.endsWith('.md')) {
-        const fullPath = join(dir, entry.name)
-        let stat
-        try {
-          stat = statSync(fullPath)
-        } catch {
-          continue
-        }
-        if (!stat.isFile()) continue
-        files.push({ path: rel, size: stat.size, modifiedAt: stat.mtimeMs })
-      }
-    }
-  }
-  walk(memDir, '')
-  files.sort((a, b) => a.path.localeCompare(b.path))
-  return c.json(files)
-})
-
-// Read a single memory file
-agentsApi.get('/:id/memory/file', async (c) => {
-  const agent = agentStore.getAgent(c.req.param('id'))
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-
-  const filePath = safeRelativePath(c.req.query('path') || '')
-  if (!filePath) return c.json({ error: 'Invalid path' }, 400)
-
-  const fullPath = join(getMemoryDir(agent.id), filePath)
-
-  try {
-    const content = readFileSync(fullPath, 'utf-8')
-    return c.json({ content })
-  } catch {
-    return c.json({ error: 'File not found' }, 404)
-  }
-})
-
-// Create a new memory file
-agentsApi.post('/:id/memory/file', async (c) => {
-  const agent = agentStore.getAgent(c.req.param('id'))
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-
-  const filePath = safeRelativePath(c.req.query('path') || '')
-  if (!filePath) return c.json({ error: 'Invalid path' }, 400)
-
-  const fullPath = join(getMemoryDir(agent.id), filePath)
-
-  if (existsSync(fullPath)) return c.json({ error: 'File already exists' }, 409)
-
-  const body = await c.req.json()
-  const content = typeof body.content === 'string' ? body.content : ''
-  mkdirSync(dirname(fullPath), { recursive: true })
-  writeFileSync(fullPath, content, 'utf-8')
-  return c.json({ ok: true }, 201)
-})
-
-// Update a memory file
-agentsApi.put('/:id/memory/file', async (c) => {
-  const agent = agentStore.getAgent(c.req.param('id'))
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-
-  const filePath = safeRelativePath(c.req.query('path') || '')
-  if (!filePath) return c.json({ error: 'Invalid path' }, 400)
-
-  const fullPath = join(getMemoryDir(agent.id), filePath)
-
-  const body = await c.req.json()
-  const content = typeof body.content === 'string' ? body.content : ''
-  mkdirSync(dirname(fullPath), { recursive: true })
-  writeFileSync(fullPath, content, 'utf-8')
-  return c.json({ ok: true })
-})
-
-// Delete a memory file
-agentsApi.delete('/:id/memory/file', async (c) => {
-  const agent = agentStore.getAgent(c.req.param('id'))
-  if (!agent) return c.json({ error: 'Not found' }, 404)
-
-  const filePath = safeRelativePath(c.req.query('path') || '')
-  if (!filePath) return c.json({ error: 'Invalid path' }, 400)
-
-  const fullPath = join(getMemoryDir(agent.id), filePath)
-
-  try {
-    unlinkSync(fullPath)
-    return c.json({ ok: true })
-  } catch {
-    return c.json({ error: 'File not found' }, 404)
   }
 })
 
