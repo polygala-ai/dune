@@ -137,6 +137,10 @@ export const WEBRTC_LOCATION_BLOCK = [
   '  }',
 ].join('\n')
 
+// ── Nesting guard ───────────────────────────────────────────────────────
+/** Env vars to strip so Claude CLI doesn't think it's running inside another Claude instance. */
+export const NESTING_GUARD_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION', 'CLAUDE_CODE_PARENT_SESSION'] as const
+
 // ── Watchdog / timing ───────────────────────────────────────────────────
 /** Max time an agent can stay in "thinking" before watchdog resets it. */
 export const THINKING_WATCHDOG_MS = 330_000  // 5.5 min (300s CLI timeout + 30s buffer)
@@ -363,6 +367,9 @@ export type BuildClaudeCliCommandInput = {
   permissionMode?: 'plan'
   sessionId?: string
   resumeSessionId?: string
+  maxTurns?: number
+  effort?: string
+  extraCliArgs?: string[]
 }
 
 export interface InputMetadata {

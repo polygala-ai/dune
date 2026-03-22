@@ -32,6 +32,9 @@ export const AgentSchema = Type.Object({
   role: AgentRole,
   workMode: AgentWorkMode,
   modelIdOverride: NullableModelId,
+  maxTurns: Type.Union([Type.Number(), Type.Null()]),
+  effort: Type.Union([Type.String(), Type.Null()]),
+  extraCliArgs: Type.Union([Type.Array(Type.String()), Type.Null()]),
   hostOperatorApprovalMode: HostOperatorApprovalMode,
   hostOperatorApps: Type.Array(Type.String()),
   hostOperatorPaths: Type.Array(Type.String()),
@@ -55,6 +58,9 @@ export const CreateAgentSchema = Type.Object({
   role: Type.Optional(AgentRole),
   workMode: Type.Optional(AgentWorkMode),
   modelIdOverride: Type.Optional(NullableModelId),
+  maxTurns: Type.Optional(Type.Number()),
+  effort: Type.Optional(Type.String()),
+  extraCliArgs: Type.Optional(Type.Array(Type.String())),
   avatarColor: Type.Optional(Type.String()),
 })
 

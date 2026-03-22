@@ -20,6 +20,9 @@ const AGENT_SELECT_COLUMNS = [
   'role',
   'work_mode as workMode',
   'model_id_override as modelIdOverride',
+  'max_turns as maxTurns',
+  'effort',
+  'extra_cli_args_json as extraCliArgsJson',
   'host_operator_approval_mode as hostOperatorApprovalMode',
   'host_operator_apps_json as hostOperatorAppsJson',
   'host_operator_paths_json as hostOperatorPathsJson',
@@ -33,11 +36,15 @@ const AGENT_SELECT_COLUMNS = [
 type AgentRow = Agent & {
   hostOperatorAppsJson?: string
   hostOperatorPathsJson?: string
+  extraCliArgsJson?: string
 }
 
 function normalizeAgent(row: AgentRow): Agent {
   return {
     ...row,
+    maxTurns: row.maxTurns ?? null,
+    effort: row.effort ?? null,
+    extraCliArgs: parseJsonArray(row.extraCliArgsJson) as string[] | null || null,
     hostOperatorApps: parseJsonArray(row.hostOperatorAppsJson),
     hostOperatorPaths: parseJsonArray(row.hostOperatorPathsJson),
     keepAlive: row.keepAlive !== 0 && row.keepAlive !== false,
@@ -64,6 +71,9 @@ export function createAgent(data: CreateAgent): Agent {
     role,
     workMode: data.workMode ?? getDefaultWorkMode(role),
     modelIdOverride: data.modelIdOverride === undefined ? getDefaultModelIdOverride(role) : data.modelIdOverride,
+    maxTurns: data.maxTurns ?? null,
+    effort: data.effort ?? null,
+    extraCliArgs: data.extraCliArgs ?? null,
     hostOperatorApprovalMode: DEFAULT_HOST_OPERATOR_APPROVAL_MODE,
     hostOperatorApps: [],
     hostOperatorPaths: [],
@@ -74,7 +84,7 @@ export function createAgent(data: CreateAgent): Agent {
     createdAt: Date.now(),
   }
   db.prepare(
-    'INSERT INTO agents (id, name, personality, role, work_mode, model_id_override, host_exec_approval_mode, host_operator_approval_mode, host_operator_apps_json, host_operator_paths_json, keep_alive, status, avatar_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO agents (id, name, personality, role, work_mode, model_id_override, max_turns, effort, extra_cli_args_json, host_exec_approval_mode, host_operator_approval_mode, host_operator_apps_json, host_operator_paths_json, keep_alive, status, avatar_color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(
     agent.id,
     agent.name,
@@ -82,6 +92,9 @@ export function createAgent(data: CreateAgent): Agent {
     agent.role,
     agent.workMode,
     agent.modelIdOverride,
+    agent.maxTurns,
+    agent.effort,
+    agent.extraCliArgs ? JSON.stringify(agent.extraCliArgs) : null,
     agent.hostOperatorApprovalMode,
     agent.hostOperatorApprovalMode,
     JSON.stringify(agent.hostOperatorApps),
@@ -106,7 +119,7 @@ export function getAgent(id: string): Agent | undefined {
 
 export function updateAgent(
   id: string,
-  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'keepAlive' | 'status' | 'avatarColor' | 'slackChannelId'>>,
+  data: Partial<Pick<Agent, 'name' | 'personality' | 'role' | 'workMode' | 'modelIdOverride' | 'maxTurns' | 'effort' | 'extraCliArgs' | 'hostOperatorApprovalMode' | 'hostOperatorApps' | 'hostOperatorPaths' | 'keepAlive' | 'status' | 'avatarColor' | 'slackChannelId'>>,
 ): Agent | undefined {
   const agent = getAgent(id)
   if (!agent) return undefined
@@ -121,6 +134,9 @@ export function updateAgent(
   if (data.role !== undefined) { updates.push('role = ?'); values.push(data.role) }
   if (data.workMode !== undefined) { updates.push('work_mode = ?'); values.push(data.workMode) }
   if (data.modelIdOverride !== undefined) { updates.push('model_id_override = ?'); values.push(data.modelIdOverride) }
+  if (data.maxTurns !== undefined) { updates.push('max_turns = ?'); values.push(data.maxTurns) }
+  if (data.effort !== undefined) { updates.push('effort = ?'); values.push(data.effort) }
+  if (data.extraCliArgs !== undefined) { updates.push('extra_cli_args_json = ?'); values.push(data.extraCliArgs ? JSON.stringify(data.extraCliArgs) : null) }
   if (data.hostOperatorApprovalMode !== undefined) {
     updates.push('host_operator_approval_mode = ?')
     values.push(data.hostOperatorApprovalMode)

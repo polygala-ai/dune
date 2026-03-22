@@ -603,4 +603,22 @@ function initSchema(db: Database.Database) {
   // Ensure all existing agents default to keep_alive off
   db.exec(`UPDATE agents SET keep_alive = 0 WHERE keep_alive = 1`)
 
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN max_turns INTEGER`)
+  } catch {
+    // Column already exists — ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN effort TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN extra_cli_args_json TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
 }
