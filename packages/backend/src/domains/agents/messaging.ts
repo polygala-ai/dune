@@ -9,6 +9,7 @@ import {
   SYSTEM_PROMPT_DIR,
   RPC_GUEST_PATH,
   STOP_AGENT_SHUTDOWN_PROMPT,
+  NESTING_GUARD_VARS,
 } from './constants.js'
 import type {
   RunningAgent,
@@ -21,6 +22,30 @@ import { runningAgents, agentLocks, setAgentStatus, emitAgentLogEntries, emitRun
 import { buildSystemPrompt, resolveClaudeModelId } from './prompt-builder.js'
 import { buildClaudeCliAuthEnvValues } from './settings-sync.js'
 import { detectLeaderPolicyViolation, finalizeTodoReminderTurn, queueTodoReminderIfNeeded } from './todo-reminder.js'
+
+// ── Detection helpers ───────────────────────────────────────────────────
+
+const LOGIN_REQUIRED_RE = /(?:not\s+logged\s+in|please\s+log\s+in|please\s+run\s+`?claude\s+login`?|login\s+required|requires\s+login|unauthorized|authentication\s+required)/i
+const UNKNOWN_SESSION_RE = /no conversation found with session id|unknown session|session .* not found/i
+
+function isLoginRequired(text: string): boolean {
+  return LOGIN_REQUIRED_RE.test(text)
+}
+
+function isUnknownSessionError(text: string): boolean {
+  return UNKNOWN_SESSION_RE.test(text)
+}
+
+function isMaxTurnsReached(parsed: any): boolean {
+  if (!parsed) return false
+  if (String(parsed.subtype || '').toLowerCase() === 'error_max_turns') return true
+  if (String(parsed.stop_reason || '').toLowerCase() === 'max_turns') return true
+  return /max(?:imum)?\s+turns?/i.test(String(parsed.result || ''))
+}
+
+export const __isLoginRequiredForTests = isLoginRequired
+export const __isUnknownSessionErrorForTests = isUnknownSessionError
+export const __isMaxTurnsReachedForTests = isMaxTurnsReached
 
 // ── Stream parsing ──────────────────────────────────────────────────────
 
@@ -83,6 +108,7 @@ export function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string
   return [
     `cat ${input.promptFile} |`,
     `runuser -u abc -- env`,
+    ...NESTING_GUARD_VARS.map(v => `-u ${v}`),
     `HOME=/config`,
     `PATH=${SKILLBOX_PATH}`,
     `DISPLAY=:1`,
@@ -101,7 +127,9 @@ export function buildClaudeCliCommand(input: BuildClaudeCliCommandInput): string
     `--verbose`,
     `--mcp-config ${MCP_CONFIG_PATH}`,
     `--append-system-prompt-file ${input.systemPromptFile}`,
-    `--max-turns 30`,
+    `--max-turns ${input.maxTurns || 30}`,
+    ...(input.effort ? [`--effort ${input.effort}`] : []),
+    ...(input.extraCliArgs || []),
     ...(input.sessionId ? [`--session-id ${input.sessionId}`] : []),
     ...(input.resumeSessionId ? [`--resume ${input.resumeSessionId}`] : []),
     ...(!input.sessionId && !input.resumeSessionId && input.hasSession ? ['--continue'] : []),
@@ -296,6 +324,9 @@ export async function _sendMessageInner(
       oauthToken,
       modelId,
       wsUrl: running.daemon.backendUrl,
+      maxTurns: currentAgent.maxTurns ?? undefined,
+      effort: currentAgent.effort ?? undefined,
+      extraCliArgs: currentAgent.extraCliArgs ?? undefined,
       ...(usePlanMode ? { permissionMode: 'plan' as const } : {}),
       ...(running.session.id ? { resumeSessionId: running.session.id } : { sessionId: turnSessionId }),
     })
@@ -308,12 +339,18 @@ export async function _sendMessageInner(
 
     let fullResponse = ''
     let firstOutputSent = false
+    let detectedSessionId: string | null = null
+    let maxTurnsHit = false
     const leaderToolUses: LeaderToolUse[] = []
     const result = await streamingExec(
       running.box, 'bash', ['-c', cliCmd], { DISPLAY: ':1' },
       (line) => {
         try {
           const parsed = JSON.parse(line)
+          // Extract session ID from system:init event
+          if (parsed.type === 'system' && parsed.subtype === 'init' && parsed.session_id) {
+            detectedSessionId = String(parsed.session_id)
+          }
           const entries = parseStreamJsonLine(parsed, agentId)
           if (entries.length > 0) {
             emitAgentLogEntries(agentId, entries)
@@ -333,6 +370,7 @@ export async function _sendMessageInner(
           }
           if (parsed.type === 'result') {
             fullResponse = parsed.result || ''
+            if (isMaxTurnsReached(parsed)) maxTurnsHit = true
           }
         } catch {
           console.warn(`[${agentId}] non-JSON stdout line: ${line.slice(0, 200)}`)
@@ -357,26 +395,114 @@ export async function _sendMessageInner(
       }, turnSessionId)
     }
 
-    console.log(`[${agentId}] streamingExec done: exit=${result.exitCode} stdout=${result.stdout.length}b stderr=${result.stderr.length}b firstOutput=${firstOutputSent} response=${fullResponse.length}b`)
+    // Session retry: if resume failed with unknown session error, retry with fresh session
+    let activeResult = result
+    let activeTurnSessionId = turnSessionId
+    if (result.exitCode !== 0 && running.session.id && isUnknownSessionError(result.stdout)) {
+      console.log(`[${agentId}] Session "${running.session.id}" unavailable, retrying with fresh session`)
+      emitRuntimeLog(agentId, 'lifecycle', 'session_retry', { oldSessionId: running.session.id })
+
+      const freshId = randomUUID()
+      const retryCmd = buildClaudeCliCommand({
+        agentId, promptFile, systemPromptFile,
+        hasSession: false, oauthToken, modelId,
+        wsUrl: running.daemon.backendUrl,
+        sessionId: freshId,
+      })
+
+      fullResponse = ''
+      firstOutputSent = false
+      detectedSessionId = null
+      maxTurnsHit = false
+      leaderToolUses.length = 0
+
+      const retryResult = await streamingExec(
+        running.box, 'bash', ['-c', retryCmd], { DISPLAY: ':1' },
+        (line) => {
+          try {
+            const parsed = JSON.parse(line)
+            if (parsed.type === 'system' && parsed.subtype === 'init' && parsed.session_id) {
+              detectedSessionId = String(parsed.session_id)
+            }
+            const entries = parseStreamJsonLine(parsed, agentId)
+            if (entries.length > 0) {
+              emitAgentLogEntries(agentId, entries)
+              if (currentAgent.role === 'leader') {
+                for (const entry of entries) {
+                  if (entry.type !== 'tool_use') continue
+                  leaderToolUses.push({ toolName: String(entry.data.toolName || ''), input: entry.data.input })
+                }
+              }
+              if (!firstOutputSent) {
+                firstOutputSent = true
+                setAgentStatus(agentId, 'responding', { source: 'send-message', reason: 'first streamed output' })
+              }
+            }
+            if (parsed.type === 'result') {
+              fullResponse = parsed.result || ''
+              if (isMaxTurnsReached(parsed)) maxTurnsHit = true
+            }
+          } catch {
+            emitRuntimeLog(agentId, 'stdout', line, { source: 'claude-stream-retry', parse: 'non-json' })
+          }
+        },
+        300_000,
+        (cb) => {
+          running.execution.handle = cb
+          if (cb && running.interrupt.requested) triggerInterruptSignals(agentId, running)
+        },
+        running.interrupt.abort?.promise,
+      )
+
+      if (running.interrupt.requested || retryResult.aborted) {
+        return finalizeInterruptedRun(agentId, running, {
+          exitCode: retryResult.exitCode,
+          stdoutBytes: retryResult.stdout.length,
+          stderrBytes: retryResult.stderr.length,
+        }, freshId)
+      }
+
+      activeResult = retryResult
+      activeTurnSessionId = freshId
+    }
+
+    console.log(`[${agentId}] streamingExec done: exit=${activeResult.exitCode} stdout=${activeResult.stdout.length}b stderr=${activeResult.stderr.length}b firstOutput=${firstOutputSent} response=${fullResponse.length}b`)
     emitRuntimeLog(agentId, 'lifecycle', 'claude_cli_complete', {
-      exitCode: result.exitCode,
-      stdoutBytes: result.stdout.length,
-      stderrBytes: result.stderr.length,
+      exitCode: activeResult.exitCode,
+      stdoutBytes: activeResult.stdout.length,
+      stderrBytes: activeResult.stderr.length,
       firstOutputSent,
       responseBytes: fullResponse.length,
     })
 
-    if (result.stderr) {
-      console.error(`Agent ${agentId} stderr:`, result.stderr)
-      const stderrLines = result.stderr.replace(/\r\n/g, '\n').split('\n').filter((line) => line.length > 0)
+    if (activeResult.stderr) {
+      console.error(`Agent ${agentId} stderr:`, activeResult.stderr)
+      const stderrLines = activeResult.stderr.replace(/\r\n/g, '\n').split('\n').filter((line) => line.length > 0)
       for (const stderrLine of stderrLines) {
         emitRuntimeLog(agentId, 'stderr', stderrLine, { source: 'claude-stream' })
       }
     }
 
+    if (maxTurnsHit) {
+      emitAgentLogEntries(agentId, [{
+        id: newEventId(), agentId, timestamp: Date.now(),
+        type: 'system', data: { message: 'Agent reached maximum turns limit.' },
+      }])
+      emitRuntimeLog(agentId, 'lifecycle', 'max_turns_reached', { maxTurns: 30 })
+    }
+
+    if (activeResult.exitCode !== 0 && isLoginRequired(activeResult.stdout + '\n' + activeResult.stderr)) {
+      emitAgentLogEntries(agentId, [{
+        id: newEventId(), agentId, timestamp: Date.now(),
+        type: 'system', data: { message: 'Authentication required. Please re-authenticate.' },
+      }])
+      emitRuntimeLog(agentId, 'lifecycle', 'login_required', {})
+    }
+
+    const finalSessionId = detectedSessionId || activeTurnSessionId
     running.session.hasSession = true
-    running.session.id = turnSessionId
-    agentRuntimeStore.setAgentRuntimeSessionId(agentId, turnSessionId)
+    running.session.id = finalSessionId
+    agentRuntimeStore.setAgentRuntimeSessionId(agentId, finalSessionId)
 
     // Plan-first phase 2
     if (usePlanMode && fullResponse) {
@@ -403,7 +529,7 @@ export async function _sendMessageInner(
         oauthToken,
         modelId,
         wsUrl: running.daemon.backendUrl,
-        resumeSessionId: turnSessionId,
+        resumeSessionId: activeTurnSessionId,
       })
 
       console.log(`[${agentId}] Starting execution phase...`)

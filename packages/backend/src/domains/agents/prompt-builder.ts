@@ -69,6 +69,19 @@ export function listSkills(agent?: Pick<Agent, 'role'> | null): SkillInfo[] {
   return skills
 }
 
+/** Replace {{dotted.path}} placeholders with values from a data object. */
+export function renderTemplate(template: string, data: Record<string, unknown>): string {
+  return template.replace(/{{\s*([a-zA-Z0-9_.-]+)\s*}}/g, (_, dotPath: string) => {
+    let cursor: unknown = data
+    for (const part of dotPath.split('.')) {
+      if (typeof cursor !== 'object' || cursor === null) return ''
+      cursor = (cursor as Record<string, unknown>)[part]
+    }
+    if (cursor == null) return ''
+    return typeof cursor === 'string' ? cursor : String(cursor)
+  })
+}
+
 /** Assemble the full system prompt an agent receives (for viewing). */
 export function assembleSystemPrompt(agentId: string): string {
   const agent = agentStore.getAgent(agentId)

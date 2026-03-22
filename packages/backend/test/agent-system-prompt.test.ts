@@ -10,7 +10,7 @@ const agentStore = await import('../src/storage/agent-store.js')
 await import('../src/domains/agents/_init.js')
 const { __getStopAgentShutdownPromptForTests } = await import('../src/domains/agents/messaging.js')
 const { __resolveBundledAssetDirForTests } = await import('../src/domains/agents/constants.js')
-const { assembleSystemPrompt, listSkills } = await import('../src/domains/agents/prompt-builder.js')
+const { assembleSystemPrompt, listSkills, renderTemplate } = await import('../src/domains/agents/prompt-builder.js')
 
 const db = getDb()
 
@@ -83,6 +83,33 @@ test('listSkills includes markdown payload while preserving existing fields', ()
   assert.equal(skills.some(skill => skill.name === 'dune-host-operator'), true)
   assert.equal(skills.some(skill => skill.name === 'dune-miniapp-builder'), false)
   assert.equal(listSkills({ role: 'follower' }).some(skill => skill.name === 'dune-leader'), false)
+})
+
+test('renderTemplate substitutes dotted paths', () => {
+  const result = renderTemplate('Hello {{agent.name}}, role={{agent.role}}', {
+    agent: { name: 'Alice', role: 'leader' },
+  })
+  assert.equal(result, 'Hello Alice, role=leader')
+})
+
+test('renderTemplate leaves unknown keys as empty string', () => {
+  const result = renderTemplate('{{missing}} and {{deep.missing}}', {})
+  assert.equal(result, ' and ')
+})
+
+test('renderTemplate handles top-level keys', () => {
+  const result = renderTemplate('id={{agentId}}', { agentId: 'abc-123' })
+  assert.equal(result, 'id=abc-123')
+})
+
+test('renderTemplate handles null/undefined values', () => {
+  const result = renderTemplate('{{val}}', { val: null })
+  assert.equal(result, '')
+})
+
+test('renderTemplate converts numbers to strings', () => {
+  const result = renderTemplate('count={{count}}', { count: 42 })
+  assert.equal(result, 'count=42')
 })
 
 test('bundled asset resolver falls back from dist to src assets', () => {
