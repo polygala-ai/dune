@@ -9,8 +9,10 @@ const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+const { reconcileSandboxesOnStartup } = await import('../src/domains/sandboxes/lifecycle.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests, __setRuntimeForTests } = await import('../src/domains/agents/runtime-state.js')
+const { listRunningAgentSandboxes, resetStoppedAgentRuntimeSandbox } = await import('../src/domains/agents/runtime-sandbox.js')
 
 const db = getDb()
 
@@ -104,15 +106,15 @@ test('resetting a stopped runtime clears persisted session resume state', async 
 
   const removed: string[] = []
   try {
-    agentManager.__setRuntimeForTests({
+    __setRuntimeForTests({
       remove: async (id: string) => {
         removed.push(id)
       },
     })
 
-    await agentManager.resetStoppedAgentRuntimeSandbox(agent.id)
+    await resetStoppedAgentRuntimeSandbox(agent.id)
   } finally {
-    agentManager.__setRuntimeForTests(null)
+    __setRuntimeForTests(null)
   }
 
   assert.deepEqual(removed, [sandboxId])
@@ -144,25 +146,24 @@ test('running sandbox overlay prefers persisted sandbox id', async () => {
   }
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId: 'box-from-running-map',
-      guiHttpPort: 42001,
-      guiHttpsPort: 42002,
-      backendUrl: '',
+      ports: { http: 42001, https: 42002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
-    const running = await agentManager.listRunningAgentSandboxes()
+    const running = await listRunningAgentSandboxes()
     const listed = running.find((item) => item.agentId === agent.id)
     assert.ok(listed)
     assert.equal(listed?.sandboxId, persistedSandboxId)
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })
 
@@ -185,7 +186,7 @@ test('persisted agent runtime sandbox remains visible as stopped after agent sto
     lastStoppedAt: Date.now(),
   })
 
-  const listed = await agentManager.listRunningAgentSandboxes()
+  const listed = await listRunningAgentSandboxes()
   const found = listed.find((item) => item.agentId === agent.id)
   assert.ok(found)
   assert.equal(found?.sandboxId, persistedSandboxId)
@@ -219,7 +220,7 @@ test('resolved runtime sandbox id remains reusable after failed-start style stop
   })
   runtimeStore.touchAgentRuntimeStopped(agent.id, Date.now())
 
-  await sandboxManager.reconcileSandboxesOnStartup()
+  await reconcileSandboxesOnStartup()
 
   const managedShadow = sandboxStore.getSandbox(resolvedSandboxId)
   assert.ok(managedShadow)

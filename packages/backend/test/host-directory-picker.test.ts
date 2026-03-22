@@ -5,7 +5,7 @@ import {
   pickHostDirectory,
   type HostDirectoryPickerCommandResult,
   type HostDirectoryPickerRunner,
-} from '../src/utils/host-directory-picker.js'
+} from '../src/domains/host/directory-picker.js'
 
 function makeRunner(
   handler: (command: string, args: string[]) => HostDirectoryPickerCommandResult | Promise<HostDirectoryPickerCommandResult>,

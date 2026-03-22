@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 process.env.DATA_DIR = join(tmpdir(), 'dune-sandbox-lifecycle')
 
 const { getDb } = await import('../src/storage/database.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
+const { createBox, reconcileSandboxesOnStartup, stopBox } = await import('../src/domains/sandboxes/lifecycle.js')
+const { createExec } = await import('../src/domains/sandboxes/exec.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
 
 const db = getDb()
@@ -26,24 +27,24 @@ test('ephemeral stop removes sandbox while persistent stop preserves it', async 
 
   const identity = { actorType: 'human' as const, actorId: 'lifecycle-user' }
 
-  const ephemeral = await sandboxManager.createBox(identity, {
+  const ephemeral = await createBox(identity, {
     name: 'Ephemeral Box',
     durability: 'ephemeral',
     autoRemove: true,
   })
 
-  const stoppedEphemeral = await sandboxManager.stopBox(identity, ephemeral.boxId)
+  const stoppedEphemeral = await stopBox(identity, ephemeral.boxId)
   assert.equal(stoppedEphemeral.removed, true)
   assert.equal(stoppedEphemeral.box, null)
   assert.equal(sandboxStore.getSandbox(ephemeral.boxId), null)
 
-  const persistent = await sandboxManager.createBox(identity, {
+  const persistent = await createBox(identity, {
     name: 'Persistent Box',
     durability: 'persistent',
     autoRemove: false,
   })
 
-  const stoppedPersistent = await sandboxManager.stopBox(identity, persistent.boxId)
+  const stoppedPersistent = await stopBox(identity, persistent.boxId)
   assert.equal(stoppedPersistent.removed, false)
   assert.equal(stoppedPersistent.box?.status, 'stopped')
   assert.ok(sandboxStore.getSandbox(persistent.boxId))
@@ -54,7 +55,7 @@ test('autoRemove defaults follow durability when omitted', async () => {
 
   const identity = { actorType: 'human' as const, actorId: 'lifecycle-default-user' }
 
-  const persistent = await sandboxManager.createBox(identity, {
+  const persistent = await createBox(identity, {
     name: 'Persistent Default Box',
     durability: 'persistent',
   })
@@ -62,11 +63,11 @@ test('autoRemove defaults follow durability when omitted', async () => {
   assert.ok(storedPersistent)
   assert.equal(storedPersistent?.autoRemove, false)
 
-  const stoppedPersistent = await sandboxManager.stopBox(identity, persistent.boxId)
+  const stoppedPersistent = await stopBox(identity, persistent.boxId)
   assert.equal(stoppedPersistent.removed, false)
   assert.ok(sandboxStore.getSandbox(persistent.boxId))
 
-  const ephemeral = await sandboxManager.createBox(identity, {
+  const ephemeral = await createBox(identity, {
     name: 'Ephemeral Default Box',
     durability: 'ephemeral',
   })
@@ -74,7 +75,7 @@ test('autoRemove defaults follow durability when omitted', async () => {
   assert.ok(storedEphemeral)
   assert.equal(storedEphemeral?.autoRemove, true)
 
-  const stoppedEphemeral = await sandboxManager.stopBox(identity, ephemeral.boxId)
+  const stoppedEphemeral = await stopBox(identity, ephemeral.boxId)
   assert.equal(stoppedEphemeral.removed, true)
   assert.equal(sandboxStore.getSandbox(ephemeral.boxId), null)
 })
@@ -84,21 +85,21 @@ test('startup reconciliation marks non-terminal persistent runs stopped and drop
 
   const identity = { actorType: 'human' as const, actorId: 'reconcile-user' }
 
-  const persistent = await sandboxManager.createBox(identity, {
+  const persistent = await createBox(identity, {
     name: 'Persistent Running',
     durability: 'persistent',
     autoRemove: false,
   })
   sandboxStore.updateSandbox(persistent.boxId, { status: 'running' })
 
-  const ephemeral = await sandboxManager.createBox(identity, {
+  const ephemeral = await createBox(identity, {
     name: 'Ephemeral Running',
     durability: 'ephemeral',
     autoRemove: true,
   })
   sandboxStore.updateSandbox(ephemeral.boxId, { status: 'running' })
 
-  await sandboxManager.reconcileSandboxesOnStartup()
+  await reconcileSandboxesOnStartup()
 
   const persistentAfter = sandboxStore.getSandbox(persistent.boxId)
   assert.ok(persistentAfter)
@@ -113,7 +114,7 @@ test('host port is not persisted for configured boxes before runtime start', asy
 
   const identity = { actorType: 'human' as const, actorId: 'port-user' }
 
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'Port Sandbox',
     durability: 'persistent',
     autoRemove: false,
@@ -132,14 +133,14 @@ test('exec on user-managed stopped box requires running state', async () => {
 
   const identity = { actorType: 'human' as const, actorId: 'exec-user' }
 
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'Exec Requires Running',
     durability: 'persistent',
     autoRemove: false,
   })
 
   await assert.rejects(
-    () => sandboxManager.createExec(identity, created.boxId, {
+    () => createExec(identity, created.boxId, {
       command: 'echo',
       args: ['should-not-run'],
       env: {},

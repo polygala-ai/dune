@@ -1,5 +1,6 @@
 import { getDb } from './database.js'
 import { newEventId } from '../utils/ids.js'
+import { parseJsonArray } from './helpers.js'
 import type { Message } from '@dune/shared'
 
 export function createMessage(channelId: string, authorId: string, content: string, mentionedAgentIds: string[] = []): Message {
@@ -38,5 +39,5 @@ export function updateMessageContent(id: string, content: string): void {
 }
 
 function mapMessage(row: any): Message {
-  return { ...row, mentionedAgentIds: JSON.parse(row.mentionedAgentIds || '[]') }
+  return { ...row, mentionedAgentIds: parseJsonArray(row.mentionedAgentIds) }
 }

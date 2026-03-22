@@ -9,8 +9,9 @@ const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+const { deleteBox, getBoxStatus, listBoxes, patchBox, startBox, stopBox } = await import('../src/domains/sandboxes/lifecycle.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests, __setRuntimeForTests } = await import('../src/domains/agents/runtime-state.js')
 
 const db = getDb()
 
@@ -67,20 +68,19 @@ test('system actor can fully operate managed runtime sandboxes while non-system 
   }
 
   try {
-    agentManager.__setRunningAgentForTests(agent.id, {
+    __setRunningAgentForTests(agent.id, {
       box: fakeBox as any,
       agent,
       sandboxId,
-      guiHttpPort: 47001,
-      guiHttpsPort: 47002,
-      backendUrl: '',
+      ports: { http: 47001, https: 47002 },
+      session: { id: null, hasSession: false, startedAt: Date.now() },
+      execution: { handle: null, thinkingSince: 0 },
+      interrupt: { requested: false, abort: null },
+      daemon: { assetHash: undefined, backendUrl: '' },
       cliInstalled: true,
-      hasSession: false,
-      startedAt: Date.now(),
-      thinkingSince: 0,
     } as any)
 
-    agentManager.__setRuntimeForTests({
+    __setRuntimeForTests({
       remove: async (id: string) => {
         removed.push(id)
       },
@@ -89,39 +89,39 @@ test('system actor can fully operate managed runtime sandboxes while non-system 
     const system = { actorType: 'system' as const, actorId: 'agent:operator' }
     const human = { actorType: 'human' as const, actorId: 'human-user' }
 
-    const listed = await sandboxManager.listBoxes(system)
+    const listed = await listBoxes(system)
     const managed = listed.boxes.find((box) => box.boxId === sandboxId)
     assert.ok(managed)
     assert.equal(managed?._dune.managedByAgent, true)
 
-    const patched = await sandboxManager.patchBox(system, sandboxId, { name: 'Runtime Renamed' })
+    const patched = await patchBox(system, sandboxId, { name: 'Runtime Renamed' })
     assert.equal(patched?.name, 'Runtime Renamed')
 
     await assert.rejects(
-      () => sandboxManager.patchBox(human, sandboxId, { name: 'blocked' }),
+      () => patchBox(human, sandboxId, { name: 'blocked' }),
       /managed_by_agent_lifecycle/,
     )
 
-    const started = await sandboxManager.startBox(system, sandboxId)
+    const started = await startBox(system, sandboxId)
     assert.equal(started?.status, 'running')
 
-    const runningStatus = await sandboxManager.getBoxStatus(system, sandboxId)
+    const runningStatus = await getBoxStatus(system, sandboxId)
     assert.equal(runningStatus?.status, 'running')
 
-    const stopped = await sandboxManager.stopBox(system, sandboxId)
+    const stopped = await stopBox(system, sandboxId)
     assert.equal(stopped.removed, false)
     assert.equal(stopCalls, 1)
 
-    const stoppedStatus = await sandboxManager.getBoxStatus(system, sandboxId)
+    const stoppedStatus = await getBoxStatus(system, sandboxId)
     assert.equal(stoppedStatus?.status, 'stopped')
 
-    const deleted = await sandboxManager.deleteBox(system, sandboxId)
+    const deleted = await deleteBox(system, sandboxId)
     assert.equal(deleted, true)
     assert.deepEqual(removed, [sandboxId])
     assert.equal(runtimeStore.getAgentRuntimeState(agent.id), null)
     assert.equal(sandboxStore.getSandbox(sandboxId), null)
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
-    agentManager.__setRuntimeForTests(null)
+    __setRunningAgentForTests(agent.id, null)
+    __setRuntimeForTests(null)
   }
 })

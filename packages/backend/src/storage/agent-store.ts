@@ -1,5 +1,6 @@
 import { getDb } from './database.js'
 import { newId } from '../utils/ids.js'
+import { parseJsonArray } from './helpers.js'
 import type {
   Agent,
   AgentRoleType,
@@ -32,16 +33,6 @@ const AGENT_SELECT_COLUMNS = [
 type AgentRow = Agent & {
   hostOperatorAppsJson?: string
   hostOperatorPathsJson?: string
-}
-
-function parseJsonArray(value: unknown): string[] {
-  try {
-    const parsed = JSON.parse(String(value ?? '[]'))
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((item) => String(item))
-  } catch {
-    return []
-  }
 }
 
 function normalizeAgent(row: AgentRow): Agent {
@@ -218,7 +209,7 @@ export function getUnreadMessages(agentId: string): UnreadChannel[] {
       result.push({
         channelId: ch.channel_id,
         channelName: ch.channel_name,
-        messages: rows.map(r => ({ ...r, mentionedAgentIds: JSON.parse(r.mentionedAgentIds || '[]') })),
+        messages: rows.map(r => ({ ...r, mentionedAgentIds: parseJsonArray(r.mentionedAgentIds) })),
       })
     }
   }

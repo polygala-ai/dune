@@ -9,11 +9,12 @@ process.env.SANDBOX_EXEC_TIMEOUT_MS = '80'
 process.env.SANDBOX_EXEC_MAX_RETRIES = '1'
 
 const { getDb } = await import('../src/storage/database.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
+const { downloadFileContent, importHostPath, uploadFileContent } = await import('../src/domains/sandboxes/files.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const agentStore = await import('../src/storage/agent-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests } = await import('../src/domains/agents/runtime-state.js')
 const { app } = await import('./_test-app.js')
 
 const db = getDb()
@@ -162,24 +163,23 @@ function registerManagedRuntime(box: ControlledRuntimeBox): { agentId: string; s
     boxliteBoxId: sandboxId,
   })
 
-  agentManager.__setRunningAgentForTests(agent.id, {
+  __setRunningAgentForTests(agent.id, {
     box: box as any,
     agent,
     sandboxId,
-    guiHttpPort,
-    guiHttpsPort,
-    backendUrl: '',
+    ports: { http: guiHttpPort, https: guiHttpsPort },
+    session: { id: null, hasSession: false, startedAt: Date.now() },
+    execution: { handle: null, thinkingSince: 0 },
+    interrupt: { requested: false, abort: null },
+    daemon: { assetHash: undefined, backendUrl: '' },
     cliInstalled: true,
-    hasSession: false,
-    startedAt: Date.now(),
-    thinkingSince: 0,
   } as any)
 
   return {
     agentId: agent.id,
     sandboxId,
     teardown: () => {
-      agentManager.__setRunningAgentForTests(agent.id, null)
+      __setRunningAgentForTests(agent.id, null)
     },
   }
 }
@@ -194,7 +194,7 @@ test('importHostPath fails with box_exec_timeout and lock is released for next f
     box.setHangWrites(true)
     const startedAt = Date.now()
     await assert.rejects(
-      () => sandboxManager.importHostPath(systemIdentity, sandboxId, {
+      () => importHostPath(systemIdentity, sandboxId, {
         hostPath,
         destPath: '/workspace/imported-timeout.txt',
       }),
@@ -203,7 +203,7 @@ test('importHostPath fails with box_exec_timeout and lock is released for next f
     assert.ok(Date.now() - startedAt < 2_000)
 
     box.setHangWrites(false)
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       systemIdentity,
       sandboxId,
       '/workspace/recovered-after-timeout.txt',
@@ -211,7 +211,7 @@ test('importHostPath fails with box_exec_timeout and lock is released for next f
       true,
     )
 
-    const downloaded = await sandboxManager.downloadFileContent(
+    const downloaded = await downloadFileContent(
       systemIdentity,
       sandboxId,
       '/workspace/recovered-after-timeout.txt',
@@ -231,7 +231,7 @@ test('uploadFileContent retries transient exec errors and eventually succeeds', 
 
   try {
     box.setTransientWriteFailures(1)
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       systemIdentity,
       sandboxId,
       '/workspace/retry-success.txt',
@@ -239,7 +239,7 @@ test('uploadFileContent retries transient exec errors and eventually succeeds', 
       true,
     )
 
-    const downloaded = await sandboxManager.downloadFileContent(
+    const downloaded = await downloadFileContent(
       systemIdentity,
       sandboxId,
       '/workspace/retry-success.txt',

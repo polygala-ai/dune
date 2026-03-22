@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 process.env.DATA_DIR = join(tmpdir(), 'dune-sandbox-files')
 
 const { getDb } = await import('../src/storage/database.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
+const { createBox } = await import('../src/domains/sandboxes/lifecycle.js')
+const { downloadFileContent, importHostPath, uploadFileContent } = await import('../src/domains/sandboxes/files.js')
 
 const db = getDb()
 
@@ -24,14 +25,14 @@ test('host import rejects host path outside allowed root', async () => {
   clearSandboxTables()
 
   const identity = { actorType: 'human' as const, actorId: 'files-user' }
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'File Import Box',
     durability: 'persistent',
     autoRemove: false,
   })
 
   await assert.rejects(
-    () => sandboxManager.importHostPath(identity, created.boxId, {
+    () => importHostPath(identity, created.boxId, {
       hostPath: '/tmp',
       destPath: '/workspace',
     }),
@@ -43,7 +44,7 @@ test('host import rejects container path traversal in destination', async () => 
   clearSandboxTables()
 
   const identity = { actorType: 'human' as const, actorId: 'files-user-2' }
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'Traversal Box',
     durability: 'persistent',
     autoRemove: false,
@@ -52,7 +53,7 @@ test('host import rejects container path traversal in destination', async () => 
   const hostPath = resolve(process.cwd(), 'package.json')
 
   await assert.rejects(
-    () => sandboxManager.importHostPath(identity, created.boxId, {
+    () => importHostPath(identity, created.boxId, {
       hostPath,
       destPath: '/workspace/../unsafe',
     }),
@@ -64,14 +65,14 @@ test('file operations on user-managed sandboxes require running state', async ()
   clearSandboxTables()
 
   const identity = { actorType: 'human' as const, actorId: 'files-user-3' }
-  const created = await sandboxManager.createBox(identity, {
+  const created = await createBox(identity, {
     name: 'Not Running Box',
     durability: 'persistent',
     autoRemove: false,
   })
 
   await assert.rejects(
-    () => sandboxManager.uploadFileContent(
+    () => uploadFileContent(
       identity,
       created.boxId,
       '/workspace/not-running.txt',
@@ -82,13 +83,13 @@ test('file operations on user-managed sandboxes require running state', async ()
   )
 
   await assert.rejects(
-    () => sandboxManager.downloadFileContent(identity, created.boxId, '/workspace/not-running.txt'),
+    () => downloadFileContent(identity, created.boxId, '/workspace/not-running.txt'),
     /box_not_running/,
   )
 
   const hostPath = resolve(process.cwd(), 'package.json')
   await assert.rejects(
-    () => sandboxManager.importHostPath(identity, created.boxId, {
+    () => importHostPath(identity, created.boxId, {
       hostPath,
       destPath: '/workspace/not-running-import.txt',
     }),

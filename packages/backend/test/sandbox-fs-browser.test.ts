@@ -9,8 +9,10 @@ const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const runtimeStore = await import('../src/storage/agent-runtime-store.js')
 const sandboxStore = await import('../src/storage/sandbox-store.js')
-const sandboxManager = await import('../src/sandboxes/sandbox-manager.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+const { createBox } = await import('../src/domains/sandboxes/lifecycle.js')
+const { deleteFsPath, listFsEntries, mkdirFsPath, moveFsPath, readFsFileContent, uploadFileContent } = await import('../src/domains/sandboxes/files.js')
+await import('../src/domains/agents/_init.js')
+const { __setRunningAgentForTests } = await import('../src/domains/agents/runtime-state.js')
 
 const db = getDb()
 
@@ -350,17 +352,16 @@ function setupManagedRuntime(fakeBox: FakeRuntimeBox) {
     boxliteBoxId: sandboxId,
   })
 
-  agentManager.__setRunningAgentForTests(agent.id, {
+  __setRunningAgentForTests(agent.id, {
     box: fakeBox as any,
     agent,
     sandboxId,
-    guiHttpPort: 48501,
-    guiHttpsPort: 48502,
-    backendUrl: '',
+    ports: { http: 48501, https: 48502 },
+    session: { id: null, hasSession: false, startedAt: Date.now() },
+    execution: { handle: null, thinkingSince: 0 },
+    interrupt: { requested: false, abort: null },
+    daemon: { assetHash: undefined, backendUrl: '' },
     cliInstalled: true,
-    hasSession: false,
-    startedAt: Date.now(),
-    thinkingSince: 0,
   } as any)
 
   return { agent, sandboxId }
@@ -374,23 +375,23 @@ test('sandbox fs browser supports list/read/mkdir/move/delete flow', async () =>
   const system = { actorType: 'system' as const, actorId: 'agent:operator' }
 
   try {
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       system,
       sandboxId,
       '/workspace/readme.txt',
       Buffer.from('hello world', 'utf-8').toString('base64'),
       true,
     )
-    await sandboxManager.uploadFileContent(
+    await uploadFileContent(
       system,
       sandboxId,
       '/workspace/.env',
       Buffer.from('SECRET=1', 'utf-8').toString('base64'),
       true,
     )
-    await sandboxManager.mkdirFsPath(system, sandboxId, { path: '/workspace/folder', recursive: true })
+    await mkdirFsPath(system, sandboxId, { path: '/workspace/folder', recursive: true })
 
-    const visibleOnly = await sandboxManager.listFsEntries(system, sandboxId, '/workspace', {
+    const visibleOnly = await listFsEntries(system, sandboxId, '/workspace', {
       includeHidden: false,
       limit: 100,
     })
@@ -398,46 +399,46 @@ test('sandbox fs browser supports list/read/mkdir/move/delete flow', async () =>
     assert.ok((visibleOnly?.entries || []).some((entry) => entry.name === 'folder' && entry.type === 'directory'))
     assert.ok(!(visibleOnly?.entries || []).some((entry) => entry.name === '.env'))
 
-    const withHidden = await sandboxManager.listFsEntries(system, sandboxId, '/workspace', {
+    const withHidden = await listFsEntries(system, sandboxId, '/workspace', {
       includeHidden: true,
       limit: 100,
     })
     assert.ok(withHidden?.entries.some((entry) => entry.name === '.env' && entry.hidden))
 
-    const limited = await sandboxManager.listFsEntries(system, sandboxId, '/workspace', {
+    const limited = await listFsEntries(system, sandboxId, '/workspace', {
       includeHidden: true,
       limit: 1,
     })
     assert.equal(limited?.truncated, true)
 
-    const preview = await sandboxManager.readFsFileContent(system, sandboxId, '/workspace/readme.txt', 5)
+    const preview = await readFsFileContent(system, sandboxId, '/workspace/readme.txt', 5)
     assert.ok(preview)
     assert.equal(preview?.size, 11)
     assert.equal(preview?.truncated, true)
     assert.equal(Buffer.from(preview?.contentBase64 || '', 'base64').toString('utf-8'), 'hello')
     assert.equal(preview?.mimeType, 'text/plain')
 
-    await sandboxManager.moveFsPath(system, sandboxId, {
+    await moveFsPath(system, sandboxId, {
       fromPath: '/workspace/readme.txt',
       toPath: '/workspace/folder/readme.txt',
       overwrite: false,
     })
 
     await assert.rejects(
-      () => sandboxManager.deleteFsPath(system, sandboxId, '/workspace/folder', false),
+      () => deleteFsPath(system, sandboxId, '/workspace/folder', false),
       /dir_not_empty/,
     )
 
-    await sandboxManager.deleteFsPath(system, sandboxId, '/workspace/folder/readme.txt', false)
-    await sandboxManager.deleteFsPath(system, sandboxId, '/workspace/folder', false)
+    await deleteFsPath(system, sandboxId, '/workspace/folder/readme.txt', false)
+    await deleteFsPath(system, sandboxId, '/workspace/folder', false)
 
-    const postDelete = await sandboxManager.listFsEntries(system, sandboxId, '/workspace', {
+    const postDelete = await listFsEntries(system, sandboxId, '/workspace', {
       includeHidden: true,
       limit: 100,
     })
     assert.ok(!postDelete?.entries.some((entry) => entry.name === 'folder'))
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })
 
@@ -447,7 +448,7 @@ test('sandbox fs browser enforces readonly/forbidden/not-running constraints', a
   const owner = { actorType: 'human' as const, actorId: 'owner-fs-user' }
   const other = { actorType: 'agent' as const, actorId: 'other-fs-agent' }
 
-  const readonlyBox = await sandboxManager.createBox(owner, {
+  const readonlyBox = await createBox(owner, {
     name: 'readonly-fs-box',
     durability: 'persistent',
     autoRemove: false,
@@ -458,23 +459,23 @@ test('sandbox fs browser enforces readonly/forbidden/not-running constraints', a
   })
 
   await assert.rejects(
-    () => sandboxManager.mkdirFsPath(owner, readonlyBox.boxId, { path: '/workspace/new-dir', recursive: true }),
+    () => mkdirFsPath(owner, readonlyBox.boxId, { path: '/workspace/new-dir', recursive: true }),
     /managed_by_agent_lifecycle/,
   )
 
-  const ownerBox = await sandboxManager.createBox(owner, {
+  const ownerBox = await createBox(owner, {
     name: 'owner-box',
     durability: 'persistent',
     autoRemove: false,
   })
 
   await assert.rejects(
-    () => sandboxManager.mkdirFsPath(other, ownerBox.boxId, { path: '/workspace/new-dir', recursive: true }),
+    () => mkdirFsPath(other, ownerBox.boxId, { path: '/workspace/new-dir', recursive: true }),
     /forbidden/,
   )
 
   await assert.rejects(
-    () => sandboxManager.listFsEntries(owner, ownerBox.boxId, '/workspace'),
+    () => listFsEntries(owner, ownerBox.boxId, '/workspace'),
     /box_not_running/,
   )
 })
@@ -488,10 +489,10 @@ test('sandbox fs browser returns deterministic no_compatible_shell error when sh
 
   try {
     await assert.rejects(
-      () => sandboxManager.listFsEntries(system, sandboxId, '/workspace'),
+      () => listFsEntries(system, sandboxId, '/workspace'),
       /no_compatible_shell/,
     )
   } finally {
-    agentManager.__setRunningAgentForTests(agent.id, null)
+    __setRunningAgentForTests(agent.id, null)
   }
 })

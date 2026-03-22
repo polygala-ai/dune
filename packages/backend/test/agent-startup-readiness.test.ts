@@ -7,7 +7,8 @@ process.env.DATA_DIR = join(tmpdir(), 'dune-agent-startup-readiness')
 process.env.AGENT_STARTUP_TIMEOUT_MS = '1000'
 process.env.AGENT_DESKTOP_POLL_MS = '100'
 
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __waitUntilDesktopReadyForTests } = await import('../src/domains/agents/lifecycle.js')
 
 type ExecResult = {
   exitCode: number
@@ -36,7 +37,7 @@ test('desktop readiness succeeds with xfdesktop4 marker', async () => {
     { exitCode: 0, stdout: 'xfdesktop4 running root window 1024x768', stderr: '' }, // probe 2: xwininfo — has marker + size
   ])
 
-  const result = await agentManager.__waitUntilDesktopReadyForTests(box as any)
+  const result = await __waitUntilDesktopReadyForTests(box as any)
   assert.equal(result.matchedMarker, 'xfdesktop4')
   assert.equal(result.probeCount, 2)
 })
@@ -46,7 +47,7 @@ test('desktop readiness succeeds with xfce4-panel marker', async () => {
     { exitCode: 0, stdout: 'xfce4-panel active root 1024x768', stderr: '' },
   ])
 
-  const result = await agentManager.__waitUntilDesktopReadyForTests(box as any)
+  const result = await __waitUntilDesktopReadyForTests(box as any)
   assert.equal(result.matchedMarker, 'xfce4-panel')
   assert.equal(result.probeCount, 1)
 })
@@ -57,7 +58,7 @@ test('desktop readiness timeout returns diagnostic desktop_not_ready error', asy
   ])
 
   await assert.rejects(
-    agentManager.__waitUntilDesktopReadyForTests(box as any),
+    __waitUntilDesktopReadyForTests(box as any),
     /desktop_not_ready: timeout_ms=\d+.*probes=\d+.*last_exit=0/s,
   )
 })

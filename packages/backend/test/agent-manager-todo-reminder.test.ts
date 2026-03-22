@@ -8,7 +8,9 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-manager-todo-${Date.now()}`)
 const { getDb } = await import('../src/storage/database.js')
 const agentStore = await import('../src/storage/agent-store.js')
 const todoStore = await import('../src/storage/todo-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __parseLeaderPdcaForTests, __detectLeaderPolicyViolationForTests, __finalizeTodoReminderTurnForTests, __getTodoReminderCooldownForTests, __setAgentLockForTests, __setTodoReminderEnqueueForTests, __runTodoReminderCheckForTests, __resetTodoReminderStateForTests } = await import('../src/domains/agents/todo-reminder.js')
+const { __buildClaudeCliCommandForTests } = await import('../src/domains/agents/messaging.js')
 
 const db = getDb()
 
@@ -23,16 +25,16 @@ function clearTables() {
 
 test.beforeEach(() => {
   clearTables()
-  agentManager.__resetTodoReminderStateForTests()
+  __resetTodoReminderStateForTests()
 })
 
 test.afterEach(() => {
-  agentManager.__setTodoReminderEnqueueForTests(null)
-  agentManager.__resetTodoReminderStateForTests()
+  __setTodoReminderEnqueueForTests(null)
+  __resetTodoReminderStateForTests()
 })
 
 test('CLI command injects agent ID env vars, model flag, and preserves session/auth flags', () => {
-  const cmd = agentManager.__buildClaudeCliCommandForTests({
+  const cmd = __buildClaudeCliCommandForTests({
     agentId: 'agent-123',
     promptFile: '/tmp/prompt.txt',
     systemPromptFile: '/tmp/system.txt',
@@ -50,7 +52,7 @@ test('CLI command injects agent ID env vars, model flag, and preserves session/a
 
 test('todo reminder check enforces cooldown boundaries for no-pending nudges', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -60,23 +62,23 @@ test('todo reminder check enforces cooldown boundaries for no-pending nudges', (
   })
 
   const firstAt = 1_000_000
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, firstAt), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, firstAt), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'no-pending')
   assert.match(sent[0]?.content || '', /idle as the follower/i)
   assert.match(sent[0]?.content || '', /Create a new pending heartbeat todo/i)
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, firstAt + 299_999), false)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, firstAt + 299_999), false)
   assert.equal(sent.length, 1)
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, firstAt + 300_001), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, firstAt + 300_001), true)
   assert.equal(sent.length, 2)
   assert.equal(sent[1]?.kind, 'no-pending')
 })
 
 test('todo reminder check prioritizes overdue reminders over no-pending nudges', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -92,7 +94,7 @@ test('todo reminder check prioritizes overdue reminders over no-pending nudges',
     dueAt: now - 5_000,
   })
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, now), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, now), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'overdue')
   assert.match(sent[0]?.content || '', /overdue todo\(s\)/)
@@ -101,7 +103,7 @@ test('todo reminder check prioritizes overdue reminders over no-pending nudges',
 
 test('leader idle reminder asks for delegation and review on pending work', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -118,7 +120,7 @@ test('leader idle reminder asks for delegation and review on pending work', () =
     dueAt: Date.now() + 30 * 60_000,
   })
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, Date.now()), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, Date.now()), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'idle')
   assert.match(sent[0]?.content || '', /idle as the leader/i)
@@ -130,12 +132,12 @@ test('leader idle reminder asks for delegation and review on pending work', () =
   assert.match(sent[0]?.content || '', /exhaust obstacle-removal/i)
   assert.match(sent[0]?.content || '', /Do not passively wait/i)
   assert.doesNotMatch(sent[0]?.content || '', /create one due about/i)
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), undefined)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), undefined)
 })
 
 test('leader no-pending reminder asks what to do next', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -145,7 +147,7 @@ test('leader no-pending reminder asks what to do next', () => {
     role: 'leader',
   })
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, Date.now()), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, Date.now()), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'no-pending')
   assert.match(sent[0]?.content || '', /pick one delegable objective now/i)
@@ -159,7 +161,7 @@ test('leader no-pending reminder asks what to do next', () => {
 
 test('follower idle reminder preserves the original request on pending work', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -176,7 +178,7 @@ test('follower idle reminder preserves the original request on pending work', ()
     dueAt: Date.now() + 30 * 60_000,
   })
 
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, Date.now()), true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, Date.now()), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'idle')
   assert.match(sent[0]?.content || '', /idle as the follower/i)
@@ -185,7 +187,7 @@ test('follower idle reminder preserves the original request on pending work', ()
 
 test('todo reminder check skips locked agents when requireUnlocked is true', () => {
   const sent: Array<{ agentId: string; content: string; kind: string }> = []
-  agentManager.__setTodoReminderEnqueueForTests((agentId, content, kind) => {
+  __setTodoReminderEnqueueForTests((agentId, content, kind) => {
     sent.push({ agentId, content, kind })
   })
 
@@ -199,18 +201,18 @@ test('todo reminder check skips locked agents when requireUnlocked is true', () 
     dueAt: Date.now() + 30 * 60_000,
   })
 
-  agentManager.__setAgentLockForTests(agent.id, true)
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, Date.now(), true), false)
+  __setAgentLockForTests(agent.id, true)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, Date.now(), true), false)
   assert.equal(sent.length, 0)
 
-  agentManager.__setAgentLockForTests(agent.id, false)
-  assert.equal(agentManager.__runTodoReminderCheckForTests(agent.id, Date.now(), true), true)
+  __setAgentLockForTests(agent.id, false)
+  assert.equal(__runTodoReminderCheckForTests(agent.id, Date.now(), true), true)
   assert.equal(sent.length, 1)
   assert.equal(sent[0]?.kind, 'idle')
 })
 
 test('leader PDCA parser requires the fixed 8-line footer at the end of the reply', () => {
-  const pdca = agentManager.__parseLeaderPdcaForTests(`
+  const pdca = __parseLeaderPdcaForTests(`
 Completed the delegation.
 
 Leader PDCA
@@ -239,15 +241,15 @@ Outcome: advanced
   })
 
   // Too few lines
-  assert.equal(agentManager.__parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged'), null)
+  assert.equal(__parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged'), null)
   // Old 7-line footer without Obstacle is rejected
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged\nPlan: owner=a; deliverable=b; due=c; success=d\nDo: x\nCheck: y\nAct: z\nOutcome: advanced'),
+    __parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged\nPlan: owner=a; deliverable=b; due=c; success=d\nDo: x\nCheck: y\nAct: z\nOutcome: advanced'),
     null,
   )
   // Trailing line after footer is rejected
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged\nPlan: owner=a; deliverable=b; due=c; success=d\nDo: x\nCheck: y\nAct: z\nObstacle: cleared\nOutcome: advanced\nTrailing line'),
+    __parseLeaderPdcaForTests('Leader PDCA\nThesis: unchanged\nPlan: owner=a; deliverable=b; due=c; success=d\nDo: x\nCheck: y\nAct: z\nObstacle: cleared\nOutcome: advanced\nTrailing line'),
     null,
   )
 })
@@ -260,7 +262,7 @@ test('advanced leader PDCA consumes cooldown and suppresses immediate requeue', 
   })
 
   const remindedAt = 2_000_000
-  const resolution = agentManager.__finalizeTodoReminderTurnForTests(
+  const resolution = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'idle', remindedAt },
@@ -280,7 +282,7 @@ Outcome: advanced
 
   assert.equal(resolution.consumeCooldown, true)
   assert.equal(resolution.allowImmediateRequeue, false)
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), remindedAt)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), remindedAt)
 })
 
 test('blocked or malformed leader PDCA does not consume cooldown and still suppresses immediate requeue', () => {
@@ -290,7 +292,7 @@ test('blocked or malformed leader PDCA does not consume cooldown and still suppr
     role: 'leader',
   })
 
-  const blocked = agentManager.__finalizeTodoReminderTurnForTests(
+  const blocked = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'no-pending', remindedAt: 3_000_000 },
@@ -310,9 +312,9 @@ Outcome: blocked
 
   assert.equal(blocked.consumeCooldown, false)
   assert.equal(blocked.allowImmediateRequeue, false)
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), undefined)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), undefined)
 
-  const malformed = agentManager.__finalizeTodoReminderTurnForTests(
+  const malformed = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'idle', remindedAt: 3_100_000 },
@@ -321,12 +323,12 @@ Outcome: blocked
 
   assert.equal(malformed.consumeCooldown, false)
   assert.equal(malformed.allowImmediateRequeue, false)
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), undefined)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), undefined)
 })
 
 test('leader policy violation detection blocks direct implementation work but allows coordination shell commands', () => {
   assert.equal(
-    agentManager.__detectLeaderPolicyViolationForTests([
+    __detectLeaderPolicyViolationForTests([
       {
         toolName: 'Bash',
         input: { command: 'curl -s -X POST http://localhost:3200/api/todos -H \"Content-Type: application/json\" -d \"{}\"' },
@@ -335,7 +337,7 @@ test('leader policy violation detection blocks direct implementation work but al
     null,
   )
 
-  const editViolation = agentManager.__detectLeaderPolicyViolationForTests([
+  const editViolation = __detectLeaderPolicyViolationForTests([
     {
       toolName: 'Edit',
       input: { file_path: '/workspace/app.ts' },
@@ -344,7 +346,7 @@ test('leader policy violation detection blocks direct implementation work but al
   assert.equal(editViolation?.toolName, 'Edit')
   assert.match(editViolation?.reason || '', /Direct implementation tool use/i)
 
-  const bashViolation = agentManager.__detectLeaderPolicyViolationForTests([
+  const bashViolation = __detectLeaderPolicyViolationForTests([
     {
       toolName: 'Bash',
       input: { command: 'cat <<\"EOF\" > /workspace/app.ts\nexport const broken = true\nEOF' },
@@ -361,7 +363,7 @@ test('leader policy violation prevents cooldown consumption even with advanced P
     role: 'leader',
   })
 
-  const resolution = agentManager.__finalizeTodoReminderTurnForTests(
+  const resolution = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'idle', remindedAt: 4_000_000 },
@@ -381,7 +383,7 @@ Outcome: advanced
   assert.equal(resolution.consumeCooldown, false)
   assert.equal(resolution.allowImmediateRequeue, false)
   assert.equal(resolution.policyViolation?.toolName, 'Edit')
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), undefined)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), undefined)
 })
 
 // ── Obstacle semantics tests ──────────────────────────────────────────────
@@ -389,7 +391,7 @@ Outcome: advanced
 test('Outcome: blocked with Obstacle != exhausted fails validation', () => {
   // blocked + cleared → invalid
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=Fiona; deliverable=Ship draft; due=tomorrow; success=Draft reviewed
@@ -404,7 +406,7 @@ Outcome: blocked
 
   // blocked + rerouted → invalid
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=Team B; deliverable=Rerouted delivery; due=today; success=Delivery complete
@@ -419,7 +421,7 @@ Outcome: blocked
 
   // blocked + escalated → invalid
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=human; deliverable=Decision needed; due=none; success=Decision made
@@ -436,7 +438,7 @@ Outcome: blocked
 test('missing Obstacle line rejects the footer', () => {
   // 7-line footer (old format) without Obstacle line
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=Fiona; deliverable=Ship draft; due=tomorrow; success=Draft reviewed
@@ -452,7 +454,7 @@ Outcome: advanced
 test('passive wait wording in Do or Act fails validation', () => {
   // "Wait for" in Act
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=human; deliverable=Decision; due=none; success=Decision made
@@ -467,7 +469,7 @@ Outcome: advanced
 
   // "waiting for" in Do
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=human; deliverable=Decision; due=none; success=Decision made
@@ -482,7 +484,7 @@ Outcome: advanced
 
   // "now waiting" in Act
   assert.equal(
-    agentManager.__parseLeaderPdcaForTests(`
+    __parseLeaderPdcaForTests(`
 Leader PDCA
 Thesis: unchanged
 Plan: owner=human; deliverable=Market choice; due=none; success=Market chosen
@@ -497,7 +499,7 @@ Outcome: blocked
 })
 
 test('valid Obstacle: escalated with concrete Act succeeds', () => {
-  const pdca = agentManager.__parseLeaderPdcaForTests(`
+  const pdca = __parseLeaderPdcaForTests(`
 Escalated to the human but assigned parallelizable work.
 
 Leader PDCA
@@ -524,7 +526,7 @@ test('valid Obstacle: rerouted + Outcome: advanced parses and consumes cooldown'
   })
 
   const remindedAt = 5_000_000
-  const resolution = agentManager.__finalizeTodoReminderTurnForTests(
+  const resolution = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'idle', remindedAt },
@@ -545,7 +547,7 @@ Outcome: advanced
   assert.equal(resolution.consumeCooldown, true)
   assert.equal(resolution.allowImmediateRequeue, false)
   assert.equal(resolution.pdca?.obstacle, 'rerouted')
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), remindedAt)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), remindedAt)
 })
 
 test('valid Obstacle: exhausted + Outcome: blocked parses correctly and does not consume cooldown', () => {
@@ -555,7 +557,7 @@ test('valid Obstacle: exhausted + Outcome: blocked parses correctly and does not
     role: 'leader',
   })
 
-  const resolution = agentManager.__finalizeTodoReminderTurnForTests(
+  const resolution = __finalizeTodoReminderTurnForTests(
     agent.id,
     'leader',
     { kind: 'idle', remindedAt: 6_000_000 },
@@ -577,5 +579,5 @@ Outcome: blocked
   assert.equal(resolution.allowImmediateRequeue, false)
   assert.equal(resolution.pdca?.obstacle, 'exhausted')
   assert.equal(resolution.pdca?.outcome, 'blocked')
-  assert.equal(agentManager.__getTodoReminderCooldownForTests(agent.id), undefined)
+  assert.equal(__getTodoReminderCooldownForTests(agent.id), undefined)
 })

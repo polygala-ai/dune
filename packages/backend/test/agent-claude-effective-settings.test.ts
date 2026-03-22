@@ -7,7 +7,8 @@ process.env.DATA_DIR = join(tmpdir(), `dune-agent-claude-effective-${Date.now()}
 
 const { getDb } = await import('../src/storage/database.js')
 const settingsStore = await import('../src/storage/claude-settings-store.js')
-const agentManager = await import('../src/agents/agent-manager.js')
+await import('../src/domains/agents/_init.js')
+const { __buildClaudeCliAuthEnvValuesForTests, __buildClaudeSettingsEnvValuesForTests } = await import('../src/domains/agents/settings-sync.js')
 
 const db = getDb()
 
@@ -26,7 +27,7 @@ test('Claude settings env values helper uses effective DB-backed auth/base/traff
     claudeCodeDisableNonessentialTraffic: '1',
   })
 
-  const envValues = agentManager.__buildClaudeSettingsEnvValuesForTests()
+  const envValues = __buildClaudeSettingsEnvValuesForTests()
   assert.deepEqual(envValues, {
     ANTHROPIC_AUTH_TOKEN: 'db-auth-token',
     ANTHROPIC_BASE_URL: 'https://db.example/o2a',
@@ -40,7 +41,7 @@ test('Claude CLI auth env helper uses effective DB-backed API key and OAuth toke
     claudeCodeOAuthToken: 'db-oauth-token',
   })
 
-  const cliEnv = agentManager.__buildClaudeCliAuthEnvValuesForTests()
+  const cliEnv = __buildClaudeCliAuthEnvValuesForTests()
   assert.deepEqual(cliEnv, {
     ANTHROPIC_API_KEY: 'db-api-key',
     CLAUDE_CODE_OAUTH_TOKEN: 'db-oauth-token',
@@ -59,8 +60,8 @@ test('Claude helpers return empty values after DB secrets are cleared', () => {
     anthropicAuthToken: null,
   })
 
-  const settingsEnv = agentManager.__buildClaudeSettingsEnvValuesForTests()
-  const cliEnv = agentManager.__buildClaudeCliAuthEnvValuesForTests()
+  const settingsEnv = __buildClaudeSettingsEnvValuesForTests()
+  const cliEnv = __buildClaudeCliAuthEnvValuesForTests()
 
   assert.deepEqual(settingsEnv, {})
   assert.deepEqual(cliEnv, {})
