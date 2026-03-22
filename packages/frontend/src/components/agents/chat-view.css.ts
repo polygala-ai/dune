@@ -15,7 +15,7 @@ export const chatViewStyles = css`
     .header {
       display: flex;
       align-items: center;
-      padding: 10px 16px 8px;
+      padding: 12px 18px 10px;
       background: transparent;
       min-height: 54px;
       gap: 14px;
@@ -30,9 +30,9 @@ export const chatViewStyles = css`
       flex: 1;
     }
     .header-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -104,7 +104,7 @@ export const chatViewStyles = css`
     .conversation {
       flex: 1;
       overflow-y: auto;
-      padding: 4px 18px 6px;
+      padding: 6px 20px 8px;
       min-height: 0;
     }
     .conversation-lane {
@@ -125,7 +125,7 @@ export const chatViewStyles = css`
     .empty-avatar {
       width: 44px;
       height: 44px;
-      border-radius: 12px;
+      border-radius: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -169,7 +169,7 @@ export const chatViewStyles = css`
     .entry-thinking {
       display: flex;
       gap: 12px;
-      padding: 7px 12px;
+      padding: 8px 14px;
       max-width: 820px;
     }
     .thinking-dots {
@@ -196,13 +196,13 @@ export const chatViewStyles = css`
     .entry-text {
       display: flex;
       gap: 12px;
-      padding: 7px 12px;
+      padding: 8px 14px;
       max-width: 820px;
     }
     .entry-avatar {
       width: 28px;
       height: 28px;
-      border-radius: 6px;
+      border-radius: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -435,7 +435,7 @@ export const chatViewStyles = css`
     .entry-user {
       display: flex;
       gap: 12px;
-      padding: 7px 12px;
+      padding: 8px 14px;
       max-width: 820px;
     }
     .user-avatar {

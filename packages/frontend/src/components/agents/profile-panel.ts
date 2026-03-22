@@ -10,6 +10,7 @@ import './profile-tab.js'
 import './skills-tab.js'
 import './logs-tab.js'
 import './system-prompt-overlay.js'
+import { iconMinimize, iconMaximize, iconX, iconPlay, iconPause, iconTrash } from '../../utils/icons.js'
 
 const STATUS_LABELS: Record<string, string> = {
   idle: 'Active',
@@ -405,46 +406,22 @@ export class AgentProfilePanel extends LitElement {
         <div class="header-buttons">
           ${this.activeTab === 'computer' ? html`
             <button class="expand-btn" @click=${this.toggleExpand} title=${this.expanded ? 'Exit fullscreen' : 'Fullscreen'}>
-              ${this.expanded
-                ? html`
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M9 9H4V4m11 5h5V4M9 15H4v5m11-5h5v5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  </svg>
-                `
-                : html`
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  </svg>
-                `}
+              ${this.expanded ? iconMinimize() : iconMaximize()}
             </button>
           ` : ''}
           <button class="close-btn" @click=${this.handleClose} aria-label="Close agent profile">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"></path>
-            </svg>
+            ${iconX()}
           </button>
         </div>
       </div>
 
       <div class="actions-row">
         <button class="action-btn" @click=${this.handleToggle}>
-          ${isStopped
-            ? html`
-              <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 6v12l10-6-10-6Z" stroke-linejoin="round"></path>
-              </svg>
-            `
-            : html`
-              <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 7h3v10H8zm5 0h3v10h-3z" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
-            `}
+          ${isStopped ? iconPlay() : iconPause()}
           <span>${isStopped ? 'Start' : 'Stop'}</span>
         </button>
         <button class="action-btn danger" @click=${this.handleDelete}>
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h16M10 11v6m4-6v6M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 .92h8a1 1 0 0 0 1-.92L20 7" stroke-linecap="round" stroke-linejoin="round"></path>
-          </svg>
+          ${iconTrash()}
           <span>Delete</span>
         </button>
       </div>

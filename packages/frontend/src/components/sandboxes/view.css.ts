@@ -3,9 +3,9 @@ import { css } from 'lit'
 /* ─── shared tokens used by child components ─── */
 export const panelStyles = css`
   .panel {
-    border: 1px solid color-mix(in srgb, var(--text-muted) 15%, transparent);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--bg-primary) 96%, transparent);
+    background: var(--bg-primary);
     padding: 11px;
     display: flex;
     flex-direction: column;
@@ -51,8 +51,8 @@ export const panelStyles = css`
   .textarea,
   .select {
     width: 100%;
-    border: 1px solid color-mix(in srgb, var(--text-muted) 22%, transparent);
-    border-radius: 10px;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
     background: var(--bg-primary);
     color: var(--text-primary);
     font-size: 13px;
@@ -64,7 +64,7 @@ export const panelStyles = css`
   .input:focus,
   .textarea:focus,
   .select:focus {
-    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-color: var(--accent);
     background: var(--bg-surface);
   }
 

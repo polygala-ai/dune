@@ -22,6 +22,7 @@ import './memory-editor.js'
 import './host-settings.js'
 import './stash-strip.js'
 import { chatViewStyles } from './chat-view.css.js'
+import { iconWrench, iconXCircle, iconFileText, iconAlertTriangle } from '../../utils/icons.js'
 import type { AgentMemoryEditor, MemoryEditorSnapshot } from './memory-editor.js'
 import type { StashItem } from './stash-strip.js'
 
@@ -554,10 +555,7 @@ export class AgentChatView extends LitElement {
             <div class="tool-card tool-use">
               <div class="tool-header" @click=${() => this.toggleExpand(entry.id)}>
                 <span class="tool-chevron ${isOpen ? 'open' : ''}">▶</span>
-                <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M14.5 6.5a4.3 4.3 0 1 0 3 3l-3.3 3.3a1 1 0 0 1-1.4 0l-1.4-1.4a1 1 0 0 1 0-1.4l3.3-3.3a4.3 4.3 0 0 0-.2-.2Z" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M5 19l4-4" stroke-linecap="round"></path>
-                </svg>
+                ${iconWrench()}
                 <span class="tool-label">${d.toolName || 'unknown'}</span>
                 <span class="tool-label-type" style="background: var(--warning)">Tool Call</span>
               </div>
@@ -574,19 +572,7 @@ export class AgentChatView extends LitElement {
             <div class="tool-card ${d.isError ? 'tool-error' : 'tool-result'}">
               <div class="tool-header" @click=${() => this.toggleExpand(entry.id)}>
                 <span class="tool-chevron ${isOpen ? 'open' : ''}">▶</span>
-                ${d.isError
-                  ? html`
-                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="12" cy="12" r="8"></circle>
-                      <path d="M9.5 9.5l5 5m0-5-5 5" stroke-linecap="round"></path>
-                    </svg>
-                  `
-                  : html`
-                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M8 4h6l4 4v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke-linejoin="round"></path>
-                      <path d="M14 4v4h4" stroke-linejoin="round"></path>
-                    </svg>
-                  `}
+                ${d.isError ? iconXCircle() : iconFileText()}
                 <span class="tool-label">${d.isError ? 'Error Result' : 'Result'}</span>
                 <span class="tool-label-type" style="background: ${d.isError ? 'var(--error)' : 'var(--accent)'}">${d.isError ? 'Error' : 'Output'}</span>
               </div>
@@ -689,9 +675,7 @@ export class AgentChatView extends LitElement {
         return html`
           <div class="entry-error">
             <div class="error-pill">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 8v5m0 3h.01M10.3 4.9 3.7 16.4a2 2 0 0 0 1.7 3h13.2a2 2 0 0 0 1.7-3L13.7 4.9a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
+              ${iconAlertTriangle()}
               <span>${d.message || 'Unknown error'}</span>
             </div>
           </div>

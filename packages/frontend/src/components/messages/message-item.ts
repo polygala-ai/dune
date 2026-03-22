@@ -10,6 +10,7 @@ import { highlightCodeBlocks } from '../../utils/shiki-highlighter.js'
 import { renderMathBlocks } from '../../utils/katex-renderer.js'
 import { renderMermaidBlocks } from '../../utils/mermaid-renderer.js'
 import type { Message } from '@dune/shared'
+import { iconInfo } from '../../utils/icons.js'
 
 @customElement('message-item')
 export class MessageItem extends LitElement {
@@ -21,24 +22,24 @@ export class MessageItem extends LitElement {
     :host {
       display: flex;
       gap: 12px;
-      padding: 12px 14px 14px;
-      border-radius: 18px;
-      border: 1px solid var(--glass-border);
-      background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+      padding: 14px 16px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
       transition: background var(--transition-fast), border-color var(--transition-fast);
       position: relative;
       isolation: isolate;
     }
 
     :host(:hover) {
-      background: color-mix(in srgb, var(--bg-hover) 34%, var(--glass-bg));
+      background: var(--bg-surface);
       border-color: var(--border-primary);
     }
 
     .avatar {
       width: 30px;
       height: 30px;
-      border-radius: 9px;
+      border-radius: 100%;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -77,7 +78,7 @@ export class MessageItem extends LitElement {
     }
 
     .name {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--text-primary);
       line-height: 1.2;
@@ -97,9 +98,9 @@ export class MessageItem extends LitElement {
     }
 
     .content {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--text-secondary);
-      line-height: 1.58;
+      line-height: 1.6;
       word-break: break-word;
     }
 
@@ -305,9 +306,7 @@ export class MessageItem extends LitElement {
     if (isSystem) {
       return html`
         <div class="avatar system" aria-hidden="true" data-testid="message-agent-avatar">
-          <svg class="system-icon" viewBox="0 0 24 24">
-            <path d="M12 16v-4m0-4h.01M3.5 12a8.5 8.5 0 1 0 17 0 8.5 8.5 0 0 0-17 0Z" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          ${iconInfo({ size: 15 })}
         </div>
       `
     }

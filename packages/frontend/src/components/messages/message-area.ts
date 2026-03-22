@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit'
 import { customElement, property, query, state } from 'lit/decorators.js'
 import type { Message, Agent, Channel, SelectedModelProvider } from '@dune/shared'
+import { iconUsers } from '../../utils/icons.js'
 import type { MentionPopup } from './mention-popup.js'
 import './codex-composer.js'
 import type {
@@ -197,9 +198,9 @@ export class MessageArea extends LitElement {
       margin-left: auto;
       max-width: min(62%, 520px);
       padding: 10px 16px;
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
-      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
       color: var(--text-primary);
       font-size: 14px;
       line-height: 1.45;
@@ -515,9 +516,7 @@ export class MessageArea extends LitElement {
             </div>
             <div class="header-right">
               <button class="members-btn" type="button" title="Manage members" @click=${this.handleManageMembers}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-6.5a3.5 3.5 0 0 1 0 7" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                ${iconUsers()}
                 <span>${this.subscriberCount}</span>
               </button>
             </div>

@@ -117,8 +117,9 @@ export const appShellStyles = css`
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 0 14px;
-      border-bottom: 1px solid var(--toolbar-border);
+      padding: 0 16px;
+      border-bottom: none;
+      box-shadow: 0 1px 0 var(--border-color);
       background: var(--toolbar-bg);
       position: relative;
     }
@@ -149,31 +150,30 @@ export const appShellStyles = css`
     }
 
     .pane-toolbar-leading-btn {
-      width: 26px;
-      min-width: 26px;
-      height: 26px;
-      border: 1px solid var(--control-border);
-      border-radius: 9px;
-      background: var(--control-bg);
-      color: var(--text-secondary);
+      width: var(--control-height);
+      min-width: var(--control-height);
+      height: var(--control-height);
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+      transition: background var(--transition-fast), color var(--transition-fast);
     }
 
     .pane-toolbar-leading-btn:hover {
-      background: var(--control-bg-hover);
-      border-color: var(--border-primary);
+      background: var(--bg-hover);
       color: var(--text-primary);
     }
 
     .pane-toolbar-leading-btn svg {
-      width: 13px;
-      height: 13px;
+      width: 18px;
+      height: 18px;
       stroke: currentColor;
-      stroke-width: 1.9;
+      stroke-width: 1.6;
       fill: none;
       flex-shrink: 0;
     }
@@ -199,11 +199,11 @@ export const appShellStyles = css`
 
     .pane-toolbar-title {
       margin: 0;
-      font-size: 13.5px;
+      font-size: 14px;
       line-height: 1.2;
-      font-weight: 650;
+      font-weight: 600;
       color: var(--text-primary);
-      letter-spacing: -0.015em;
+      letter-spacing: -0.01em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -244,25 +244,24 @@ export const appShellStyles = css`
     }
 
     .window-control-btn {
-      border: 1px solid var(--control-border);
-      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
       min-height: var(--control-height);
       padding: 0 12px;
-      background: var(--control-bg);
-      color: var(--text-primary);
+      background: transparent;
+      color: var(--text-secondary);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
       font-size: 11px;
       font-weight: 600;
-      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+      transition: background var(--transition-fast), color var(--transition-fast);
       white-space: nowrap;
     }
 
     .window-control-btn:hover {
-      background: var(--control-bg-hover);
-      border-color: var(--border-primary);
+      background: var(--bg-hover);
       color: var(--text-primary);
     }
 
@@ -304,7 +303,7 @@ export const appShellStyles = css`
       width: var(--control-height);
       min-width: var(--control-height);
       padding: 0;
-      border-radius: 9px;
+      border-radius: 8px;
     }
 
     .stage-shell {
@@ -327,7 +326,7 @@ export const appShellStyles = css`
       border-top: 1px solid var(--footer-border);
       background: var(--footer-bg);
       color: var(--text-secondary);
-      font-size: 11.5px;
+      font-size: 12px;
       line-height: 1;
     }
 

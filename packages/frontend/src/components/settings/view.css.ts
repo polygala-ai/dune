@@ -17,24 +17,22 @@ export const settingsViewStyles = css`
     }
 
     .nav {
-      background: var(--glass-bg);
+      background: var(--bg-elevated);
       border: 1px solid var(--border-color);
-      border-radius: 24px;
+      border-radius: 16px;
       padding: 14px 10px 12px;
       display: flex;
       flex-direction: column;
       min-height: 0;
       gap: 12px;
       box-shadow: var(--shadow-sm);
-      backdrop-filter: blur(18px) saturate(150%);
-      -webkit-backdrop-filter: blur(18px) saturate(150%);
     }
 
     .back-btn {
       width: 100%;
       min-height: var(--control-height);
       border: 1px solid transparent;
-      border-radius: 14px;
+      border-radius: 8px;
       background: transparent;
       color: var(--text-secondary);
       font-size: var(--text-secondary-size);
@@ -73,7 +71,7 @@ export const settingsViewStyles = css`
       width: 100%;
       min-height: var(--sidebar-row-height);
       border: 1px solid transparent;
-      border-radius: 16px;
+      border-radius: 8px;
       background: transparent;
       color: var(--text-secondary);
       font-size: var(--text-body-size);
@@ -97,13 +95,11 @@ export const settingsViewStyles = css`
     .content {
       min-height: 0;
       overflow-y: auto;
-      padding: 22px 24px 28px;
-      background: var(--glass-bg);
+      padding: 24px 28px 32px;
+      background: var(--bg-elevated);
       border: 1px solid var(--border-color);
-      border-radius: 26px;
+      border-radius: 16px;
       box-shadow: var(--shadow-sm);
-      backdrop-filter: blur(18px) saturate(150%);
-      -webkit-backdrop-filter: blur(18px) saturate(150%);
     }
 
     .top {
@@ -136,20 +132,20 @@ export const settingsViewStyles = css`
     }
 
     .card {
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+      border-radius: 12px;
+      background: var(--bg-surface);
       overflow: visible;
-      padding: 4px;
-      border: 1px solid var(--border-light);
+      padding: 8px;
+      border: 1px solid var(--border-color);
     }
 
     .settings-card {
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
-      padding: 14px;
+      border-radius: 12px;
+      background: var(--bg-surface);
+      padding: 16px;
       display: grid;
       gap: 14px;
-      border: 1px solid var(--border-light);
+      border: 1px solid var(--border-color);
     }
 
     .row {
@@ -157,10 +153,10 @@ export const settingsViewStyles = css`
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 12px;
       align-items: center;
-      padding: 14px 16px;
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
-      border: 1px solid var(--border-light);
+      padding: 16px 18px;
+      border-radius: 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
     }
 
     .row-copy {
@@ -223,12 +219,12 @@ export const settingsViewStyles = css`
     }
 
     .field {
-      padding: 14px;
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--bg-subtle);
       display: grid;
       gap: 8px;
-      border: 1px solid var(--border-light);
+      border: 1px solid var(--border-color);
     }
 
     .field-top {
@@ -279,7 +275,7 @@ export const settingsViewStyles = css`
     .btn {
       border: none;
       border-radius: var(--radius-sm);
-      min-height: 32px;
+      min-height: 36px;
       padding: 0 10px;
       background: var(--bg-hover);
       color: var(--text-primary);

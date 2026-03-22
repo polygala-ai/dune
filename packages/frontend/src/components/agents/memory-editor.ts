@@ -3,6 +3,7 @@ import { customElement, property, state as litState } from 'lit/decorators.js'
 import type { Agent, MemoryFile } from '@dune/shared'
 import * as api from '../../services/rpc.js'
 import { uiPreferences } from '../../state/ui-preferences.js'
+import { iconX } from '../../utils/icons.js'
 
 type MemorySort = 'name' | 'updated' | 'size'
 type MemoryPane = 'files' | 'editor'
@@ -1101,9 +1102,7 @@ export class AgentMemoryEditor extends LitElement {
                             title=${`Delete ${this.getMemoryFileName(f.path)}`}
                             @click=${(e: Event) => { e.stopPropagation(); this.memoryDeleteConfirm = f.path }}
                           >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"></path>
-                            </svg>
+                            ${iconX()}
                           </button>
                         </div>
                         ${this.memoryDeleteConfirm === f.path ? html`

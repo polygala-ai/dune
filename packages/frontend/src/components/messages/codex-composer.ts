@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit'
 import { customElement, property, query, state as litState } from 'lit/decorators.js'
+import { iconPlus, iconStop, iconArrowRight } from '../../utils/icons.js'
 
 export type CodexComposerInputDetail = {
   value: string
@@ -60,15 +61,15 @@ export class CodexComposer extends LitElement {
       gap: 6px;
       min-height: var(--composer-min-height);
       border-radius: var(--composer-radius);
-      background: var(--composer-shell);
+      background: transparent;
       box-shadow: var(--composer-shadow);
-      padding: 12px 14px 12px;
+      padding: 14px 16px 14px;
       transition: box-shadow var(--transition-fast), background var(--transition-fast);
-      border: 1px solid color-mix(in srgb, var(--composer-seam) 88%, transparent);
+      border: none;
     }
 
     .shell:focus-within {
-      box-shadow: var(--composer-shadow), 0 0 0 2px var(--focus-ring);
+      box-shadow: var(--shadow-sm);
     }
 
     .composer-input {
@@ -124,10 +125,10 @@ export class CodexComposer extends LitElement {
     .add-btn {
       width: var(--composer-submit-size);
       height: var(--composer-submit-size);
-      border: 1px solid var(--control-border);
-      border-radius: 10px;
-      background: var(--control-bg);
-      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -145,9 +146,8 @@ export class CodexComposer extends LitElement {
 
     .add-btn:hover:enabled,
     .add-btn.open:enabled {
-      background: var(--control-bg-hover);
+      background: var(--bg-hover);
       color: var(--text-primary);
-      border-color: var(--border-primary);
     }
 
     .add-btn:disabled {
@@ -161,11 +161,11 @@ export class CodexComposer extends LitElement {
       left: 0;
       bottom: calc(100% + 10px);
       min-width: 220px;
-      border-radius: 12px;
+      border-radius: 16px;
       background: var(--sheet-bg);
       border: 1px solid var(--border-color);
       box-shadow: var(--shadow-md);
-      padding: 8px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 4px;
@@ -177,7 +177,7 @@ export class CodexComposer extends LitElement {
       background: transparent;
       color: var(--text-primary);
       text-align: left;
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 9px 10px;
       font-size: 13px;
       font-weight: 500;
@@ -450,9 +450,7 @@ export class CodexComposer extends LitElement {
                       aria-label="Open actions"
                       aria-expanded=${this.addMenuOpen ? 'true' : 'false'}
                     >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" stroke-linecap="round"></path>
-                      </svg>
+                      ${iconPlus()}
                     </button>
                     ${this.addMenuOpen
                       ? html`
@@ -487,17 +485,7 @@ export class CodexComposer extends LitElement {
             @click=${this.handleSubmitClick}
             aria-label=${isInterruptMode ? 'Interrupt workflow' : 'Send'}
           >
-            ${isInterruptMode
-              ? html`
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="8" y="8" width="8" height="8" rx="1.5"></rect>
-                  </svg>
-                `
-              : html`
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M7 12h10M13 8l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-                  </svg>
-                `}
+            ${isInterruptMode ? iconStop() : iconArrowRight()}
           </button>
         </div>
       </div>

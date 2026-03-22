@@ -7,6 +7,7 @@ import * as api from './services/rpc.js'
 import { WsClient } from './services/rpc.js'
 import { initWorkspaceSync } from './services/workspace-sync.js'
 import { appShellStyles } from './app-shell.css.js'
+import { iconMinus, iconSquare, iconX, iconPanelLeft } from './utils/icons.js'
 import type { ClaudeSettings, HostOperatorRequest, SelectedModelProvider } from '@dune/shared'
 import type { CreateAgentDialog } from './components/agents/create-dialog.js'
 import type { CreateChannelDialog } from './components/channels/create-dialog.js'
@@ -939,9 +940,7 @@ export class AppShell extends LitElement {
           aria-label="Minimize window"
           @click=${() => this.handleWindowControl('minimize')}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 12h14" stroke-linecap="round"></path>
-          </svg>
+          ${iconMinus()}
         </button>
         <button
           class="window-control-btn"
@@ -950,9 +949,7 @@ export class AppShell extends LitElement {
           aria-label="Maximize window"
           @click=${() => this.handleWindowControl('maximize')}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 5h14v14H5z" stroke-linejoin="round"></path>
-          </svg>
+          ${iconSquare()}
         </button>
         <button
           class="window-control-btn"
@@ -961,20 +958,14 @@ export class AppShell extends LitElement {
           aria-label="Close window"
           @click=${() => this.handleWindowControl('close')}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" stroke-linecap="round"></path>
-          </svg>
+          ${iconX()}
         </button>
       </div>
     `
   }
 
   private renderSidebarToggleIcon() {
-    return html`
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 5h16v14H4zM9 5v14" stroke-linejoin="round"></path>
-      </svg>
-    `
+    return iconPanelLeft()
   }
 
   private renderToolbarLeadingCluster() {
