@@ -2,6 +2,7 @@ import { LitElement, html } from 'lit'
 import { customElement, property, state } from 'lit/decorators.js'
 import * as api from '../../services/rpc.js'
 import { profilePanelStyles } from './profile-panel.css.js'
+import { iconX } from '../../utils/icons.js'
 
 @customElement('agent-system-prompt-overlay')
 export class AgentSystemPromptOverlay extends LitElement {
@@ -42,9 +43,7 @@ export class AgentSystemPromptOverlay extends LitElement {
         <div class="prompt-header">
           <span class="prompt-title">System Prompt</span>
           <button class="close-btn" @click=${this.handleClose}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"></path>
-            </svg>
+            ${iconX()}
           </button>
         </div>
         <div class="prompt-body">

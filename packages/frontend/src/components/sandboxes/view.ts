@@ -3,6 +3,7 @@ import { customElement, property, state as litState } from 'lit/decorators.js'
 import type { Agent, BoxResource } from '@dune/shared'
 import * as api from '../../services/rpc.js'
 import { parentStyles } from './view.css.js'
+import { iconBox, iconPlus, iconRefresh, iconSearch } from '../../utils/icons.js'
 import './overview-tab.js'
 import './execs-tab.js'
 import './files-tab.js'
@@ -189,10 +190,7 @@ export class SandboxesView extends LitElement {
         }}
       >
         <span class="card-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2.5l9 5v9l-9 5-9-5v-9l9-5z" stroke-linejoin="round"></path>
-            <path d="M12 21.5v-9M3 7.5l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"></path>
-          </svg>
+          ${iconBox()}
         </span>
         <div class="card-main">
           <div class="card-title">${title}</div>
@@ -208,9 +206,7 @@ export class SandboxesView extends LitElement {
           e.stopPropagation()
           this.selectBox(box.boxId)
         }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 12h16M12 4v16" stroke-linecap="round"></path>
-          </svg>
+          ${iconPlus()}
         </button>
       </article>
     `
@@ -225,21 +221,15 @@ export class SandboxesView extends LitElement {
         <div class="page">
           <div class="toolbar">
             <button class="refresh-btn" type="button" @click=${this.refreshAll} ?disabled=${this.loading}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
+              ${iconRefresh()}
               <span>Refresh</span>
             </button>
             <label class="search-wrap">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m21 21-4.35-4.35M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" stroke-linecap="round"></path>
-              </svg>
+              ${iconSearch()}
               <input class="search" type="search" .value=${this.query} @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value }} placeholder="Search sandboxes" />
             </label>
             <button class="new-btn" type="button" @click=${this.openCreate}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" stroke-linecap="round"></path>
-              </svg>
+              ${iconPlus()}
               <span>New sandbox</span>
             </button>
           </div>

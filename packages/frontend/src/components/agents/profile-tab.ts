@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js'
 import type { Agent, Channel } from '@dune/shared'
 import * as api from '../../services/rpc.js'
 import { profilePanelStyles } from './profile-panel.css.js'
+import { iconFileText } from '../../utils/icons.js'
 
 const AVATAR_COLORS = ['#0f9a90', '#0ea5e9', '#3b82f6', '#6d28d9', '#ef4444', '#f97316', '#10b981', '#64748b']
 
@@ -268,10 +269,7 @@ export class AgentProfileTab extends LitElement {
 
       <div class="section-card">
         <button class="action-btn" @click=${this.handleViewSystemPrompt}>
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-linecap="round" stroke-linejoin="round"></path>
-            <path d="M14 2v6h6M16 13H8m8 4H8m2-8H8" stroke-linecap="round" stroke-linejoin="round"></path>
-          </svg>
+          ${iconFileText()}
           <span>View System Prompt</span>
         </button>
       </div>

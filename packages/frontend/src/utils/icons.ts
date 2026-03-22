@@ -34,7 +34,7 @@ function attrsToString(attrs: Record<string, string>): string {
 
 function renderIcon(
   node: IconNode,
-  { size = 16, strokeWidth = 1.8 }: IconOptions = {},
+  { size = 18, strokeWidth = 1.6 }: IconOptions = {},
 ): SVGTemplateResult {
   const inner = node
     .map(([tag, attrs]) => `<${tag} ${attrsToString(attrs)}/>`)

@@ -3,6 +3,7 @@ import { customElement, property, state as litState } from 'lit/decorators.js'
 import type { Channel, Agent } from '@dune/shared'
 import * as api from '../../services/rpc.js'
 import { uiPreferences } from '../../state/ui-preferences.js'
+import { iconX } from '../../utils/icons.js'
 
 const DEFAULT_INSPECTOR_WIDTH_PX = 520
 const INSPECTOR_MIN_WIDTH_PX = 360
@@ -109,7 +110,7 @@ export class ChannelDetailsPanel extends LitElement {
       max-height: none;
       background: var(--sheet-bg);
       border: 1px solid var(--border-color);
-      border-radius: 30px 0 0 30px;
+      border-radius: 16px 0 0 16px;
       box-shadow: var(--shadow-lg);
       display: flex;
       flex-direction: column;
@@ -358,7 +359,7 @@ export class ChannelDetailsPanel extends LitElement {
         width: min(560px, 92vw);
         height: auto;
         max-height: 88vh;
-        border-radius: 24px;
+        border-radius: 16px;
       }
 
       .modal-header {
@@ -629,9 +630,7 @@ export class ChannelDetailsPanel extends LitElement {
             }
           </div>
           <button class="close-btn" type="button" @click=${this.handleClose} aria-label="Close channel details">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"></path>
-            </svg>
+            ${iconX()}
           </button>
         </div>
 

@@ -71,7 +71,7 @@ export const profilePanelStyles = css`
       max-height: none;
       background: var(--sheet-bg);
       border: 1px solid var(--border-color);
-      border-radius: 30px 0 0 30px;
+      border-radius: 16px 0 0 16px;
       box-shadow: var(--shadow-lg);
       display: flex;
       flex-direction: column;
@@ -86,7 +86,7 @@ export const profilePanelStyles = css`
     .modal.computer {
       height: 85vh;
       width: min(94vw, calc((85vh - 120px) * 4 / 3 + 52px));
-      border-radius: 28px;
+      border-radius: 16px;
       margin: auto 12px auto auto;
       align-self: center;
     }
@@ -103,7 +103,7 @@ export const profilePanelStyles = css`
     .modal.prompt-view {
       width: min(800px, 92vw);
       height: 85vh;
-      border-radius: 28px;
+      border-radius: 16px;
       margin: auto 12px auto auto;
       align-self: center;
     }
@@ -112,7 +112,7 @@ export const profilePanelStyles = css`
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 18px 18px 12px;
+      padding: 20px 20px 14px;
       transition: padding 0.25s ease;
     }
 
@@ -124,7 +124,7 @@ export const profilePanelStyles = css`
     .avatar {
       width: 64px;
       height: 64px;
-      border-radius: var(--radius);
+      border-radius: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -711,7 +711,7 @@ export const profilePanelStyles = css`
         width: min(620px, 92vw);
         height: auto;
         max-height: 88vh;
-        border-radius: 24px;
+        border-radius: 16px;
       }
 
       .modal-header {

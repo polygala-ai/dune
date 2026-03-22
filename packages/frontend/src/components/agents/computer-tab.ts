@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit'
 import { customElement, property, state as litState } from 'lit/decorators.js'
 import * as api from '../../services/rpc.js'
+import { iconPlus, iconMenu, iconPlay, iconCamera } from '../../utils/icons.js'
 
 @customElement('agent-computer-tab')
 export class AgentComputerTab extends LitElement {
@@ -204,9 +205,7 @@ export class AgentComputerTab extends LitElement {
         <div class="container">
           <div class="toolbar">
             <span class="toolbar-badge">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M2 12h20M12 2v20" stroke-linecap="round"></path>
-              </svg>
+              ${iconPlus()}
               <span>Desktop</span>
             </span>
             <span class="spacer"></span>
@@ -223,23 +222,16 @@ export class AgentComputerTab extends LitElement {
       <div class="container">
         <div class="toolbar">
           <span class="toolbar-badge">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"></path>
-            </svg>
+            ${iconMenu()}
             <span>Screenshot Mode</span>
           </span>
           <span class="spacer"></span>
           <button class="control-btn" type="button" @click=${() => this.startPolling()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 6v12l10-6-10-6Z" stroke-linejoin="round"></path>
-            </svg>
+            ${iconPlay()}
             <span>${this.polling ? 'Live' : 'Start Live'}</span>
           </button>
           <button class="control-btn" type="button" @click=${() => this.takeScreenshot()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 9h2l1-2h4l1 2h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z" stroke-linejoin="round"></path>
-              <circle cx="12" cy="14" r="3"></circle>
-            </svg>
+            ${iconCamera()}
             <span>Capture</span>
           </button>
         </div>

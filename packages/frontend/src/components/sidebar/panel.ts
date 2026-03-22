@@ -2,6 +2,7 @@ import { LitElement, css, html } from 'lit'
 import { customElement, property, state as litState } from 'lit/decorators.js'
 import { ifDefined } from 'lit/directives/if-defined.js'
 import type { Agent, Channel } from '@dune/shared'
+import { iconPanelLeft, iconBox, iconLayoutGrid, iconPlus, iconSettings, iconInfo, iconTrash } from '../../utils/icons.js'
 
 export type NavRow = {
   kind: 'channel' | 'agent'
@@ -44,6 +45,9 @@ export class SidebarPanel extends LitElement {
     .workspace {
       padding: 10px 12px 8px;
       min-height: var(--header-height);
+      -webkit-app-region: drag;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .workspace.native-traffic-lights {
@@ -72,6 +76,7 @@ export class SidebarPanel extends LitElement {
       background: transparent;
       color: var(--sidebar-text-active);
       transition: color var(--transition-fast), opacity var(--transition-fast);
+      -webkit-app-region: no-drag;
     }
 
     .workspace-brand-mark {
@@ -102,36 +107,6 @@ export class SidebarPanel extends LitElement {
       opacity: 0.9;
     }
 
-    .workspace-brand.style-signature {
-      gap: 11px;
-    }
-
-    .workspace-brand.style-signature .workspace-brand-mark {
-      height: 17px;
-      opacity: 0.82;
-      background: linear-gradient(
-        to bottom,
-        color-mix(in srgb, var(--warning) 36%, var(--accent)) 0%,
-        color-mix(in srgb, var(--accent) 76%, var(--sidebar-text-active)) 100%
-      );
-    }
-
-    .workspace-brand.style-signature .workspace-brand-text {
-      font-weight: 635;
-      letter-spacing: 0.014em;
-      text-shadow: 0 1px 0 color-mix(in srgb, var(--bg-primary) 72%, transparent);
-    }
-
-    .workspace-brand.style-signature .workspace-brand-text::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: -2px;
-      height: 1px;
-      background: color-mix(in srgb, var(--accent) 24%, transparent);
-    }
-
     .workspace-brand.style-minimal .workspace-brand-mark {
       width: 1.5px;
       height: 14px;
@@ -140,83 +115,31 @@ export class SidebarPanel extends LitElement {
     }
 
     .workspace-brand.style-minimal .workspace-brand-text {
-      font-weight: 615;
-      letter-spacing: 0.012em;
-    }
-
-    .workspace-brand.style-technical {
-      gap: 8px;
-    }
-
-    .workspace-brand.style-technical .workspace-brand-mark {
-      width: 1px;
-      height: 16px;
-      opacity: 0.88;
-      background: color-mix(in srgb, var(--accent) 72%, var(--sidebar-text-active));
-    }
-
-    .workspace-brand.style-technical .workspace-brand-text {
-      font-family: var(--font-mono);
-      font-size: var(--text-secondary-size);
-      letter-spacing: 0.015em;
-      font-weight: 620;
-    }
-
-    .workspace-head.style-signature .sidebar-toggle {
-      border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-      background: color-mix(in srgb, var(--accent-soft) 24%, var(--sidebar-hover));
-      color: var(--sidebar-text-active);
-    }
-
-    .workspace-head.style-signature .sidebar-toggle:hover {
-      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-      background: color-mix(in srgb, var(--accent-soft) 36%, var(--sidebar-hover));
-    }
-
-    .workspace-head.style-minimal .sidebar-toggle {
-      border-color: color-mix(in srgb, var(--text-muted) 22%, transparent);
-      background: color-mix(in srgb, var(--sidebar-hover) 50%, transparent);
-    }
-
-    .workspace-head.style-minimal .sidebar-toggle:hover {
-      border-color: color-mix(in srgb, var(--text-muted) 32%, transparent);
-      background: color-mix(in srgb, var(--sidebar-hover) 72%, transparent);
-    }
-
-    .workspace-head.style-technical .sidebar-toggle {
-      border-radius: var(--radius-xs);
-      border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-      background: color-mix(in srgb, var(--accent-soft) 18%, var(--sidebar-hover));
-      color: var(--sidebar-text-active);
-    }
-
-    .workspace-head.style-technical .sidebar-toggle:hover {
-      border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-      background: color-mix(in srgb, var(--accent-soft) 30%, var(--sidebar-hover));
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
 
     .sidebar-toggle {
       width: var(--control-height);
       height: var(--control-height);
-      border: 1px solid color-mix(in srgb, var(--text-muted) 18%, transparent);
-      border-radius: var(--radius-sm);
-      background: color-mix(in srgb, var(--sidebar-hover) 52%, transparent);
+      border: none;
+      border-radius: 8px;
+      background: transparent;
       color: var(--sidebar-text);
       display: none;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+      transition: background var(--transition-fast), color var(--transition-fast);
+      -webkit-app-region: no-drag;
     }
 
     .sidebar-toggle:hover {
-      background: color-mix(in srgb, var(--sidebar-hover) 72%, transparent);
-      border-color: color-mix(in srgb, var(--text-muted) 30%, transparent);
+      background: var(--sidebar-hover);
       color: var(--sidebar-text-active);
     }
 
     .sidebar-toggle:focus-visible {
-      border-color: color-mix(in srgb, var(--accent) 46%, transparent);
       box-shadow: 0 0 0 2px var(--focus-ring);
       color: var(--sidebar-text-active);
     }
@@ -290,7 +213,7 @@ export class SidebarPanel extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin: 0 4px 5px;
+      margin: 0 6px 6px;
       gap: 8px;
     }
 
@@ -357,7 +280,7 @@ export class SidebarPanel extends LitElement {
       grid-template-columns: 16px minmax(0, 1fr);
       gap: 9px;
       align-items: center;
-      padding: 6px 10px;
+      padding: 7px 12px;
       cursor: pointer;
       text-align: left;
       transition: background var(--transition-fast), color var(--transition-fast);
@@ -373,6 +296,7 @@ export class SidebarPanel extends LitElement {
     .row.selected {
       background: var(--sidebar-selected);
       color: var(--sidebar-text-active);
+      border-left: 2px solid var(--accent);
     }
 
     .row-icon {
@@ -666,28 +590,14 @@ export class SidebarPanel extends LitElement {
               data-testid="sidebar-toggle"
               @click=${this.toggleSidebar}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 5h16v14H4zM9 5v14" stroke-linejoin="round"></path>
-              </svg>
+              ${iconPanelLeft()}
             </button>
           </div>
         </div>
 
         <div class="utility">
-          ${this.renderUtilityButton('Sandboxes', html`
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2.5l9 5v9l-9 5-9-5v-9l9-5z" stroke-linejoin="round"></path>
-              <path d="M12 21.5v-9M3 7.5l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          `, () => this.dispatchEvent(new CustomEvent('open-sandboxes', { bubbles: true, composed: true })), this.activeSurface === 'sandboxes', 'nav-sandboxes')}
-          ${this.renderUtilityButton('Apps', html`
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"></rect>
-              <rect x="14" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"></rect>
-              <rect x="3" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"></rect>
-              <rect x="14" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"></rect>
-            </svg>
-          `, () => this.dispatchEvent(new CustomEvent('open-apps', { bubbles: true, composed: true })), this.activeSurface === 'apps', 'nav-apps')}
+          ${this.renderUtilityButton('Sandboxes', iconBox(), () => this.dispatchEvent(new CustomEvent('open-sandboxes', { bubbles: true, composed: true })), this.activeSurface === 'sandboxes', 'nav-sandboxes')}
+          ${this.renderUtilityButton('Apps', iconLayoutGrid(), () => this.dispatchEvent(new CustomEvent('open-apps', { bubbles: true, composed: true })), this.activeSurface === 'apps', 'nav-apps')}
         </div>
 
         <div class="sections">
@@ -701,9 +611,7 @@ export class SidebarPanel extends LitElement {
                   title="Create channel"
                   @click=${() => this.dispatchEvent(new CustomEvent('create-channel', { bubbles: true, composed: true }))}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" stroke-linecap="round"></path>
-                  </svg>
+                  ${iconPlus()}
                 </button>
               </span>
             </div>
@@ -724,9 +632,7 @@ export class SidebarPanel extends LitElement {
                   title="Create agent"
                   @click=${() => this.dispatchEvent(new CustomEvent('create-agent', { bubbles: true, composed: true }))}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" stroke-linecap="round"></path>
-                  </svg>
+                  ${iconPlus()}
                 </button>
               </span>
             </div>
@@ -739,27 +645,18 @@ export class SidebarPanel extends LitElement {
         </div>
 
         <div class="footer">
-          ${this.renderUtilityButton('Settings', html`
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12.22 2h-.44a2 2 0 0 0-1.94 1.5l-.26 1.05a2 2 0 0 1-2.11 1.5l-1.09-.06A2 2 0 0 0 4.5 8.22l.53.95a2 2 0 0 1 0 2.16l-.53.95a2 2 0 0 0 1.88 2.93l1.09-.06a2 2 0 0 1 2.11 1.5l.26 1.05A2 2 0 0 0 11.78 20h.44a2 2 0 0 0 1.94-1.5l.26-1.05a2 2 0 0 1 2.11-1.5l1.09.06a2 2 0 0 0 1.88-2.93l-.53-.95a2 2 0 0 1 0-2.16l.53-.95a2 2 0 0 0-1.88-2.93l-1.09.06a2 2 0 0 1-2.11-1.5l-.26-1.05A2 2 0 0 0 12.22 2Z" stroke-linecap="round" stroke-linejoin="round"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          `, () => this.dispatchEvent(new CustomEvent('open-settings', { bubbles: true, composed: true })), this.activeSurface === 'settings', 'nav-settings')}
+          ${this.renderUtilityButton('Settings', iconSettings(), () => this.dispatchEvent(new CustomEvent('open-settings', { bubbles: true, composed: true })), this.activeSurface === 'settings', 'nav-settings')}
         </div>
       </div>
 
       ${this.contextMenu ? html`
         <div class="context-menu" style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px">
           <button class="context-item" type="button" @click=${() => this.handleContextAction('details')}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 16v-4m0-4h.01M3.5 12a8.5 8.5 0 1 0 17 0 8.5 8.5 0 0 0-17 0Z" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
+            ${iconInfo()}
             <span>Channel details</span>
           </button>
           <button class="context-item danger" type="button" @click=${() => this.handleContextAction('delete')}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M10 11v6m4-6v6M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 .92h8a1 1 0 0 0 1-.92L20 7" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
+            ${iconTrash()}
             <span>Delete channel</span>
           </button>
         </div>

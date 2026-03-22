@@ -1,10 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-
 :root {
   color-scheme: light dark;
 
-  --font: 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', 'Consolas', monospace;
+  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --text-meta-size: 12px;
   --text-secondary-size: 13px;
@@ -13,11 +11,11 @@
   --text-display-size: 24px;
   --text-hero-size: clamp(28px, 2.8vw, 38px);
 
-  --radius-xs: 5px;
+  --radius-xs: 6px;
   --radius-sm: 8px;
   --radius: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-xl: 16px;
 
   --space-2xs: 4px;
   --space-xs: 6px;
@@ -45,9 +43,9 @@
   --composer-pad-x: 8px;
   --composer-gap: 4px;
   --composer-input-top-inset: 4px;
-  --control-height: 28px;
-  --sidebar-row-height: 32px;
-  --sidebar-utility-height: 30px;
+  --control-height: 32px;
+  --sidebar-row-height: 36px;
+  --sidebar-utility-height: 36px;
   --toolbar-glass-blur: 2px;
   --footer-height: 34px;
 
@@ -58,155 +56,169 @@
 
 :root,
 :root[data-theme='light'] {
-  --app-canvas: #faf9f6;
+  --app-canvas: #f8f8f7;
   --app-canvas-top: rgba(255, 255, 255, 0.88);
-  --bg-primary: #fcfbf8;
-  --bg-elevated: rgba(255, 255, 255, 0.94);
-  --bg-surface: rgba(249, 248, 244, 0.98);
-  --bg-subtle: rgba(244, 243, 238, 0.96);
-  --bg-hover: rgba(231, 229, 223, 0.92);
-  --bg-code: #efeee8;
+  --bg-primary: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-surface: #fafafa;
+  --bg-subtle: #37352f0a;
+  --bg-hover: #37352f0f;
+  --bg-code: #f0f0ef;
 
-  --text-primary: #191b1f;
-  --text-secondary: #61656d;
-  --text-muted: #8b8e95;
-  --text-disabled: #b2b8c1;
-  --text-blue: #0077ed;
+  --text-primary: #34322d;
+  --text-secondary: #5e5e5b;
+  --text-muted: #858481;
+  --text-disabled: #b9b9b7;
+  --text-blue: #0081f2;
 
   --accent: #ff5f73;
   --accent-hover: #f2475e;
   --accent-soft: rgba(255, 95, 115, 0.14);
 
-  --success: #2fa76d;
-  --warning: #d78a2d;
-  --error: #de4f4f;
+  --success: #25ba3b;
+  --warning: #efa201;
+  --error: #f25a5a;
+  --success-soft: #25ba3b14;
+  --warning-soft: #efa2011f;
+  --error-soft: #f25a5a14;
 
-  --toolbar-bg: rgba(252, 251, 248, 0.97);
-  --toolbar-border: rgba(24, 28, 34, 0.07);
+  --fill-subtle: #37352f0f;
+  --tab-fill: rgba(0, 0, 0, 0.04);
+  --tab-active: #1a1a19;
+
+  --toolbar-bg: rgba(255, 255, 255, 0.97);
+  --toolbar-border: #0000000f;
   --toolbar-shadow: none;
-  --toolbar-text-muted: #80848c;
-  --shell-stage-bg: rgba(250, 249, 246, 0.995);
+  --toolbar-text-muted: #858481;
+  --shell-stage-bg: #fafafa;
   --shell-stage-border: transparent;
   --shell-stage-shadow: none;
-  --glass-bg: rgba(248, 247, 244, 0.985);
-  --glass-border: rgba(24, 28, 34, 0.07);
-  --dock-bg: rgba(248, 247, 244, 0.99);
-  --dock-border: rgba(24, 28, 34, 0.07);
-  --footer-bg: rgba(248, 247, 244, 0.99);
-  --footer-border: rgba(24, 28, 34, 0.07);
-  --sheet-bg: rgba(252, 251, 248, 0.99);
-  --sheet-scrim: rgba(36, 42, 51, 0.18);
+  --glass-bg: rgba(255, 255, 255, 0.98);
+  --glass-border: #0000000f;
+  --dock-bg: rgba(255, 255, 255, 0.99);
+  --dock-border: #0000000f;
+  --footer-bg: rgba(255, 255, 255, 0.99);
+  --footer-border: #0000000f;
+  --sheet-bg: #ffffff;
+  --sheet-scrim: rgba(0, 0, 0, 0.18);
 
-  --sidebar-bg: rgba(242, 240, 235, 0.995);
-  --sidebar-text: #64676f;
-  --sidebar-text-active: #171a1f;
-  --sidebar-hover: rgba(232, 230, 224, 0.82);
-  --sidebar-selected: rgba(255, 255, 255, 0.96);
-  --sidebar-border: rgba(24, 28, 34, 0.07);
-  --row-selected-border: rgba(24, 28, 34, 0.08);
-  --pane-divider: rgba(24, 28, 34, 0.07);
+  --sidebar-bg: #f8f8f7;
+  --sidebar-text: #5e5e5b;
+  --sidebar-text-active: #34322d;
+  --sidebar-hover: #37352f0f;
+  --sidebar-selected: #37352f0a;
+  --sidebar-border: #0000000f;
+  --row-selected-border: #0000000f;
+  --pane-divider: #0000000f;
   --control-bg: rgba(255, 255, 255, 0.84);
   --control-bg-hover: rgba(255, 255, 255, 0.97);
-  --control-border: rgba(24, 28, 34, 0.09);
+  --control-border: #0000001f;
 
-  --border-color: rgba(24, 28, 34, 0.08);
-  --border-primary: rgba(24, 28, 34, 0.11);
-  --border-input: rgba(24, 28, 34, 0.11);
-  --border-light: rgba(255, 255, 255, 0.64);
-  --border-dark: rgba(24, 28, 34, 0.12);
+  --border-color: #0000000f;
+  --border-primary: #0000001f;
+  --border-input: #0000001f;
+  --border-light: #0000000a;
+  --border-dark: #0000001f;
   --focus-ring: rgba(255, 95, 115, 0.24);
-  --composer-shell: rgba(255, 255, 255, 0.995);
-  --composer-seam: rgba(24, 28, 34, 0.08);
-  --composer-submit-bg: #1b1c1f;
+  --composer-shell: #ffffff;
+  --composer-seam: #0000000f;
+  --composer-submit-bg: #1a1a19;
   --composer-submit-hover: var(--accent);
-  --composer-submit-disabled: #b8bec7;
+  --composer-submit-disabled: #b9b9b7;
   --composer-shadow: none;
 
-  --button-primary-bg: #1a1917;
+  --button-primary-bg: #1a1a19;
   --button-primary-text: #ffffff;
   --button-brand-bg: #ff5f73;
   --button-brand-text: #ffffff;
 
-  --shadow-sm: 0 8px 18px rgba(35, 39, 46, 0.08);
-  --shadow-md: 0 18px 34px rgba(35, 39, 46, 0.1);
-  --shadow-lg: 0 28px 58px rgba(35, 39, 46, 0.14);
+  --shadow-sm: 0 2px 8px #00000014;
+  --shadow-md: 0 8px 24px #0000001f;
+  --shadow-lg: 0 16px 48px #0000003d;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --app-canvas: #1d1e21;
+  --app-canvas: #272728;
   --app-canvas-top: transparent;
-  --bg-primary: #18191b;
-  --bg-elevated: rgba(30, 31, 34, 0.985);
-  --bg-surface: rgba(34, 35, 39, 0.99);
-  --bg-subtle: rgba(27, 28, 31, 0.99);
-  --bg-hover: rgba(74, 77, 84, 0.72);
-  --bg-code: #141517;
+  --bg-primary: #161618;
+  --bg-elevated: #383739;
+  --bg-surface: #383739;
+  --bg-subtle: #ffffff0a;
+  --bg-hover: #ffffff0f;
+  --bg-code: #2f2f30;
 
-  --text-primary: #eef1f5;
-  --text-secondary: #b8bfca;
-  --text-muted: #8b93a0;
-  --text-disabled: #5d6470;
-  --text-blue: #7cb8ff;
+  --text-primary: #dadada;
+  --text-secondary: #acacac;
+  --text-muted: #7f7f7f;
+  --text-disabled: #5f5f5f;
+  --text-blue: #1a93fe;
 
   --accent: #ff667a;
   --accent-hover: #ff7d8d;
   --accent-soft: rgba(255, 102, 122, 0.16);
 
-  --success: #57c485;
-  --warning: #f0b55a;
-  --error: #ff7474;
+  --success: #5eb92d;
+  --warning: #ffbf36;
+  --error: #eb4d4d;
+  --success-soft: #25ba3b1f;
+  --warning-soft: #ffbf361f;
+  --error-soft: #eb4d4d14;
 
-  --toolbar-bg: rgba(30, 31, 34, 0.99);
-  --toolbar-border: rgba(255, 255, 255, 0.09);
+  --fill-subtle: #ffffff0f;
+  --tab-fill: rgba(255, 255, 255, 0.06);
+  --tab-active: #ffffff;
+
+  --toolbar-bg: rgba(39, 39, 40, 0.99);
+  --toolbar-border: #ffffff14;
   --toolbar-shadow: none;
-  --toolbar-text-muted: #949aa4;
-  --shell-stage-bg: rgba(29, 30, 33, 0.995);
+  --toolbar-text-muted: #7f7f7f;
+  --shell-stage-bg: #272728;
   --shell-stage-border: transparent;
   --shell-stage-shadow: none;
-  --glass-bg: rgba(35, 36, 40, 0.99);
-  --glass-border: rgba(255, 255, 255, 0.09);
-  --dock-bg: rgba(28, 29, 32, 0.995);
-  --dock-border: rgba(255, 255, 255, 0.1);
-  --footer-bg: rgba(26, 27, 30, 0.995);
-  --footer-border: rgba(255, 255, 255, 0.08);
-  --sheet-bg: rgba(25, 26, 29, 0.99);
+  --glass-bg: rgba(56, 55, 57, 0.99);
+  --glass-border: #ffffff14;
+  --dock-bg: rgba(33, 33, 34, 0.99);
+  --dock-border: #ffffff14;
+  --footer-bg: rgba(33, 33, 34, 0.99);
+  --footer-border: #ffffff14;
+  --sheet-bg: #383739;
   --sheet-scrim: rgba(0, 0, 0, 0.32);
 
-  --sidebar-bg: rgba(35, 36, 40, 0.995);
-  --sidebar-text: #c8cdd5;
-  --sidebar-text-active: #f5f7fa;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-selected: rgba(255, 255, 255, 0.08);
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --row-selected-border: rgba(255, 255, 255, 0.06);
-  --pane-divider: rgba(255, 255, 255, 0.08);
-  --control-bg: rgba(43, 45, 49, 0.96);
-  --control-bg-hover: rgba(55, 58, 63, 0.98);
-  --control-border: rgba(255, 255, 255, 0.1);
+  --sidebar-bg: #212122;
+  --sidebar-text: #acacac;
+  --sidebar-text-active: #dadada;
+  --sidebar-hover: #ffffff0f;
+  --sidebar-selected: #ffffff0a;
+  --sidebar-border: #ffffff14;
+  --row-selected-border: #ffffff0f;
+  --pane-divider: #ffffff14;
+  --control-bg: rgba(62, 61, 62, 0.96);
+  --control-bg-hover: rgba(68, 67, 69, 0.98);
+  --control-border: #ffffff1a;
 
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-primary: rgba(255, 255, 255, 0.14);
-  --border-input: rgba(255, 255, 255, 0.14);
-  --border-light: rgba(255, 255, 255, 0.07);
-  --border-dark: rgba(255, 255, 255, 0.16);
+  --border-color: #ffffff14;
+  --border-primary: #ffffff1a;
+  --border-input: #ffffff1a;
+  --border-light: #ffffff0f;
+  --border-dark: #ffffff29;
   --focus-ring: rgba(255, 102, 122, 0.28);
-  --composer-shell: rgba(31, 32, 36, 0.995);
-  --composer-seam: rgba(255, 255, 255, 0.1);
-  --composer-submit-bg: #ebeff4;
+  --composer-shell: #363537;
+  --composer-seam: #ffffff14;
+  --composer-submit-bg: #ffffff;
   --composer-submit-hover: var(--accent);
-  --composer-submit-disabled: #525a66;
+  --composer-submit-disabled: #5f5f5f;
   --composer-shadow: none;
 
-  --button-primary-bg: #edf1f6;
+  --button-primary-bg: #ffffff;
   --button-primary-text: #14161a;
   --button-brand-bg: #ff667a;
   --button-brand-text: #14161a;
 
-  --shadow-sm: 0 8px 16px rgba(0, 0, 0, 0.16);
-  --shadow-md: 0 16px 28px rgba(0, 0, 0, 0.22);
-  --shadow-lg: 0 28px 52px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px #0000001f;
+  --shadow-md: 0 8px 24px #0000003d;
+  --shadow-lg: 0 16px 48px #00000066;
 }
 
 *,
@@ -253,8 +265,8 @@ button {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -262,14 +274,14 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text-muted) 45%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   border-radius: 999px;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-muted) 58%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 36%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
