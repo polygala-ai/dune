@@ -5,7 +5,7 @@ import { restoreWindowState, trackWindowState } from './window-state'
 export function createMainWindow(backendPort: number, devMode: boolean): BrowserWindow {
   const savedState = restoreWindowState()
 
-  const backgroundColor = nativeTheme.shouldUseDarkColors ? '#1d1e21' : '#faf9f6'
+  const backgroundColor = nativeTheme.shouldUseDarkColors ? '#272728' : '#f8f8f7'
 
   const win = new BrowserWindow({
     width: savedState.width,

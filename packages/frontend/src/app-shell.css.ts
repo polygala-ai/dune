@@ -15,6 +15,7 @@ export const appShellStyles = css`
     }
 
     .workspace {
+      position: relative;
       min-height: 0;
       height: 100%;
       display: grid;
@@ -124,8 +125,12 @@ export const appShellStyles = css`
       position: relative;
     }
 
+    .pane-toolbar.hidden-sidebar {
+      padding-left: calc(16px + var(--control-height) + 10px);
+    }
+
     .pane-toolbar.hidden-sidebar.native-traffic-lights {
-      padding-left: calc(var(--toolbar-safe-left) + 10px);
+      padding-left: calc(var(--toolbar-safe-left) + var(--control-height) + 10px);
     }
 
     .pane-toolbar-main {
@@ -139,43 +144,6 @@ export const appShellStyles = css`
 
     .pane-toolbar-main.hidden-sidebar {
       gap: 12px;
-    }
-
-    .pane-toolbar-leading {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-      -webkit-app-region: no-drag;
-    }
-
-    .pane-toolbar-leading-btn {
-      width: var(--control-height);
-      min-width: var(--control-height);
-      height: var(--control-height);
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-muted);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background var(--transition-fast), color var(--transition-fast);
-    }
-
-    .pane-toolbar-leading-btn:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    .pane-toolbar-leading-btn svg {
-      width: 18px;
-      height: 18px;
-      stroke: currentColor;
-      stroke-width: 1.6;
-      fill: none;
-      flex-shrink: 0;
     }
 
     .pane-toolbar-copy {
@@ -383,6 +351,59 @@ export const appShellStyles = css`
       background: currentColor;
     }
 
+    .sidebar-toggle-overlay {
+      position: absolute;
+      top: calc((var(--toolbar-height) - var(--control-height)) / 2);
+      left: calc(var(--shell-sidebar-width, var(--sidebar-width)) - 12px - var(--control-height));
+      z-index: 10;
+      width: var(--control-height);
+      height: var(--control-height);
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--sidebar-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast), left var(--transition-fast);
+      -webkit-app-region: no-drag;
+    }
+
+    .sidebar-toggle-overlay:hover {
+      background: var(--sidebar-hover);
+      color: var(--sidebar-text-active);
+    }
+
+    .sidebar-toggle-overlay:focus-visible {
+      box-shadow: 0 0 0 2px var(--focus-ring);
+      color: var(--sidebar-text-active);
+    }
+
+    .workspace.collapsed .sidebar-toggle-overlay {
+      left: 16px;
+      color: var(--text-muted);
+    }
+
+    .workspace.collapsed.native-traffic-lights .sidebar-toggle-overlay {
+      left: var(--toolbar-safe-left);
+    }
+
+    .workspace.collapsed .sidebar-toggle-overlay:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .sidebar-toggle-overlay svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      fill: none;
+      flex-shrink: 0;
+    }
+
     sidebar-panel {
       min-height: 0;
       height: 100%;
@@ -519,7 +540,15 @@ export const appShellStyles = css`
       color: var(--text-muted);
     }
 
+    .workspace.settings-mode .sidebar-toggle-overlay {
+      display: none;
+    }
+
     @media (max-width: 980px) {
+      .sidebar-toggle-overlay {
+        display: none;
+      }
+
       .pane-toolbar {
         min-height: var(--toolbar-height-compact);
         padding: 0 14px;

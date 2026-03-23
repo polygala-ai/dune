@@ -26,7 +26,7 @@
   --space-2xl: 24px;
 
   --app-frame-pad: 0px;
-  --toolbar-height: 53px;
+  --toolbar-height: 48px;
   --toolbar-height-compact: 48px;
   --toolbar-safe-left: 84px;
   --toolbar-safe-right: 12px;
@@ -90,7 +90,7 @@
   --toolbar-border: #0000000f;
   --toolbar-shadow: none;
   --toolbar-text-muted: #858481;
-  --shell-stage-bg: #fafafa;
+  --shell-stage-bg: var(--app-canvas);
   --shell-stage-border: transparent;
   --shell-stage-shadow: none;
   --glass-bg: rgba(255, 255, 255, 0.98);
@@ -297,7 +297,7 @@ button {
 
 @media (max-width: 1515px) {
   :root {
-    --toolbar-height: 64px;
+    --toolbar-height: 48px;
     --header-height: 54px;
     --sidebar-row-height: 38px;
     --composer-min-height: 116px;
