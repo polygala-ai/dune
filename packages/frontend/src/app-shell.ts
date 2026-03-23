@@ -16,7 +16,7 @@ import type { ChannelDetailsPanel } from './components/channels/details-panel.js
 import './components/apps/apps-view.js'
 
 const ADMIN_USER_ID = 'admin'
-const DESKTOP_FULL_HIDE_SIDEBAR_QUERY = '(min-width: 981px)'
+const FULL_HIDE_SIDEBAR_QUERY = '(min-width: 1px)'
 const DEFAULT_SIDEBAR_WIDTH_PX = 320
 const SIDEBAR_MIN_WIDTH_PX = 240
 const SIDEBAR_MAX_WIDTH_PX = 520
@@ -682,7 +682,7 @@ export class AppShell extends LitElement {
   }
 
   private supportsFullHideSidebar() {
-    return window.matchMedia(DESKTOP_FULL_HIDE_SIDEBAR_QUERY).matches
+    return window.matchMedia(FULL_HIDE_SIDEBAR_QUERY).matches
   }
 
   private syncSidebarWidthFromPreferences() {
@@ -786,12 +786,18 @@ export class AppShell extends LitElement {
     this.persistSidebarWidth()
   }
 
+  private isNarrowViewport() {
+    return !window.matchMedia('(min-width: 981px)').matches
+  }
+
   private shouldFullyHideSidebar() {
-    return uiPreferences.sidebarCollapsed && this.supportsFullHideSidebar() && this.activeSurface !== 'settings'
+    if (this.activeSurface === 'settings') return false
+    if (this.isNarrowViewport()) return true
+    return uiPreferences.sidebarCollapsed && this.supportsFullHideSidebar()
   }
 
   private shouldRenderSidebarResizer() {
-    return this.activeSurface !== 'settings' && !this.shouldFullyHideSidebar() && this.supportsFullHideSidebar()
+    return this.activeSurface !== 'settings' && !this.shouldFullyHideSidebar() && !this.isNarrowViewport()
   }
 
   private openCreateChannelDialog() {
