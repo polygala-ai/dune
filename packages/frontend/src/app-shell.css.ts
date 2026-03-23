@@ -545,10 +545,6 @@ export const appShellStyles = css`
     }
 
     @media (max-width: 980px) {
-      .sidebar-toggle-overlay {
-        display: none;
-      }
-
       .pane-toolbar {
         min-height: var(--toolbar-height-compact);
         padding: 0 14px;
@@ -561,20 +557,41 @@ export const appShellStyles = css`
 
       .workspace,
       .workspace.with-sidebar-resizer,
-      .workspace.settings-mode,
       .workspace.collapsed,
       .workspace.with-sidebar-resizer.collapsed {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(188px, 34vh) minmax(0, 1fr);
+        grid-template-columns: 0 minmax(0, 1fr);
+      }
+
+      .workspace.with-sidebar-resizer,
+      .workspace.with-sidebar-resizer.collapsed {
+        grid-template-columns: 0 0 minmax(0, 1fr);
       }
 
       .workspace.settings-mode {
-        grid-template-rows: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .sidebar-wrap {
         border-right: none;
-        border-bottom: 1px solid var(--pane-divider);
+        overflow: hidden;
+      }
+
+      .sidebar-resizer {
+        display: none;
+      }
+
+      .sidebar-toggle-overlay {
+        left: 16px;
+        color: var(--text-muted);
+      }
+
+      .sidebar-toggle-overlay:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+
+      .pane-toolbar.hidden-sidebar {
+        padding-left: calc(16px + var(--control-height) + 10px);
       }
 
       .footer-strip {

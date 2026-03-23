@@ -25,10 +25,8 @@ git clone <repo-url>
 cd dune
 corepack enable
 make deploy
-make run
+make dev
 ```
-
-Open [http://localhost:3100](http://localhost:3100).
 
 `make deploy` installs dependencies, creates `.env` from `.env.example` if needed, and builds all packages. Before agents can actually respond, configure a model provider in `Settings > Model`.
 
@@ -40,12 +38,8 @@ Open [http://localhost:3100](http://localhost:3100).
 | `make build` | Build shared, backend, frontend, and Electron packages. |
 | `make test` | Run the backend test suite. |
 | `make check` | Run the pre-PR validation gate: build plus backend tests. |
-| `make run` | Start the app with the built frontend assets. |
 | `make dev` | Start backend, frontend, and Electron together for local development. |
-| `make electron-dev` | Launch Electron only when backend and frontend dev servers are already running. |
-| `make electron-pack` | Build an unpacked Electron package for local testing. |
 | `make package` | Build an installable Electron app for the current platform. |
-| `pnpm --filter @dune/frontend e2e:electron` | Run the opt-in Electron smoke E2E against the built app. |
 | `make clean` | Remove build and dev artifacts while keeping local runtime data. |
 
 ## Development Mode
@@ -81,12 +75,6 @@ pnpm --filter @dune/frontend dev -- --host localhost --port 4173
 
 4. Open [http://localhost:4173](http://localhost:4173).
 
-5. If you want Electron on top of those existing dev servers, run in a third terminal:
-
-```bash
-make electron-dev
-```
-
 ## Monorepo Layout
 
 - `packages/frontend`: Lit-based SPA, workspace shell, agent views, sandbox UI, and apps UI.
@@ -101,11 +89,10 @@ make electron-dev
 - BoxLite state lives at `data/boxlite/`.
 - `PORT` defaults to `3100`.
 - `ADMIN_PORT` defaults to `PORT + 1` and binds the admin plane to `127.0.0.1`.
-- `FRONTEND_DIST_PATH` defaults to `./packages/frontend/dist`; `make run` serves the built SPA from there.
+- `FRONTEND_DIST_PATH` defaults to `./packages/frontend/dist`.
 - Local tool state in `.claude/` and `.codex/`, runtime data in `data/`, and generated artifacts such as `dist/`, `test-results/`, `coverage/`, `.release/`, and `packages/backend/.port` are intentionally local-only and git-ignored.
 - If you want an isolated run for manual checks or demos, point `DATA_DIR` at another ignored path such as `./test-results/manual-checks/data`.
 
 ## Further Reading
 
 - [Sandboxes UI Manual Verification Checklist](docs/sandboxes-ui-manual-checklist.md)
-- [Deployment Function UI Design](docs/deployment-function-ui-design.md)

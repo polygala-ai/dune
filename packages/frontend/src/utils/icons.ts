@@ -13,7 +13,7 @@ import {
   Plus, Minus, Square, X, PanelLeft, Settings, Box, LayoutGrid,
   Users, Info, Trash2, FileText, Play, Pause, ChevronLeft, ChevronRight,
   ChevronDown, Menu, Link, ArrowRight, Camera, Wrench, XCircle,
-  AlertTriangle, RefreshCw, Search, Maximize2, Minimize2, CircleStop, Files,
+  AlertTriangle, RefreshCw, Search, Maximize2, Minimize2, CircleStop,
 } from 'lucide';
 
 /* ── Types ────────────────────────────────────────────────────────────── */
@@ -84,7 +84,6 @@ export const iconMinimize = (o?: IconOptions) => renderIcon(Minimize2, o);
 
 // Content & files
 export const iconFileText = (o?: IconOptions) => renderIcon(FileText, o);
-export const iconFiles = (o?: IconOptions) => renderIcon(Files, o);
 export const iconBox = (o?: IconOptions) => renderIcon(Box, o);
 export const iconLayoutGrid = (o?: IconOptions) => renderIcon(LayoutGrid, o);
 export const iconCamera = (o?: IconOptions) => renderIcon(Camera, o);

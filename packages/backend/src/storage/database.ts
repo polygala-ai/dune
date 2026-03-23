@@ -163,43 +163,6 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_agent_runtime_mounts_agent
       ON agent_runtime_mounts(agent_id, created_at ASC);
 
-    CREATE TABLE IF NOT EXISTS deployment_configs (
-      agent_id TEXT PRIMARY KEY,
-      source_path TEXT NOT NULL,
-      build_command TEXT NOT NULL,
-      start_command TEXT NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS deployment_runs (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL,
-      initiator TEXT NOT NULL,
-      status TEXT NOT NULL,
-      sandbox_id TEXT,
-      error TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      stopped_at INTEGER,
-      FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS deployment_logs (
-      run_id TEXT NOT NULL,
-      seq INTEGER NOT NULL,
-      timestamp INTEGER NOT NULL,
-      line TEXT NOT NULL,
-      PRIMARY KEY (run_id, seq),
-      FOREIGN KEY (run_id) REFERENCES deployment_runs(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_deployment_runs_agent_created
-      ON deployment_runs(agent_id, created_at DESC);
-
-    CREATE INDEX IF NOT EXISTS idx_deployment_logs_run_seq
-      ON deployment_logs(run_id, seq);
-
     CREATE TABLE IF NOT EXISTS sandboxes (
       id TEXT PRIMARY KEY,
       name TEXT,
