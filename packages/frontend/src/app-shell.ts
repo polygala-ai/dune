@@ -964,27 +964,8 @@ export class AppShell extends LitElement {
     `
   }
 
-  private renderSidebarToggleIcon() {
-    return iconPanelLeft()
-  }
-
   private renderToolbarLeadingCluster() {
-    if (!this.shouldFullyHideSidebar()) return null
-
-    return html`
-      <div class="pane-toolbar-leading" data-testid="toolbar-leading-cluster">
-        <button
-          class="pane-toolbar-leading-btn"
-          type="button"
-          title="Show sidebar"
-          aria-label="Show sidebar"
-          data-testid="toolbar-sidebar-toggle"
-          @click=${this.handleToggleSidebar}
-        >
-          ${this.renderSidebarToggleIcon()}
-        </button>
-      </div>
-    `
+    return null
   }
 
   private renderPaneToolbarActions() {
@@ -1145,6 +1126,7 @@ export class AppShell extends LitElement {
       sidebarHidden ? 'collapsed' : '',
       isSettings ? 'settings-mode' : '',
       sidebarResizable ? 'with-sidebar-resizer' : '',
+      shell.usesNativeTrafficLights ? 'native-traffic-lights' : '',
     ].filter(Boolean).join(' ')
 
     return html`
@@ -1193,6 +1175,18 @@ export class AppShell extends LitElement {
               ></button>
             ` : ''}
           `}
+          ${!isSettings && this.supportsFullHideSidebar() ? html`
+            <button
+              class="sidebar-toggle-overlay"
+              type="button"
+              title="${sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}"
+              aria-label="${sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}"
+              data-testid="sidebar-toggle"
+              @click=${this.handleToggleSidebar}
+            >
+              ${iconPanelLeft()}
+            </button>
+          ` : ''}
           <div class="content-wrap" data-testid="content-region">
             ${this.renderDesktopToolbar()}
             <div class="stage-shell" data-testid="stage-shell">

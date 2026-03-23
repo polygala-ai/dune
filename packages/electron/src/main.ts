@@ -85,8 +85,10 @@ app.whenReady().then(async () => {
   })
 
   app.on('activate', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show()
+    } else {
+      mainWindow = createMainWindow(devMode ? 0 : sidecar.clientPort, devMode)
     }
   })
 })

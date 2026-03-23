@@ -2,6 +2,9 @@ import { css } from 'lit'
 
 export const profilePanelStyles = css`
     :host {
+      display: block;
+    }
+    :host(agent-profile-panel) {
       position: fixed;
       inset: 0;
       z-index: 100;

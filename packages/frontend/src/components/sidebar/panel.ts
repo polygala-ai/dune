@@ -2,7 +2,7 @@ import { LitElement, css, html } from 'lit'
 import { customElement, property, state as litState } from 'lit/decorators.js'
 import { ifDefined } from 'lit/directives/if-defined.js'
 import type { Agent, Channel } from '@dune/shared'
-import { iconPanelLeft, iconBox, iconLayoutGrid, iconPlus, iconSettings, iconInfo, iconTrash } from '../../utils/icons.js'
+import { iconBox, iconLayoutGrid, iconPlus, iconSettings, iconInfo, iconTrash } from '../../utils/icons.js'
 
 export type NavRow = {
   kind: 'channel' | 'agent'
@@ -117,40 +117,6 @@ export class SidebarPanel extends LitElement {
     .workspace-brand.style-minimal .workspace-brand-text {
       font-weight: 600;
       letter-spacing: 0.01em;
-    }
-
-    .sidebar-toggle {
-      width: var(--control-height);
-      height: var(--control-height);
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--sidebar-text);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background var(--transition-fast), color var(--transition-fast);
-      -webkit-app-region: no-drag;
-    }
-
-    .sidebar-toggle:hover {
-      background: var(--sidebar-hover);
-      color: var(--sidebar-text-active);
-    }
-
-    .sidebar-toggle:focus-visible {
-      box-shadow: 0 0 0 2px var(--focus-ring);
-      color: var(--sidebar-text-active);
-    }
-
-    .sidebar-toggle svg {
-      width: 15px;
-      height: 15px;
-      stroke: currentColor;
-      stroke-width: 1.9;
-      fill: none;
-      flex-shrink: 0;
     }
 
     .utility {
@@ -452,11 +418,6 @@ export class SidebarPanel extends LitElement {
       font-size: 12px;
     }
 
-    @media (min-width: 1025px) {
-      .sidebar-toggle {
-        display: inline-flex;
-      }
-    }
   `
 
   connectedCallback() {
@@ -522,12 +483,6 @@ export class SidebarPanel extends LitElement {
     this.contextMenu = null
   }
 
-  private toggleSidebar() {
-    this.dispatchEvent(new CustomEvent('toggle-sidebar', {
-      bubbles: true,
-      composed: true,
-    }))
-  }
 
   private renderUtilityButton(
     label: string,
@@ -582,16 +537,6 @@ export class SidebarPanel extends LitElement {
       <div class="shell ${this.collapsed ? 'collapsed' : ''}">
         <div class="workspace ${this.nativeTrafficLights ? 'native-traffic-lights' : ''}">
           <div class="workspace-head style-${workspaceStyle}" data-testid="sidebar-header">
-            <button
-              class="sidebar-toggle"
-              type="button"
-              title="Toggle sidebar"
-              aria-label="Toggle sidebar"
-              data-testid="sidebar-toggle"
-              @click=${this.toggleSidebar}
-            >
-              ${iconPanelLeft()}
-            </button>
           </div>
         </div>
 
