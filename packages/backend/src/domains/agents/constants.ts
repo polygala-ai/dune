@@ -56,6 +56,8 @@ export const AGENT_DUNE_CLAUDE_PATH = `${AGENT_DUNE_VOLUME_PATH}/.claude`
 export const AGENT_DUNE_CLAUDE_STATE_PATH = `${AGENT_DUNE_VOLUME_PATH}/.claude.json`
 export const AGENT_DUNE_SYSTEM_PATH = `${AGENT_DUNE_VOLUME_PATH}/system`
 export const AGENT_DUNE_COMMUNICATION_PATH = `${AGENT_DUNE_SYSTEM_PATH}/communication`
+export const AGENT_DUNE_WORKSPACE_PATH = `${AGENT_DUNE_VOLUME_PATH}/workspace`
+export const AGENT_WORKSPACE_VOLUME_PATH = '/workspace'
 export const RPC_GUEST_PATH = `${AGENT_DUNE_VOLUME_PATH}/rpc.py`
 export const LISTENER_GUEST_PATH = `${AGENT_DUNE_VOLUME_PATH}/listener.py`
 export const AGENT_MEMORY_VOLUME_PATH = '/config/memory'
@@ -68,14 +70,26 @@ export const LEADER_THESIS_MEMORY_PATH = `${AGENT_MEMORY_VOLUME_PATH}/leader-the
 export const TODO_HEARTBEAT_DELAY_MINUTES = 30
 export const LISTENER_PROCESS_PATTERN = '[l]istener.py'
 export const COMMUNICATION_DAEMON_REFRESH_INTERVAL_MS = 60_000
-export const MCP_CONFIG = JSON.stringify({
-  mcpServers: {
-    computer: {
-      command: 'python3',
-      args: ['/config/.local/bin/local_computer_mcp.py'],
+export const HOST_COMPUTER_MCP_GUEST_PATH = `${AGENT_DUNE_VOLUME_PATH}/host_computer_mcp.py`
+
+export function buildMcpConfig(opts: { agentId?: string; wsUrl?: string } = {}): string {
+  const config: Record<string, unknown> = {
+    mcpServers: {
+      computer: {
+        command: 'python3',
+        args: ['/config/.local/bin/local_computer_mcp.py'],
+      },
+      ...(opts.agentId && opts.wsUrl ? {
+        host_computer: {
+          command: 'python3',
+          args: [HOST_COMPUTER_MCP_GUEST_PATH],
+          env: { DUNE_WS_URL: opts.wsUrl, AGENT_ID: opts.agentId },
+        },
+      } : {}),
     },
-  },
-})
+  }
+  return JSON.stringify(config)
+}
 
 /** System prompt file path inside the container (per-agent, written before each CLI call). */
 export const SYSTEM_PROMPT_DIR = '/tmp'
@@ -95,7 +109,6 @@ export const COORDINATION_AGENT_SKILLS = [
   'dune-communication',
   'dune-team-manager',
   'dune-todo',
-  'dune-host-operator',
   'dune-slack-connector',
 ] as const
 export const FOLLOWER_AGENT_SKILLS = [
@@ -251,6 +264,7 @@ export type AgentRuntimeHostPaths = {
   claudeHostPath: string
   claudeStateHostPath: string
   communicationHostPath: string
+  workspaceHostPath: string
 }
 
 export type AgentSession = {

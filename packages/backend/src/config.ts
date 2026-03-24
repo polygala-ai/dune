@@ -28,7 +28,7 @@ export const config = {
   agentsRoot: join(dataRoot, 'agents'),
   databasePath: join(dataRoot, 'db', 'dune.db'),
   frontendDistPath: resolveFromRepoRoot(process.env.FRONTEND_DIST_PATH || './packages/frontend/dist'),
-  hostOperatorHelperPath: resolveFromRepoRoot(process.env.HOST_OPERATOR_HELPER_PATH || './packages/backend/bin/dune-host-operator-helper'),
+  hostOperatorHelperPath: resolveFromRepoRoot(process.env.RESCREEN_PATH || './packages/backend/bin/rescreen'),
   agentSkillsPath: process.env.AGENT_SKILLS_PATH || join(backendPackageRoot, 'src', 'domains', 'agents', 'skills'),
   agentMcpPath: process.env.AGENT_MCP_PATH || join(backendPackageRoot, 'src', 'domains', 'agents', 'mcp'),
   agentPromptsPath: process.env.AGENT_PROMPTS_PATH || join(backendPackageRoot, 'src', 'domains', 'agents', 'prompts'),

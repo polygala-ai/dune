@@ -11,10 +11,10 @@ import {
 const approvalMessages = new Map<string, Array<{ ts: string; channelId: string }>>()
 
 // Lazy import to avoid circular dependency
-let _hostOperatorService: typeof import('../host/gui-service.js') | null = null
+let _hostOperatorService: typeof import('../host/computer-use-service.js') | null = null
 async function getHostOperatorService() {
   if (!_hostOperatorService) {
-    _hostOperatorService = await import('../host/gui-service.js')
+    _hostOperatorService = await import('../host/computer-use-service.js')
   }
   return _hostOperatorService
 }

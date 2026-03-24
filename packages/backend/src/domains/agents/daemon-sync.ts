@@ -78,9 +78,11 @@ export function syncCommunicationDaemonAssets(agentId: string): CommunicationDae
   const rootHostPath = runtimeHostPaths.duneRootHostPath
   const rpcCode = readAgentMcpFile('rpc.py')
   const listenerCode = readAgentMcpFile('listener.py')
+  const hostComputerMcpCode = readAgentMcpFile('host_computer_mcp.py')
   const assets = [
     { hostPath: join(rootHostPath, 'rpc.py'), content: rpcCode },
     { hostPath: join(rootHostPath, 'listener.py'), content: listenerCode },
+    { hostPath: join(rootHostPath, 'host_computer_mcp.py'), content: hostComputerMcpCode },
   ]
 
   mkdirSync(rootHostPath, { recursive: true })
@@ -99,7 +101,7 @@ export function syncCommunicationDaemonAssets(agentId: string): CommunicationDae
     changed = true
   }
 
-  const assetHash = createHash('sha256').update(rpcCode).update('\0').update(listenerCode).digest('hex')
+  const assetHash = createHash('sha256').update(rpcCode).update('\0').update(listenerCode).update('\0').update(hostComputerMcpCode).digest('hex')
   return { rootHostPath, assetHash, changed }
 }
 

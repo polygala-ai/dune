@@ -1,11 +1,11 @@
 import type { Handler, CallContext } from '../protocol.js'
 import * as agentStore from '../../storage/agent-store.js'
-import * as hostOperatorService from '../../domains/host/gui-service.js'
+import * as hostOperatorService from '../../domains/host/computer-use-service.js'
 import * as hostGrantStore from '../../storage/host-grant-store.js'
 import type { HostOperatorCreateRequest } from '@dune/shared'
 
-export function registerHostOpsHandlers(h: (method: string, fn: Handler) => void): void {
-  h('agents.submitHostOperator', async (params, ctx) => {
+export function registerHostComputerUseHandlers(h: (method: string, fn: Handler) => void): void {
+  h('agents.executeHostComputerUse', async (params, ctx) => {
     const agentId = params.id as string
     const agent = agentStore.getAgent(agentId)
     if (!agent) throw new Error('not_found')

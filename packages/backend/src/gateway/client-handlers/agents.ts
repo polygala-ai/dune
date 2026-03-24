@@ -10,7 +10,7 @@ import { isAgentRunning } from '../../domains/agents/runtime-state.js'
 import { listSkills, assembleSystemPrompt } from '../../domains/agents/prompt-builder.js'
 import { takeScreenshot, getAgentScreen, debugExec } from '../../domains/agents/screen.js'
 import { sendMessage } from '../../domains/agents/messaging.js'
-import * as hostOperatorService from '../../domains/host/gui-service.js'
+import * as hostOperatorService from '../../domains/host/computer-use-service.js'
 import { config } from '../../config.js'
 import {
   normalizeAgentRole,

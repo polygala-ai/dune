@@ -24,6 +24,7 @@ export class AgentHostSettingsPanel extends LitElement {
   @litState() private hostExecApprovalConfirmOpen = false
   @litState() private hostExecApprovalDraft: HostExecApprovalMode | null = null
   @litState() private hostExecApprovalSaving = false
+  @litState() private activeGrants: Array<{ kind: 'app' | 'path'; target: string; expiresAt: number | null }> = []
 
   static styles = css`
     :host {
@@ -288,6 +289,25 @@ export class AgentHostSettingsPanel extends LitElement {
       background: var(--accent);
       color: #fff;
     }
+
+    .host-grant-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .host-grant-badge.permanent {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent);
+    }
+
+    .host-grant-badge.ttl {
+      background: color-mix(in srgb, var(--warning, orange) 12%, transparent);
+      color: var(--warning, orange);
+    }
   `
 
   async openPanel() {
@@ -296,11 +316,16 @@ export class AgentHostSettingsPanel extends LitElement {
     this.hostNewApp = ''
     this.hostRunningAppsLoading = true
     try {
-      const response = await api.listRunningHostOperatorAppsAdmin()
+      const [response, grants] = await Promise.all([
+        api.listRunningHostOperatorAppsAdmin(),
+        api.listAgentGrants(this.agent.id),
+      ])
       this.hostRunningApps = response.apps
+      this.activeGrants = grants.map((g) => ({ kind: g.kind, target: g.target, expiresAt: g.expiresAt }))
     } catch (err) {
       console.error('Failed to load running host apps:', err)
       this.hostRunningApps = []
+      this.activeGrants = []
     } finally {
       this.hostRunningAppsLoading = false
     }
@@ -437,6 +462,14 @@ export class AgentHostSettingsPanel extends LitElement {
     }
   }
 
+  private _formatTtl(expiresAt: number | null): string {
+    if (expiresAt === null) return 'Permanent'
+    const remaining = expiresAt - Date.now()
+    if (remaining <= 0) return 'Expired'
+    const minutes = Math.ceil(remaining / 60_000)
+    return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m left`
+  }
+
   private async saveHostSettings() {
     if (this.hostSettingsSaving) return
     this.hostSettingsSaving = true
@@ -542,14 +575,24 @@ export class AgentHostSettingsPanel extends LitElement {
             </div>
           ` : nothing}
           <div class="host-settings-list">
-            ${this.hostAppsDraft.length === 0
-              ? html`<div class="host-settings-help">No allowed apps configured.</div>`
-              : this.hostAppsDraft.map((bundleId) => html`
+            ${this.hostAppsDraft.map((bundleId) => html`
+                <div class="host-settings-chip">
+                  <span>${bundleId}</span>
+                  <span class="host-grant-badge permanent">Permanent</span>
+                  <button type="button" @click=${() => this.removeHostApp(bundleId)}>Remove</button>
+                </div>
+              `)}
+            ${this.activeGrants
+                .filter((g) => g.kind === 'app' && !this.hostAppsDraft.includes(g.target))
+                .map((g) => html`
                   <div class="host-settings-chip">
-                    <span>${bundleId}</span>
-                    <button type="button" @click=${() => this.removeHostApp(bundleId)}>Remove</button>
+                    <span>${g.target}</span>
+                    <span class="host-grant-badge ttl">${this._formatTtl(g.expiresAt)}</span>
                   </div>
                 `)}
+            ${this.hostAppsDraft.length === 0 && this.activeGrants.filter((g) => g.kind === 'app').length === 0
+              ? html`<div class="host-settings-help">No allowed apps configured.</div>`
+              : nothing}
           </div>
         </div>
 
