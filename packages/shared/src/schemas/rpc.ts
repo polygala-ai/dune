@@ -74,7 +74,7 @@ import type {
   HostOperatorDecisionRequest,
   HostOperatorRunningApp,
   HostOperatorApprovalModeType,
-} from './host-operator.js'
+} from './host-computer-use.js'
 import type {
   BoxResource,
   BoxCreateRequest,

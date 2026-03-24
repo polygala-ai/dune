@@ -3,7 +3,7 @@ import { createServer } from 'node:net'
 import * as agentStore from '../../storage/agent-store.js'
 import * as agentRuntimeStore from '../../storage/agent-runtime-store.js'
 import { emit } from '../../gateway/events.js'
-import { clearGrantsForAgent } from '../host/gui-service.js'
+import { clearGrantsForAgent } from '../host/computer-use-service.js'
 import { config } from '../../config.js'
 import { retriedExec, execChecked } from './container-exec.js'
 import {
@@ -20,12 +20,13 @@ import {
   AGENT_DUNE_MINIAPPS_PATH,
   AGENT_DUNE_CLAUDE_PATH,
   AGENT_DUNE_CLAUDE_STATE_PATH,
+  AGENT_DUNE_WORKSPACE_PATH,
   AGENT_MEMORY_VOLUME_PATH,
   AGENT_MINIAPP_VOLUME_PATH,
   AGENT_CLAUDE_VOLUME_PATH,
   CLAUDE_STATE_PATH,
   STOP_AGENT_SHUTDOWN_PROMPT,
-  MCP_CONFIG,
+  buildMcpConfig,
 } from './constants.js'
 import type { DesktopReadinessDiagnostics, DesktopReadinessResult } from './constants.js'
 import { runningAgents, agentLocks, getRuntime, setAgentStatus, emitAgentLogEntries, emitStartupLog } from './runtime-state.js'
@@ -218,7 +219,7 @@ for link_path, target_path in (
   await retriedExec(
     box,
     'bash',
-    ['-c', `chown -R abc:abc ${AGENT_DUNE_VOLUME_PATH} 2>/dev/null; true`],
+    ['-c', `chown abc:abc ${AGENT_DUNE_VOLUME_PATH} && find ${AGENT_DUNE_VOLUME_PATH} -maxdepth 1 ! -name workspace ! -path ${AGENT_DUNE_VOLUME_PATH} -exec chown -R abc:abc {} + 2>/dev/null; true`],
     { DISPLAY: ':1' },
     20_000,
     2,
@@ -483,7 +484,8 @@ export async function startAgent(agentId: string): Promise<void> {
     await ensureMiniappNginxConfiguredInBox(box, agentId)
     emitStartupLog(agentId, 'Miniapp nginx route ensured.')
 
-    await retriedExec(box, 'bash', ['-c', `echo '${MCP_CONFIG}' > ${MCP_CONFIG_PATH} && chown abc:abc ${MCP_CONFIG_PATH}`], { DISPLAY: ':1' })
+    // Write initial MCP config (without host_computer — WS URL not yet known)
+    await retriedExec(box, 'bash', ['-c', `echo '${buildMcpConfig()}' > ${MCP_CONFIG_PATH} && chown abc:abc ${MCP_CONFIG_PATH}`], { DISPLAY: ':1' })
 
     emitStartupLog(agentId, 'Updating Claude settings...')
     await upsertClaudeSettingsInBox(box, agentId)
@@ -492,7 +494,7 @@ export async function startAgent(agentId: string): Promise<void> {
     await retriedExec(
       box,
       'bash',
-      ['-c', `mkdir -p ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}/skills && chown abc:abc ${AGENT_DUNE_VOLUME_PATH} && chown -R abc:abc ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}`],
+      ['-c', `mkdir -p ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}/skills ${AGENT_DUNE_WORKSPACE_PATH} && chown abc:abc ${AGENT_DUNE_VOLUME_PATH} ${AGENT_DUNE_WORKSPACE_PATH} && chown -R abc:abc ${AGENT_DUNE_MEMORY_PATH} ${AGENT_DUNE_MINIAPPS_PATH} ${AGENT_DUNE_CLAUDE_PATH}`],
       { DISPLAY: ':1' },
     )
 
@@ -520,6 +522,9 @@ export async function startAgent(agentId: string): Promise<void> {
       const wsUrl = `ws://${hostAddr}:${backendPort}/ws/agent?agentId=${agentId}`
       backendUrl = wsUrl
       console.log(`Backend host for agent ${agentId}: ${hostAddr} (candidates: ${hostIps.join(', ')})`)
+      // Rewrite MCP config with host_computer server now that WS URL is known
+      const mcpConfig = buildMcpConfig({ agentId, wsUrl })
+      await retriedExec(box, 'bash', ['-c', `echo '${mcpConfig}' > ${MCP_CONFIG_PATH} && chown abc:abc ${MCP_CONFIG_PATH}`], { DISPLAY: ':1' })
       try {
         await startCommunicationDaemons(box, agentId, wsUrl)
         console.log(`Listener started for agent ${agentId}: ${wsUrl}`)

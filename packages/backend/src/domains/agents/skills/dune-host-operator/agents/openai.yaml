@@ -1,3 +1,0 @@
-agents:
-  codex:
-    short_description: "Operate allowed host apps and files with agent-configured approval policy"

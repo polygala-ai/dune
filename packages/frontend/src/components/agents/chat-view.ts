@@ -817,7 +817,7 @@ export class AgentChatView extends LitElement {
               Memory
             </button>
             <button slot="footer-controls" class="composer-aux-btn" type="button" @click=${this.handleOpenHostSettings} title="Configure host operator access">
-              Host
+              Host${this.agent.hostOperatorApps.length ? ` (${this.agent.hostOperatorApps.length})` : ''}
             </button>
           </codex-composer>
         </div>

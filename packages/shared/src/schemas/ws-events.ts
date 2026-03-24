@@ -3,7 +3,7 @@ import { MessageSchema } from './message.js'
 import { AgentStatus } from './agent.js'
 import { AgentLogEntrySchema } from './agent-log.js'
 import { TodoSchema } from './todo.js'
-import { HostOperatorRequestSchema } from './host-operator.js'
+import { HostOperatorRequestSchema } from './host-computer-use.js'
 
 export const WsMessageNew = Type.Object({
   type: Type.Literal('message:new'),

@@ -6,7 +6,7 @@ import { registerMountHandlers } from './mounts.js'
 import { registerMemoryHandlers } from './memory.js'
 import { registerMailboxHandlers } from './mailbox.js'
 import { registerAppHandlers } from './apps.js'
-import { registerHostOpsHandlers } from './host-ops.js'
+import { registerHostComputerUseHandlers } from './host-computer-use.js'
 import { registerTodoHandlers } from './todos.js'
 import { registerSettingsHandlers } from './settings.js'
 import { registerAdminHandlers } from './admin.js'
@@ -25,7 +25,7 @@ export function buildClientHandlers(): HandlerMap {
   registerMemoryHandlers(h)
   registerMailboxHandlers(h)
   registerAppHandlers(h)
-  registerHostOpsHandlers(h)
+  registerHostComputerUseHandlers(h)
   registerTodoHandlers(h)
   registerSettingsHandlers(h)
   registerAdminHandlers(h)

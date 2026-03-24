@@ -67,9 +67,9 @@ export function getAgentPromptsPath(): string {
 
 export function getHostOperatorHelperPath(): string {
   if (isPackaged()) {
-    return join(process.resourcesPath!, 'backend', 'bin', 'dune-host-operator-helper')
+    return join(process.resourcesPath!, 'backend', 'bin', 'rescreen')
   }
-  return resolve(getRepoRoot(), 'packages', 'backend', 'bin', 'dune-host-operator-helper')
+  return resolve(getRepoRoot(), 'packages', 'backend', 'bin', 'rescreen')
 }
 
 export function getPreloadPath(): string {

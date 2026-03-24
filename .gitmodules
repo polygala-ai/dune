@@ -1,0 +1,3 @@
+[submodule "packages/backend/native/rescreen"]
+	path = packages/backend/native/rescreen
+	url = https://github.com/ygwyg/rescreen.git

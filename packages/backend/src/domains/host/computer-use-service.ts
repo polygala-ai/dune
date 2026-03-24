@@ -228,30 +228,12 @@ function writeArtifacts(agentId: string, requestId: string, artifacts: Array<{ n
   })
 }
 
-function filterOverviewResultForAllowedApps(resultJson: unknown, agent: Pick<Agent, 'hostOperatorApps'>): unknown {
-  const allowedApps = new Set(listAllowedApps(agent))
-  if (allowedApps.size === 0) return { windows: [] }
-  if (!resultJson || typeof resultJson !== 'object') return resultJson
-  const record = resultJson as Record<string, unknown>
-  const windows = Array.isArray(record.windows) ? record.windows : []
-  return {
-    ...record,
-    windows: windows.filter((entry) => {
-      if (!entry || typeof entry !== 'object') return false
-      const bundleId = typeof (entry as Record<string, unknown>).bundleId === 'string'
-        ? String((entry as Record<string, unknown>).bundleId)
-        : ''
-      return allowedApps.has(bundleId)
-    }),
-  }
-}
 
 async function executeRequest(request: HostOperatorRequest, agent: Agent): Promise<void> {
   let result: HostOperatorProviderResult
   switch (request.kind) {
     case 'overview':
       result = await provider.overview(request.input as HostOperatorOverviewCreateRequest)
-      result.resultJson = filterOverviewResultForAllowedApps(result.resultJson, agent)
       break
     case 'perceive':
       result = await provider.perceive(request.input as HostOperatorPerceiveCreateRequest)

@@ -1,5 +1,5 @@
 import { Type, Static } from '@sinclair/typebox'
-import { HostOperatorApprovalMode } from './host-operator.js'
+import { HostOperatorApprovalMode } from './host-computer-use.js'
 
 export const AgentStatus = Type.Union([
   Type.Literal('idle'),

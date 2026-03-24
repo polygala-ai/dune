@@ -366,6 +366,8 @@ export const decideHostOperatorRequestAdmin = (requestId: string, data: HostOper
   call<HostOperatorRequest>('admin.decideHostOp', { requestId, ...data })
 export const listRunningHostOperatorAppsAdmin = () =>
   call<{ apps: HostOperatorRunningApp[] }>('admin.listHostOpApps')
+export const listAgentGrants = (id: string) =>
+  call<Array<{ agentId: string; kind: 'app' | 'path'; target: string; expiresAt: number | null; createdAt: number }>>('agents.listGrants', { id })
 export const sendDirectMessage = (
   agentId: string,
   content: string,

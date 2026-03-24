@@ -25,7 +25,7 @@ const ALLOWED_AGENT_METHODS = new Set([
   'agents.fetchMailbox',
   'agents.ackMailbox',
   'agents.respond',
-  'agents.submitHostOperator',
+  'agents.executeHostComputerUse',
   'agents.getHostOperator',
 
   // Todos
