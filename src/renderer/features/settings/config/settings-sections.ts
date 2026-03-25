@@ -1,8 +1,8 @@
 import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
+import { ChannelsSettings } from '@/renderer/features/settings/components/ChannelsSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
-import { WorkspaceSettings } from '@/renderer/features/settings/components/WorkspaceSettings';
 
 import type {
   SettingsRoute,
@@ -27,10 +27,10 @@ export const settingsSections: SettingsSectionDefinition[] = [
     Component: AppearanceSettings,
   },
   {
-    id: 'workspace',
-    title: 'Workspace',
-    description: 'Layout defaults and demo scope',
-    Component: WorkspaceSettings,
+    id: 'channels',
+    title: 'Channels',
+    description: 'External channel catalog',
+    Component: ChannelsSettings,
   },
   {
     id: 'shortcuts',

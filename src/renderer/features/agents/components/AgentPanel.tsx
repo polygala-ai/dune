@@ -37,6 +37,13 @@ export function AgentPanel({
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
+  const isComposerDisabled = isStreaming || !agent.channel.canCompose;
+  const composerHint = agent.channel.canCompose
+    ? `${modifierLabel} Enter to send · Shift Enter for a new line`
+    : `This agent is attached to ${agent.channel.label}. Reply in the source channel.`;
+  const composerPlaceholder = agent.channel.canCompose
+    ? 'Message agent...'
+    : `Attached to ${agent.channel.label}`;
 
   const handleComposerKeyDown = async (
     event: KeyboardEvent<HTMLTextAreaElement>,
@@ -65,6 +72,8 @@ export function AgentPanel({
             </h2>
             <div className="mt-1 flex items-center gap-2 text-[12px] text-app-muted">
               <span>{agent.workspace}</span>
+              <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+              <span>{agent.channel.label}</span>
               <span className="h-1 w-1 rounded-full bg-app-border-strong" />
               <span>{agent.updatedLabel}</span>
             </div>
@@ -133,23 +142,21 @@ export function AgentPanel({
           <textarea
             aria-label="Agent composer"
             className="min-h-[84px] w-full bg-transparent px-1 text-[14px] leading-7 text-app-text outline-none placeholder:text-app-muted"
-            disabled={isStreaming}
+            disabled={isComposerDisabled}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               void handleComposerKeyDown(event);
             }}
-            placeholder="Message agent..."
+            placeholder={composerPlaceholder}
             ref={composerRef}
             rows={4}
             value={draft}
           />
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[12px] leading-5 text-app-muted">
-              {modifierLabel} Enter to send · Shift Enter for a new line
-            </p>
+            <p className="text-[12px] leading-5 text-app-muted">{composerHint}</p>
 
-            <Button disabled={!draft.trim() || isStreaming} size="sm" type="submit">
+            <Button disabled={!draft.trim() || isComposerDisabled} size="sm" type="submit">
               {isStreaming ? 'Streaming…' : 'Send'}
               <ArrowUpRight className="h-4 w-4" />
             </Button>
@@ -159,4 +166,3 @@ export function AgentPanel({
     </div>
   );
 }
-

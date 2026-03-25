@@ -1,5 +1,6 @@
 import { PanelRight, X } from 'lucide-react';
 
+import { formatChannelStatus } from '@/renderer/features/agents/model/channels';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -62,6 +63,25 @@ export function AgentContextPanel({
             </p>
           </section>
 
+          <section className="border-t border-app-border pt-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+              Connection
+            </div>
+            <div className="mt-3 rounded-[18px] border border-app-border bg-app-card/60 px-4 py-3">
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-app-muted">Channel</span>
+                <span className="font-medium text-app-text">{agent.channel.label}</span>
+              </div>
+              <Separator className="my-3" />
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-app-muted">Status</span>
+                <span className="font-medium text-app-text">
+                  {formatChannelStatus(agent.channel.status)}
+                </span>
+              </div>
+            </div>
+          </section>
+
           {agent.contextCards.slice(0, 2).map((card) => (
             <section className="border-t border-app-border pt-4" key={card.id}>
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
@@ -78,4 +98,3 @@ export function AgentContextPanel({
     </aside>
   );
 }
-

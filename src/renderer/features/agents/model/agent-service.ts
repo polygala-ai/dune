@@ -1,4 +1,7 @@
-import type { Agent } from '@/renderer/features/agents/types';
+import type {
+  Agent,
+  CreateAgentInput,
+} from '@/renderer/features/agents/types';
 
 export interface AgentServiceSnapshot {
   agents: Agent[];
@@ -9,11 +12,10 @@ export interface AgentServiceSnapshot {
 export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
 
 export interface AgentService {
-  createAgent: (name: string) => Promise<string>;
+  createAgent: (input: CreateAgentInput) => Promise<string>;
   getSnapshot: () => AgentServiceSnapshot;
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;
   sendMessage: (agentId: string, text: string) => Promise<void>;
   subscribe: (listener: AgentServiceListener) => () => void;
 }
-

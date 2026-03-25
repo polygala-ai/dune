@@ -1,4 +1,4 @@
-export type SettingsRoute = 'appearance' | 'shortcuts' | 'workspace';
+export type SettingsRoute = 'appearance' | 'channels' | 'shortcuts';
 export type ThemePreference = 'dark' | 'light' | 'system';
 
 export interface SettingsSection {

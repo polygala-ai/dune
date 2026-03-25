@@ -8,7 +8,10 @@ describe('agent runtime', () => {
     const listener = vi.fn();
     const unsubscribe = runtime.subscribe(listener);
 
-    const agentId = await runtime.service.createAgent('Navigator');
+    const agentId = await runtime.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+    });
     runtime.service.selectAgent(agentId);
 
     expect(runtime.service.listAgents()).toHaveLength(1);
@@ -21,7 +24,10 @@ describe('agent runtime', () => {
   it('resets runtime state cleanly', async () => {
     const runtime = createMockAgentRuntime();
 
-    await runtime.service.createAgent('Navigator');
+    await runtime.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+    });
     runtime.reset();
 
     expect(runtime.getSnapshot()).toEqual({
@@ -31,4 +37,3 @@ describe('agent runtime', () => {
     });
   });
 });
-

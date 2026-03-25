@@ -54,10 +54,22 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
   ).toHaveCount(1);
 
   await page.getByRole('button', { name: /^New agent$/i }).first().click();
-  await page.getByLabel('Agent name').fill('Navigator');
-  await page.getByRole('button', { name: /^Create agent$/i }).click();
+  await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Select Telegram/i })).toHaveCount(0);
+  await page.getByRole('button', { name: /Channel: Dune chat/i }).click();
+  await expect(page.getByTestId('channel-select-popover')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Select Telegram/i })).toBeDisabled();
+  await page.getByRole('button', { name: /Open Channels settings/i }).click();
+  await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
+
+  await page.keyboard.press(`${modifier}+N`);
+  await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
+  const agentNameInput = page.getByLabel('Agent name');
+  await agentNameInput.fill('Navigator');
+  await agentNameInput.press('Enter');
 
   await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
+  await expect(page.getByText('Dune chat')).toBeVisible();
   await expect(page.getByLabel('Agent composer')).toBeVisible();
 
   const sidebar = page.locator('[data-testid="app-sidebar"]:visible');
@@ -122,6 +134,8 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
 
   await page.keyboard.press(`${modifier}+,`);
   await expect(page.getByTestId('settings-view')).toBeVisible();
+  await page.getByRole('button', { name: /Channels/i }).click();
+  await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
   await page.keyboard.press(`${modifier}+K`);
   await expect(
     page.getByPlaceholder('Jump to an agent or action…'),

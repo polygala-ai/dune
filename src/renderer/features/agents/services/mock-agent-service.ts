@@ -6,7 +6,9 @@ import type {
 import type {
   Agent,
   AgentMessage,
+  CreateAgentInput,
 } from '@/renderer/features/agents/types';
+import { createChannelBinding } from '@/renderer/features/agents/model/channels';
 
 function createAgentId(name: string, now: number) {
   const slug = name
@@ -26,22 +28,38 @@ function summarizePreview(content: string) {
   return content.replace(/\s+/g, ' ').trim().slice(0, 92);
 }
 
-function createDraftAgent(name: string, now: number): Agent {
+function createDraftAgent(
+  name: string,
+  now: number,
+  channelId: CreateAgentInput['channelId'],
+): Agent {
+  const channel = createChannelBinding(channelId);
+  const isBuiltInChannel = channel.kind === 'built-in';
+
   return {
+    channel,
     id: createAgentId(name, now),
     name,
     note:
-      'This prototype agent is local while the app stays open. AgentLite runtime wiring lands in the next phase.',
-    preview: 'Ready for a first instruction.',
+      isBuiltInChannel
+        ? 'This prototype agent stays inside Dune while the app is open. AgentLite runtime wiring lands in the next phase.'
+        : `This prototype agent mirrors ${channel.label} into Dune. Real channel wiring lands in the AgentLite phase.`,
+    preview: isBuiltInChannel
+      ? 'Ready for a first instruction.'
+      : `Attached to ${channel.label}. Dune mirrors the transcript.`,
     updatedAt: now,
     status: 'draft',
     workspace: 'Prototype agent',
     contextCards: [
       {
         id: `context-${now}-1`,
-        eyebrow: 'Working style',
-        title: 'Treat this like a long-lived agent',
-        body: 'The shell now centers one durable agent workspace at a time rather than a stack of disposable prompt loops.',
+        eyebrow: 'Connection',
+        title: isBuiltInChannel
+          ? 'Dune chat is attached by default'
+          : `${channel.label} is attached to this agent`,
+        body: isBuiltInChannel
+          ? 'Dune chat is built in and writable here, so the agent behaves like a long-lived workspace inside the app.'
+          : 'This UI-first phase can already present a wrapped external channel, but the actual transport is still mocked.',
       },
       {
         id: `context-${now}-2`,
@@ -116,6 +134,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
       ...agent,
+      channel: { ...agent.channel },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({ ...message })),
     })),
@@ -171,15 +190,15 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
-  async createAgent(name: string) {
-    const trimmedName = name.trim();
+  async createAgent(input: CreateAgentInput) {
+    const trimmedName = input.name.trim();
 
     if (!trimmedName) {
       throw new Error('Agent name is required.');
     }
 
     const now = Date.now();
-    const nextAgent = createDraftAgent(trimmedName, now);
+    const nextAgent = createDraftAgent(trimmedName, now, input.channelId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -200,7 +219,7 @@ class MockAgentService implements AgentService {
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId);
 
-    if (!agent) {
+    if (!agent || !agent.channel.canCompose) {
       return;
     }
 

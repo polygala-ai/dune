@@ -19,9 +19,9 @@ export function EmptyAgentState({ onCreateAgent }: EmptyAgentStateProps) {
           No agents yet.
         </h2>
         <p className="mt-3 max-w-xl text-sm leading-7 text-app-muted">
-          Start by naming one agent. The prototype keeps each workspace local while
-          the app is open, but the shell already matches the AgentLite model that will
-          replace the mock runtime next.
+          Start by naming one agent and attaching it to Dune chat. External channels
+          are represented in the shell now, but the runtime is still mocked while the
+          AgentLite wiring comes next.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -30,7 +30,8 @@ export function EmptyAgentState({ onCreateAgent }: EmptyAgentStateProps) {
             <Plus className="h-4 w-4" />
           </Button>
           <p className="text-[12px] leading-5 text-app-muted">
-            Create one durable workspace instead of restarting from scratch each time.
+            Create one durable workspace with a built-in channel instead of restarting
+            from scratch each time.
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
+import type { CreateAgentInput } from '@/renderer/features/agents/types';
 
 import type {
   SettingsRoute,
@@ -26,9 +27,9 @@ function getAgentByOffset(
   return agentIds[nextIndex] ?? null;
 }
 
-export async function createAgent(name: string) {
+export async function createAgent(input: CreateAgentInput) {
   const state = useAppStore.getState();
-  const nextAgentId = await agentRuntime.service.createAgent(name);
+  const nextAgentId = await agentRuntime.service.createAgent(input);
 
   state.setRoute('agent');
 

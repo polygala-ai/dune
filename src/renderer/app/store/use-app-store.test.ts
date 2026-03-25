@@ -9,14 +9,20 @@ describe('app store agent runtime sync', () => {
   });
 
   it('syncs runtime snapshots into the store through the slice action', async () => {
-    const agentId = await agentRuntime.service.createAgent('Navigator');
+    const agentId = await agentRuntime.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+    });
 
     expect(useAppStore.getState().agents[0]?.id).toBe(agentId);
     expect(useAppStore.getState().selectedAgentId).toBe(agentId);
   });
 
   it('clears runtime and local draft state on reset', async () => {
-    await agentRuntime.service.createAgent('Navigator');
+    await agentRuntime.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+    });
     useAppStore.getState().setDraft('Pending note');
 
     resetAppStore();
@@ -31,4 +37,3 @@ describe('app store agent runtime sync', () => {
     });
   });
 });
-

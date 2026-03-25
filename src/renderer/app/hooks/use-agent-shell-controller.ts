@@ -6,13 +6,18 @@ import {
 } from 'react';
 
 import type { AppRoute } from '@/renderer/app/store/types';
-import type { PresentedAgent } from '@/renderer/features/agents/types';
+import type {
+  CreateAgentInput,
+  PresentedAgent,
+} from '@/renderer/features/agents/types';
+import type { SettingsRoute } from '@/renderer/features/settings/types';
 
 export interface AgentShellControllerCommands {
-  createAgent: (name: string) => Promise<string>;
+  createAgent: (input: CreateAgentInput) => Promise<string>;
   openAgent: (agentId: string) => void;
   openSettings: () => void;
   setCommandOpen: (isOpen: boolean) => void;
+  setSettingsRoute: (route: SettingsRoute) => void;
   toggleInspector: (force?: boolean) => void;
 }
 
@@ -60,8 +65,8 @@ export function useAgentShellController({
     setCreateAgentOpen(true);
   });
 
-  const handleCreateAgent = useEffectEvent(async (name: string) => {
-    await commands.createAgent(name);
+  const handleCreateAgent = useEffectEvent(async (input: CreateAgentInput) => {
+    await commands.createAgent(input);
     setCreateAgentOpen(false);
     setSidebarDrawerOpen(false);
     focusComposer();
@@ -71,6 +76,15 @@ export function useAgentShellController({
     startTransition(() => {
       setSidebarDrawerOpen(false);
       commands.openSettings();
+    });
+  });
+
+  const handleOpenChannelsSettings = useEffectEvent(() => {
+    setCreateAgentOpen(false);
+    startTransition(() => {
+      setSidebarDrawerOpen(false);
+      commands.openSettings();
+      commands.setSettingsRoute('channels');
     });
   });
 
@@ -106,6 +120,7 @@ export function useAgentShellController({
     handleCreateAgentDialogOpenChange,
     handleOpenCommand,
     handleOpenCreateAgent,
+    handleOpenChannelsSettings,
     handleOpenSettings,
     handleSelectAgent,
     handleSidebarDrawerOpenChange,
@@ -115,4 +130,3 @@ export function useAgentShellController({
     isSidebarDrawerOpen,
   };
 }
-

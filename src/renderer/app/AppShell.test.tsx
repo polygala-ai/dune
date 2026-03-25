@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,6 +16,7 @@ import {
   SIDEBAR_WIDTH_STORAGE_KEY,
 } from '@/renderer/app/hooks/use-resizable-sidebar';
 import { resetAppStore } from '@/renderer/app/store/use-app-store';
+import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
 function setWindowWidth(width: number) {
   Object.defineProperty(window, 'innerWidth', {
@@ -32,6 +39,9 @@ function expectSidebarWidth(width: number) {
 
 async function createAgent(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(screen.getAllByRole('button', { name: /^New agent$/i })[0]!);
+  expect(
+    await screen.findByRole('button', { name: /Channel: Dune chat/i }),
+  ).toBeInTheDocument();
   await user.type(await screen.findByLabelText('Agent name'), name);
   await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
   await waitFor(() => {
@@ -47,6 +57,8 @@ describe('AppShell', () => {
   });
 
   it('launches empty and opens settings and the command palette through shortcuts', async () => {
+    const user = userEvent.setup();
+
     render(<AppShell />);
 
     expect(screen.getByTestId('window-drag-region')).toBeInTheDocument();
@@ -58,11 +70,46 @@ describe('AppShell', () => {
     fireEvent.keyDown(window, { key: ',', metaKey: true });
     expect(await screen.findByTestId('settings-view')).toBeInTheDocument();
     expect(screen.getByTestId('settings-nav')).toHaveAttribute('data-platform-inset', 'mac');
+    expect(screen.getByRole('button', { name: /Channels/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Workspace/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Channels/i }));
+    expect(
+      screen.getByRole('heading', { name: 'External channel catalog' }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Configure$/i })).toHaveLength(3);
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     expect(
       screen.getByPlaceholderText('Jump to an agent or action…'),
     ).toBeInTheDocument();
+  });
+
+  it('opens channels settings directly from the create-agent channel selector', async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+
+    await user.click(screen.getAllByRole('button', { name: /^New agent$/i })[0]!);
+    await user.click(await screen.findByRole('button', { name: /Channel: Dune chat/i }));
+
+    const channelPopover = await screen.findByTestId('channel-select-popover');
+
+    expect(
+      within(channelPopover).getByRole('button', { name: /Select Telegram/i }),
+    ).toBeDisabled();
+
+    await user.click(
+      within(channelPopover).getByRole('button', { name: /Open Channels settings/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Agent name')).not.toBeInTheDocument();
+      expect(screen.getByTestId('settings-view')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'External channel catalog' }),
+      ).toBeInTheDocument();
+    });
   });
 
   it('creates agents and moves through them with arrow-key navigation', async () => {
@@ -87,6 +134,7 @@ describe('AppShell', () => {
     render(<AppShell />);
     await createAgent(user, 'Release coordinator');
 
+    expect(screen.getAllByText('Dune chat').length).toBeGreaterThan(0);
     await user.type(screen.getByLabelText('Agent composer'), 'Refine the agent shell');
     await user.click(screen.getByRole('button', { name: /^Send$/i }));
 
@@ -161,6 +209,24 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-view')).toBeInTheDocument();
     });
+  });
+
+  it('disables local input for externally attached mock agents', async () => {
+    render(<AppShell />);
+
+    await agentRuntime.service.createAgent({
+      channelId: 'telegram',
+      name: 'QA triage',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'QA triage' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Agent composer')).toBeDisabled();
+    expect(
+      screen.getByText(/This agent is attached to Telegram\. Reply in the source channel\./i),
+    ).toBeInTheDocument();
   });
 
   it('reflows between wide, medium, and compact layouts on resize', async () => {

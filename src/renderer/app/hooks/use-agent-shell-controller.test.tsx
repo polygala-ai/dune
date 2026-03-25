@@ -2,10 +2,20 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentShellController } from '@/renderer/app/hooks/use-agent-shell-controller';
-import type { PresentedAgent } from '@/renderer/features/agents/types';
+import type {
+  CreateAgentInput,
+  PresentedAgent,
+} from '@/renderer/features/agents/types';
 
 function createPresentedAgent(): PresentedAgent {
   return {
+    channel: {
+      canCompose: true,
+      id: 'dune-chat',
+      kind: 'built-in',
+      label: 'Dune chat',
+      status: 'ready',
+    },
     contextCards: [],
     id: 'agent-1',
     messages: [],
@@ -22,10 +32,11 @@ function createPresentedAgent(): PresentedAgent {
 
 describe('useAgentShellController', () => {
   const commands = {
-    createAgent: vi.fn<() => Promise<string>>(),
+    createAgent: vi.fn<(input: CreateAgentInput) => Promise<string>>(),
     openAgent: vi.fn<(agentId: string) => void>(),
     openSettings: vi.fn<() => void>(),
     setCommandOpen: vi.fn<(isOpen: boolean) => void>(),
+    setSettingsRoute: vi.fn<(route: 'appearance' | 'channels' | 'shortcuts') => void>(),
     toggleInspector: vi.fn<(force?: boolean) => void>(),
   };
   const focusComposer = vi.fn();
@@ -75,10 +86,16 @@ describe('useAgentShellController', () => {
     });
 
     await act(async () => {
-      await result.current.handleCreateAgent('Navigator');
+      await result.current.handleCreateAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+      });
     });
 
-    expect(commands.createAgent).toHaveBeenCalledWith('Navigator');
+    expect(commands.createAgent).toHaveBeenCalledWith({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+    });
     expect(result.current.isCreateAgentOpen).toBe(false);
     expect(result.current.isSidebarDrawerOpen).toBe(false);
     expect(focusComposer).toHaveBeenCalled();
@@ -123,6 +140,34 @@ describe('useAgentShellController', () => {
     await waitFor(() => {
       expect(result.current.isSidebarDrawerOpen).toBe(false);
       expect(focusComposer).toHaveBeenCalled();
+    });
+  });
+
+  it('opens channels settings from the create-agent flow', async () => {
+    const { result } = renderHook(() =>
+      useAgentShellController({
+        activeAgent: null,
+        commands,
+        focusComposer,
+        isCompactShell: true,
+        route: 'agent',
+      }),
+    );
+
+    act(() => {
+      result.current.handleOpenCreateAgent();
+    });
+
+    expect(result.current.isCreateAgentOpen).toBe(true);
+
+    await act(async () => {
+      result.current.handleOpenChannelsSettings();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isCreateAgentOpen).toBe(false);
+      expect(commands.openSettings).toHaveBeenCalled();
+      expect(commands.setSettingsRoute).toHaveBeenCalledWith('channels');
     });
   });
 });

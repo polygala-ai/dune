@@ -18,7 +18,10 @@ describe('app commands', () => {
   });
 
   it('creates a new agent and selects it', async () => {
-    const nextAgentId = await createAgent('Release coordinator');
+    const nextAgentId = await createAgent({
+      channelId: 'dune-chat',
+      name: 'Release coordinator',
+    });
     const state = useAppStore.getState();
 
     expect(state.selectedAgentId).toBe(nextAgentId);
@@ -37,8 +40,11 @@ describe('app commands', () => {
   });
 
   it('selects an opened agent', async () => {
-    await createAgent('Alpha');
-    const secondAgentId = await createAgent('Beta');
+    await createAgent({ channelId: 'dune-chat', name: 'Alpha' });
+    const secondAgentId = await createAgent({
+      channelId: 'dune-chat',
+      name: 'Beta',
+    });
 
     openAgent(secondAgentId);
 
@@ -47,8 +53,8 @@ describe('app commands', () => {
   });
 
   it('cycles through the current agent list', async () => {
-    await createAgent('Alpha');
-    await createAgent('Beta');
+    await createAgent({ channelId: 'dune-chat', name: 'Alpha' });
+    await createAgent({ channelId: 'dune-chat', name: 'Beta' });
     const stateBefore = useAppStore.getState();
     const initialAgentId = stateBefore.selectedAgentId;
 

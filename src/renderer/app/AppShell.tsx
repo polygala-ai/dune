@@ -200,6 +200,7 @@ export default function AppShell() {
         <CreateAgentDialog
           onCreateAgent={controller.handleCreateAgent}
           onOpenChange={controller.handleCreateAgentDialogOpenChange}
+          onOpenChannelsSettings={controller.handleOpenChannelsSettings}
           open={controller.isCreateAgentOpen}
         />
       </div>
