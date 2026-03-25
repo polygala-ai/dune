@@ -1,0 +1,342 @@
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource/ibm-plex-mono";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-drag-strip-height: 2.9rem;
+  --app-shell-context-width: 280px;
+  --app-shell-overlay-context-width: 300px;
+  --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
+  --app-shell-sidebar-width: 232px;
+  --app-shell-window-gap-x: 18px;
+  --app-shell-window-gap-y: 16px;
+  --app-bg: #f3eee7;
+  --app-panel: rgba(247, 241, 233, 0.88);
+  --app-panel-strong: rgba(247, 241, 233, 0.96);
+  --app-card: rgba(255, 255, 255, 0.44);
+  --app-border: rgba(74, 63, 47, 0.1);
+  --app-border-strong: rgba(74, 63, 47, 0.16);
+  --app-text: #221d17;
+  --app-muted: #6f6558;
+  --app-muted-strong: #4d453a;
+  --app-accent: #a86d46;
+  --app-accent-soft: rgba(168, 109, 70, 0.12);
+  --app-accent-ink: #7f4f2f;
+  --app-shadow: 0 8px 22px rgba(54, 42, 26, 0.06);
+  --font-sans: "Instrument Sans Variable", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --app-backdrop: #f3eee7;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --app-drag-strip-height: 2.9rem;
+  --app-shell-context-width: 280px;
+  --app-shell-overlay-context-width: 300px;
+  --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
+  --app-shell-sidebar-width: 232px;
+  --app-shell-window-gap-x: 18px;
+  --app-shell-window-gap-y: 16px;
+  --app-bg: #171410;
+  --app-panel: rgba(24, 21, 18, 0.94);
+  --app-panel-strong: rgba(24, 21, 18, 0.98);
+  --app-card: rgba(255, 244, 231, 0.04);
+  --app-border: rgba(224, 212, 197, 0.09);
+  --app-border-strong: rgba(224, 212, 197, 0.14);
+  --app-text: #f2ebdf;
+  --app-muted: #a39686;
+  --app-muted-strong: #d1c5b5;
+  --app-accent: #d28f63;
+  --app-accent-soft: rgba(210, 143, 99, 0.16);
+  --app-accent-ink: #f4c6a2;
+  --app-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  --font-sans: "Instrument Sans Variable", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --app-backdrop: #171410;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  background: var(--app-backdrop);
+  color: var(--app-text);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+textarea {
+  resize: none;
+}
+
+::selection {
+  background: var(--app-accent-soft);
+}
+
+.shell-reveal {
+  animation: shell-reveal 520ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
+}
+
+.panel-reveal {
+  animation: panel-reveal 320ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
+}
+
+.message-reveal {
+  animation: message-reveal 260ms ease both;
+}
+
+.streaming-dot {
+  animation: streaming-dot 1.2s ease-in-out infinite;
+}
+
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border-strong) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--app-border-strong);
+  border-radius: 9999px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.window-shell {
+  position: relative;
+  display: grid;
+  height: 100vh;
+  overflow: hidden;
+  padding: var(--app-shell-window-gap-y) var(--app-shell-window-gap-x);
+  background: var(--app-bg);
+}
+
+.window-shell > * {
+  min-height: 0;
+}
+
+.window-shell-grid {
+  display: grid;
+  grid-template-rows: var(--app-drag-strip-height) minmax(0, 1fr);
+  height: 100%;
+}
+
+.window-drag-strip {
+  -webkit-app-region: drag;
+  height: var(--app-drag-strip-height);
+}
+
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.pill-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid var(--app-border);
+  padding: 0.2rem 0.48rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  color: var(--app-muted);
+}
+
+.shell-sidebar-drawer {
+  left: var(--app-shell-window-gap-x);
+  top: calc(var(--app-shell-window-gap-y) + var(--app-drag-strip-height));
+  height: calc(100vh - var(--app-drag-strip-height) - 32px);
+  width: min(280px, calc(100vw - 36px));
+  transform: translate(0, 0);
+  border: 1px solid var(--app-border);
+  border-radius: 24px;
+  background: var(--app-panel-strong);
+  padding: 0;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  z-index: 25;
+  width: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: var(--app-border-strong);
+  opacity: 0.62;
+  transition:
+    width 160ms ease,
+    opacity 160ms ease,
+    background-color 160ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle[data-resizing='true']::after {
+  width: 2px;
+  opacity: 1;
+  background: var(--app-accent);
+}
+
+.sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+
+.shell-overlay-backdrop {
+  position: absolute;
+  inset-inline: 0;
+  top: var(--app-shell-overlay-top-offset);
+  bottom: 0;
+  z-index: 20;
+  background: rgb(0 0 0 / 8%);
+}
+
+.shell-overlay-context {
+  position: absolute;
+  top: calc(var(--app-shell-overlay-top-offset) + 0.25rem);
+  right: var(--app-shell-window-gap-x);
+  bottom: var(--app-shell-window-gap-y);
+  z-index: 30;
+  width: var(--app-shell-overlay-context-width);
+  max-width: calc(100vw - 2rem);
+  overflow: hidden;
+  background: var(--app-panel);
+}
+
+.surface-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.surface-title {
+  margin-top: 0.5rem;
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  color: var(--app-text);
+}
+
+.surface-description {
+  margin-top: 0.5rem;
+  max-width: 36rem;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  color: var(--app-muted);
+}
+
+.prose-message p + p {
+  margin-top: 0.85rem;
+}
+
+.prose-message {
+  overflow-wrap: anywhere;
+}
+
+.prose-message ul {
+  margin: 0.85rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.prose-message li + li {
+  margin-top: 0.4rem;
+}
+
+@keyframes shell-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes message-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes streaming-dot {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
