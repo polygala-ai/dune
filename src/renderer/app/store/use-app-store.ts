@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
 import {
-  createChatSlice,
-  createInitialChatState,
-} from '@/renderer/app/store/chat-slice';
+  createAgentSlice,
+  createInitialAgentState,
+} from '@/renderer/app/store/agent-slice';
 import {
   createInitialSettingsState,
   createSettingsSlice,
@@ -12,6 +12,7 @@ import {
   createInitialShellState,
   createShellSlice,
 } from '@/renderer/app/store/shell-slice';
+import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
 import type {
   AppStore,
@@ -19,16 +20,11 @@ import type {
 } from './types';
 
 function createInitialState(): AppStoreState {
-  const chatState = createInitialChatState();
-  const [firstConversation] = chatState.conversations;
-
-  if (!firstConversation) {
-    throw new Error('Expected the seeded chat state to include at least one conversation.');
-  }
+  const agentState = createInitialAgentState(agentRuntime.getSnapshot());
 
   return {
-    ...chatState,
-    ...createInitialShellState(firstConversation.id),
+    ...agentState,
+    ...createInitialShellState(),
     ...createInitialSettingsState(),
   };
 }
@@ -37,16 +33,16 @@ export const useAppStore = create<AppStore>((set, get, store) => {
   const initialState = createInitialState();
 
   return {
-    ...createChatSlice({
-      conversations: initialState.conversations,
+    ...createAgentSlice({
+      agents: initialState.agents,
       draft: initialState.draft,
       isStreaming: initialState.isStreaming,
+      selectedAgentId: initialState.selectedAgentId,
     })(set, get, store),
     ...createShellSlice({
       isCommandOpen: initialState.isCommandOpen,
       isContextPanelOpen: initialState.isContextPanelOpen,
       route: initialState.route,
-      selectedConversationId: initialState.selectedConversationId,
     })(set, get, store),
     ...createSettingsSlice({
       settingsRoute: initialState.settingsRoute,
@@ -55,6 +51,11 @@ export const useAppStore = create<AppStore>((set, get, store) => {
   };
 });
 
+agentRuntime.subscribe((snapshot) => {
+  useAppStore.getState().setAgentsSnapshot(snapshot);
+});
+
 export function resetAppStore() {
+  agentRuntime.reset();
   useAppStore.setState(createInitialState());
 }

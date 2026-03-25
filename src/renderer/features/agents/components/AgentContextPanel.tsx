@@ -1,22 +1,22 @@
 import { PanelRight, X } from 'lucide-react';
 
-import type { PresentedConversation } from '@/renderer/features/chat/types';
+import type { PresentedAgent } from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 import { Separator } from '@/renderer/shared/ui/separator';
 
-interface ConversationContextPanelProps {
+interface AgentContextPanelProps {
+  agent: PresentedAgent;
   className?: string;
-  conversation: PresentedConversation;
   onClose: () => void;
 }
 
-export function ConversationContextPanel({
+export function AgentContextPanel({
+  agent,
   className,
-  conversation,
   onClose,
-}: ConversationContextPanelProps) {
+}: AgentContextPanelProps) {
   return (
     <aside
       className={cn(
@@ -32,10 +32,10 @@ export function ConversationContextPanel({
             Inspector
           </div>
           <h3 className="mt-2 text-sm font-medium text-app-text">
-            {conversation.workspace}
+            {agent.workspace}
           </h3>
           <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-app-muted">
-            {conversation.updatedLabel}
+            {agent.updatedLabel}
           </p>
         </div>
 
@@ -55,14 +55,14 @@ export function ConversationContextPanel({
         <div className="pr-2">
           <section>
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-              Session summary
+              Agent brief
             </div>
             <p className="mt-2 text-sm leading-6 text-app-muted">
-              {conversation.note}
+              {agent.note}
             </p>
           </section>
 
-          {conversation.contextCards.slice(0, 2).map((card) => (
+          {agent.contextCards.slice(0, 2).map((card) => (
             <section className="border-t border-app-border pt-4" key={card.id}>
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
                 {card.eyebrow}
@@ -78,3 +78,4 @@ export function ConversationContextPanel({
     </aside>
   );
 }
+

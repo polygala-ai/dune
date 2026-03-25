@@ -21,7 +21,7 @@ export function ShortcutsSettings(props: SettingsSectionComponentProps) {
       value: `${modifierLabel}K`,
     },
     {
-      label: 'New chat',
+      label: 'New agent',
       description: mappingDescription,
       value: `${modifierLabel}N`,
     },
@@ -41,7 +41,7 @@ export function ShortcutsSettings(props: SettingsSectionComponentProps) {
       value: `${modifierLabel} Enter`,
     },
     {
-      label: 'Conversation up/down',
+      label: 'Agent up/down',
       description: mappingDescription,
       value: '↑ / ↓',
     },

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import AppShell from '@/renderer/app/AppShell';
 import {
@@ -10,16 +10,6 @@ import {
   SIDEBAR_WIDTH_STORAGE_KEY,
 } from '@/renderer/app/hooks/use-resizable-sidebar';
 import { resetAppStore } from '@/renderer/app/store/use-app-store';
-
-vi.mock('@/renderer/features/chat/transports/mock-chat-transport', () => ({
-  mockChatTransport: {
-    streamReply: async function* streamReply() {
-      await Promise.resolve();
-      yield 'Mock response';
-      yield ' assembled for the prototype.';
-    },
-  },
-}));
 
 function setWindowWidth(width: number) {
   Object.defineProperty(window, 'innerWidth', {
@@ -40,6 +30,15 @@ function expectSidebarWidth(width: number) {
   );
 }
 
+async function createAgent(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(screen.getAllByRole('button', { name: /^New agent$/i })[0]!);
+  await user.type(await screen.findByLabelText('Agent name'), name);
+  await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
+  await waitFor(() => {
+    expect(screen.queryByLabelText('Agent name')).not.toBeInTheDocument();
+  });
+}
+
 describe('AppShell', () => {
   beforeEach(() => {
     resetAppStore();
@@ -47,57 +46,56 @@ describe('AppShell', () => {
     setWindowWidth(1440);
   });
 
-  it('launches with the context panel hidden and opens settings and the command palette through shortcuts', async () => {
+  it('launches empty and opens settings and the command palette through shortcuts', async () => {
     render(<AppShell />);
 
     expect(screen.getByTestId('window-drag-region')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Studio shell' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No agents yet.' })).toBeInTheDocument();
     expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-platform-inset', 'mac');
     expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /studio shell/i }),
-    ).toHaveAttribute('data-active-style', 'fill');
     expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: ',', metaKey: true });
     expect(await screen.findByTestId('settings-view')).toBeInTheDocument();
     expect(screen.getByTestId('settings-nav')).toHaveAttribute('data-platform-inset', 'mac');
-    expect(
-      screen.getByRole('button', { name: /appearance\s*theme and visual tone/i }),
-    ).toHaveAttribute('data-active-style', 'fill');
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     expect(
-      screen.getByPlaceholderText('Jump to a thread or action…'),
+      screen.getByPlaceholderText('Jump to an agent or action…'),
     ).toBeInTheDocument();
   });
 
-  it('moves through conversations with arrow-key navigation', async () => {
-    render(<AppShell />);
-
-    expect(screen.getByRole('heading', { name: 'Studio shell' })).toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: 'Composer polish' }),
-      ).toBeInTheDocument();
-    });
-  });
-
-  it('submits a prompt and streams the mocked assistant reply', async () => {
+  it('creates agents and moves through them with arrow-key navigation', async () => {
     const user = userEvent.setup();
 
     render(<AppShell />);
 
-    await user.type(screen.getByLabelText('Composer'), 'Refine the settings surface');
+    await createAgent(user, 'Alpha');
+    await createAgent(user, 'Beta');
+
+    expect(screen.getByRole('heading', { name: 'Beta' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Alpha' })).toBeInTheDocument();
+    });
+  });
+
+  it('submits a prompt and streams the mocked agent reply', async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+    await createAgent(user, 'Release coordinator');
+
+    await user.type(screen.getByLabelText('Agent composer'), 'Refine the agent shell');
     await user.click(screen.getByRole('button', { name: /^Send$/i }));
 
-    expect(screen.getByText('Refine the settings surface')).toBeInTheDocument();
+    expect(screen.getAllByText('Refine the agent shell').length).toBeGreaterThan(0);
 
     await waitFor(() => {
       expect(
-        screen.getAllByText(/Mock response assembled for the prototype\./i).length,
+        screen.getAllByText(/Release coordinator should feel like a durable workspace/i)
+          .length,
       ).toBeGreaterThan(0);
     });
   });
@@ -108,8 +106,9 @@ describe('AppShell', () => {
     setWindowWidth(960);
 
     render(<AppShell />);
+    await createAgent(user, 'Navigator');
 
-    const composer = screen.getByLabelText('Composer');
+    const composer = screen.getByLabelText('Agent composer');
 
     expect(composer).toBeInTheDocument();
     expect(screen.getByTestId('compact-shell-toolbar')).toBeInTheDocument();
@@ -122,7 +121,7 @@ describe('AppShell', () => {
       expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /composer polish/i }));
+    await user.click(screen.getByRole('button', { name: /navigator/i }));
 
     await waitFor(() => {
       expect(screen.queryByTestId('app-sidebar')).not.toBeInTheDocument();
@@ -165,7 +164,10 @@ describe('AppShell', () => {
   });
 
   it('reflows between wide, medium, and compact layouts on resize', async () => {
+    const user = userEvent.setup();
+
     render(<AppShell />);
+    await createAgent(user, 'Orchestrator');
 
     fireEvent.keyDown(window, { key: '\\', metaKey: true });
 
@@ -324,7 +326,7 @@ describe('AppShell', () => {
     });
   });
 
-  it('switches to dark theme from settings in-session', async () => {
+  it('switches to dark theme from settings while the prototype is open', async () => {
     const user = userEvent.setup();
 
     render(<AppShell />);

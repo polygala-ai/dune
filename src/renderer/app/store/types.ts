@@ -1,39 +1,31 @@
 import type { StateCreator } from 'zustand';
 
 import type {
-  Conversation,
-  ConversationSummary,
-  MessageStatus,
-} from '@/renderer/features/chat/types';
+  Agent,
+  AgentSummary,
+  PresentedAgent,
+} from '@/renderer/features/agents/types';
+import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
 import type {
   SettingsRoute,
   ThemePreference,
 } from '@/renderer/features/settings/types';
 
-export type AppRoute = 'chat' | 'settings';
+export type AppRoute = 'agent' | 'settings';
 
-export interface ChatState {
-  conversations: Conversation[];
+export interface AgentState {
+  agents: Agent[];
   draft: string;
   isStreaming: boolean;
+  selectedAgentId: string | null;
 }
 
-export interface ChatActions {
-  appendUserMessage: (conversationId: string, content: string) => void;
-  beginAssistantMessage: (conversationId: string) => string;
-  completeAssistantMessage: (conversationId: string, messageId: string) => void;
-  insertConversation: (conversation: Conversation) => void;
-  setConversations: (conversations: Conversation[]) => void;
+export interface AgentActions {
+  setAgentsSnapshot: (snapshot: AgentServiceSnapshot) => void;
   setDraft: (draft: string) => void;
-  updateAssistantMessage: (
-    conversationId: string,
-    messageId: string,
-    content: string,
-    status?: MessageStatus,
-  ) => void;
 }
 
-export type ChatSlice = ChatState & ChatActions;
+export type AgentSlice = AgentState & AgentActions;
 
 export interface SettingsState {
   settingsRoute: SettingsRoute;
@@ -51,26 +43,25 @@ export interface ShellState {
   isCommandOpen: boolean;
   isContextPanelOpen: boolean;
   route: AppRoute;
-  selectedConversationId: string;
 }
 
 export interface ShellActions {
   setCommandOpen: (isOpen: boolean) => void;
   setContextPanelOpen: (isOpen: boolean) => void;
   setRoute: (route: AppRoute) => void;
-  setSelectedConversationId: (conversationId: string) => void;
 }
 
 export type ShellSlice = ShellState & ShellActions;
 
-export type AppStoreState = ChatState & SettingsState & ShellState;
-export type AppStore = AppStoreState & ChatActions & SettingsActions & ShellActions;
+export type AppStoreState = AgentState & SettingsState & ShellState;
+export type AppStore = AppStoreState & AgentActions & SettingsActions & ShellActions;
 export type AppStoreSlice<T> = StateCreator<AppStore, [], [], T>;
 
-export interface ChatSessionState {
-  activeConversation: Conversation | null;
-  conversationSummaries: ConversationSummary[];
+export interface AgentSessionState {
+  activeAgent: PresentedAgent | null;
+  agentSummaries: AgentSummary[];
+  commandAgents: Array<AgentSummary & { workspace: string }>;
   draft: string;
   isStreaming: boolean;
-  selectedConversationId: string;
+  selectedAgentId: string | null;
 }

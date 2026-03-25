@@ -41,7 +41,7 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
       <DialogContent className={commandDialogContentClassName}>
         <DialogTitle className="sr-only">Quick switcher</DialogTitle>
         <DialogDescription className="sr-only">
-          Search actions and seeded conversations.
+          Search actions and agents.
         </DialogDescription>
         <Command className={commandDialogLayoutClassName}>
           {children}

@@ -1,13 +1,11 @@
 import {
-  startTransition,
-  useEffect,
-  useEffectEvent,
   useRef,
-  useState,
 } from 'react';
 
+import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
+import { useAgentSubmit } from '@/renderer/app/hooks/use-agent-submit';
+import { useAgentShellController } from '@/renderer/app/hooks/use-agent-shell-controller';
 import { useComposerFocus } from '@/renderer/app/hooks/use-composer-focus';
-import { useConversationSubmit } from '@/renderer/app/hooks/use-conversation-submit';
 import { useResizableSidebar } from '@/renderer/app/hooks/use-resizable-sidebar';
 import { useGlobalShortcuts } from '@/renderer/app/hooks/use-global-shortcuts';
 import { useResponsiveShell } from '@/renderer/app/hooks/use-responsive-shell';
@@ -19,11 +17,11 @@ import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
-  useChatSession,
+  useAgentSession,
   useSettingsState,
   useShellState,
 } from '@/renderer/app/store/selectors';
-import { ChatWorkspace } from '@/renderer/app/workspaces/ChatWorkspace';
+import { AgentWorkspace } from '@/renderer/app/workspaces/AgentWorkspace';
 import { SettingsWorkspace } from '@/renderer/app/workspaces/SettingsWorkspace';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
@@ -32,17 +30,16 @@ import { TooltipProvider } from '@/renderer/shared/ui/tooltip';
 export default function AppShell() {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const { composerRef, focusComposer } = useComposerFocus();
-  const [isSidebarDrawerOpen, setSidebarDrawerOpen] = useState(false);
   const { isMac } = useDesktopPlatform();
   const commands = useAppCommands();
   const {
-    activeConversation,
-    commandConversations,
-    conversationSummaries,
+    activeAgent,
+    agentSummaries,
+    commandAgents,
     draft,
     isStreaming,
-    selectedConversationId,
-  } = useChatSession();
+    selectedAgentId,
+  } = useAgentSession();
   const {
     isCommandOpen,
     isContextPanelOpen,
@@ -52,7 +49,7 @@ export default function AppShell() {
     settingsRoute,
     themePreference,
   } = useSettingsState();
-  const showContextPanel = route === 'chat' && isContextPanelOpen;
+  const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
   const { isCompactShell, usesInlineContext, usesOverlayContext } =
     useResponsiveShell(showContextPanel);
   const {
@@ -65,69 +62,50 @@ export default function AppShell() {
 
   useThemeSync(themePreference);
 
-  useEffect(() => {
-    if (!isCompactShell) {
-      setSidebarDrawerOpen(false);
-    }
-  }, [isCompactShell]);
-
   useTranscriptScroll({
-    conversation: activeConversation,
+    agent: activeAgent,
     route,
     transcriptRef,
   });
 
-  const handleSubmit = useConversationSubmit({ focusComposer });
-
-  const handleCreateConversation = useEffectEvent(() => {
-    commands.startConversation();
-    setSidebarDrawerOpen(false);
-    focusComposer();
+  const handleSubmit = useAgentSubmit({ focusComposer });
+  const controller = useAgentShellController({
+    activeAgent,
+    commands,
+    focusComposer,
+    isCompactShell,
+    route,
   });
-
-  const handleOpenSettings = useEffectEvent(() => {
-    startTransition(() => {
-      setSidebarDrawerOpen(false);
-      commands.openSettings();
-    });
-  });
-
-  const handleOpenCommand = useEffectEvent(() => {
-    commands.setCommandOpen(true);
-  });
-
-  const handleCloseCommand = useEffectEvent(() => {
-    commands.setCommandOpen(false);
-  });
-
-  const handleSelectConversation = useEffectEvent((conversationId: string) => {
-    setSidebarDrawerOpen(false);
-    commands.openConversation(conversationId);
-  });
+  const sidebarProps = {
+    agents: agentSummaries,
+    isCommandOpen,
+    onCreateAgent: controller.handleOpenCreateAgent,
+    onOpenCommand: controller.handleOpenCommand,
+    onOpenSettings: controller.handleOpenSettings,
+    onSelectAgent: controller.handleSelectAgent,
+    route,
+    selectedAgentId,
+  };
+  const sidebar = (className: string) => (
+    <AppSidebar
+      {...sidebarProps}
+      className={className}
+    />
+  );
 
   useGlobalShortcuts({
     isCommandOpen,
     isMac,
-    onCloseCommand: handleCloseCommand,
-    onCloseContextPanel: () => commands.toggleInspector(false),
-    onCreateConversation: handleCreateConversation,
-    onCycleConversation: commands.cycleConversation,
-    onOpenCommand: handleOpenCommand,
-    onOpenSettings: handleOpenSettings,
-    onToggleContextPanel: () => commands.toggleInspector(),
+    onCloseCommand: controller.handleCloseCommand,
+    onCloseContextPanel: controller.handleCloseContextPanel,
+    onCreateAgent: controller.handleOpenCreateAgent,
+    onCycleAgent: commands.cycleAgent,
+    onOpenCommand: controller.handleOpenCommand,
+    onOpenSettings: controller.handleOpenSettings,
+    onToggleContextPanel: controller.handleToggleContextPanel,
     route,
     usesOverlayContext,
   });
-
-  useEffect(() => {
-    if (route === 'chat') {
-      focusComposer();
-    }
-  }, [focusComposer, route]);
-
-  if (!activeConversation) {
-    return null;
-  }
 
   return (
     <TooltipProvider delayDuration={120}>
@@ -148,17 +126,7 @@ export default function AppShell() {
         >
           {!isCompactShell ? (
             <div className="relative min-h-0 min-w-0">
-              <AppSidebar
-                className="h-full border-r border-app-border"
-                conversations={conversationSummaries}
-                isCommandOpen={isCommandOpen}
-                onCreateConversation={handleCreateConversation}
-                onOpenCommand={handleOpenCommand}
-                onOpenSettings={handleOpenSettings}
-                onSelectConversation={handleSelectConversation}
-                route={route}
-                selectedConversationId={selectedConversationId}
-              />
+              {sidebar('h-full border-r border-app-border')}
               <div
                 {...resizeHandleProps}
                 className="sidebar-resize-handle"
@@ -168,28 +136,29 @@ export default function AppShell() {
           ) : null}
 
           <main className="panel-reveal flex min-h-0 min-w-0 flex-col overflow-hidden">
-            {route === 'chat' ? (
-              <ChatWorkspace
+            {route === 'agent' ? (
+              <AgentWorkspace
+                agent={activeAgent}
                 composerRef={composerRef}
-                conversation={activeConversation}
                 draft={draft}
                 isCompactShell={isCompactShell}
                 isContextPanelOpen={isContextPanelOpen}
-                isSidebarOpen={isSidebarDrawerOpen}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
                 isStreaming={isStreaming}
+                onCreateAgent={controller.handleOpenCreateAgent}
                 onDraftChange={commands.setDraft}
                 onSubmit={handleSubmit}
-                onToggleInspector={() => commands.toggleInspector()}
-                onToggleSidebar={() => setSidebarDrawerOpen((open) => !open)}
+                onToggleInspector={controller.handleToggleContextPanel}
+                onToggleSidebar={controller.handleToggleSidebar}
                 transcriptRef={transcriptRef}
               />
             ) : (
               <SettingsWorkspace
                 isCompactShell={isCompactShell}
-                isSidebarOpen={isSidebarDrawerOpen}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
                 onSelectRoute={commands.setSettingsRoute}
                 onThemeChange={commands.setThemePreference}
-                onToggleSidebar={() => setSidebarDrawerOpen((open) => !open)}
+                onToggleSidebar={controller.handleToggleSidebar}
                 settingsRoute={settingsRoute}
                 themePreference={themePreference}
               />
@@ -197,9 +166,9 @@ export default function AppShell() {
           </main>
 
           <ContextPanelHost
-            conversation={activeConversation}
+            agent={activeAgent}
             mode={
-              route !== 'chat'
+              route !== 'agent' || !activeAgent
                 ? 'hidden'
                 : usesInlineContext
                   ? 'inline'
@@ -207,37 +176,31 @@ export default function AppShell() {
                     ? 'overlay'
                     : 'hidden'
             }
-            onClose={() => commands.toggleInspector(false)}
+            onClose={controller.handleCloseContextPanel}
           />
         </div>
 
         <SidebarDrawer
-          isOpen={isCompactShell && isSidebarDrawerOpen}
-          onOpenChange={setSidebarDrawerOpen}
-          sidebar={(
-            <AppSidebar
-              className="h-full rounded-[24px]"
-              conversations={conversationSummaries}
-              isCommandOpen={isCommandOpen}
-              onCreateConversation={handleCreateConversation}
-              onOpenCommand={handleOpenCommand}
-              onOpenSettings={handleOpenSettings}
-              onSelectConversation={handleSelectConversation}
-              route={route}
-              selectedConversationId={selectedConversationId}
-            />
-          )}
+          isOpen={isCompactShell && controller.isSidebarDrawerOpen}
+          onOpenChange={controller.handleSidebarDrawerOpenChange}
+          sidebar={sidebar('h-full rounded-[24px]')}
         />
 
         <CommandMenu
-          conversations={commandConversations}
+          agents={commandAgents}
           isContextPanelOpen={isContextPanelOpen}
-          onCreateConversation={handleCreateConversation}
+          onCreateAgent={controller.handleOpenCreateAgent}
           onOpenChange={commands.setCommandOpen}
-          onOpenSettings={handleOpenSettings}
-          onSelectConversation={handleSelectConversation}
-          onToggleContextPanel={() => commands.toggleInspector()}
+          onOpenSettings={controller.handleOpenSettings}
+          onSelectAgent={controller.handleSelectAgent}
+          onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
+        />
+
+        <CreateAgentDialog
+          onCreateAgent={controller.handleCreateAgent}
+          onOpenChange={controller.handleCreateAgentDialogOpenChange}
+          open={controller.isCreateAgentOpen}
         />
       </div>
     </TooltipProvider>

@@ -20,7 +20,7 @@ export function SidebarDrawer({
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
       <DialogContent className="shell-sidebar-drawer">
-        <DialogTitle className="sr-only">Conversation sidebar</DialogTitle>
+        <DialogTitle className="sr-only">Agent sidebar</DialogTitle>
         {sidebar}
       </DialogContent>
     </Dialog>

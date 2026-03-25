@@ -11,8 +11,8 @@ export function WorkspaceSettings(props: SettingsSectionComponentProps) {
   const rows: SettingsRow[] = [
     {
       label: 'Default workspace',
-      description: 'The app opens into seeded demo sessions.',
-      value: 'Seeded',
+      description: 'The app opens into an empty agent shell.',
+      value: 'Empty',
     },
     {
       label: 'Launch layout',
@@ -29,7 +29,7 @@ export function WorkspaceSettings(props: SettingsSectionComponentProps) {
   return (
     <>
       <SettingsSectionIntro
-        description="These rows describe the default workspace without implying persistence."
+        description="These rows describe the default agent shell without implying runtime persistence yet."
         eyebrow="Workspace"
         title="Prototype defaults"
       />

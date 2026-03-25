@@ -1,27 +1,27 @@
-import { ConversationContextPanel } from '@/renderer/features/chat/components/ConversationContextPanel';
+import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
 
-import type { PresentedConversation } from '@/renderer/features/chat/types';
+import type { PresentedAgent } from '@/renderer/features/agents/types';
 
 interface ContextPanelHostProps {
-  conversation: PresentedConversation;
+  agent: PresentedAgent | null;
   mode: 'hidden' | 'inline' | 'overlay';
   onClose: () => void;
 }
 
 export function ContextPanelHost({
-  conversation,
+  agent,
   mode,
   onClose,
 }: ContextPanelHostProps) {
-  if (mode === 'hidden') {
+  if (mode === 'hidden' || !agent) {
     return null;
   }
 
   if (mode === 'inline') {
     return (
-      <ConversationContextPanel
+      <AgentContextPanel
+        agent={agent}
         className="h-full border-l border-app-border"
-        conversation={conversation}
         onClose={onClose}
       />
     );
@@ -36,9 +36,9 @@ export function ContextPanelHost({
         type="button"
       />
       <div className="shell-overlay-context">
-        <ConversationContextPanel
+        <AgentContextPanel
+          agent={agent}
           className="app-no-drag h-full border-l border-app-border"
-          conversation={conversation}
           onClose={onClose}
         />
       </div>

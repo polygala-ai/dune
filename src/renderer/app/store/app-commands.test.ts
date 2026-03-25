@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  cycleConversation,
-  openConversation,
+  createAgent,
+  cycleAgent,
+  openAgent,
   openSettings,
-  startConversation,
   toggleInspector,
 } from '@/renderer/app/store/app-commands';
 import {
@@ -17,13 +17,13 @@ describe('app commands', () => {
     resetAppStore();
   });
 
-  it('creates a new conversation and selects it', () => {
-    const nextConversationId = startConversation();
+  it('creates a new agent and selects it', async () => {
+    const nextAgentId = await createAgent('Release coordinator');
     const state = useAppStore.getState();
 
-    expect(state.selectedConversationId).toBe(nextConversationId);
-    expect(state.route).toBe('chat');
-    expect(state.conversations[0]?.id).toBe(nextConversationId);
+    expect(state.selectedAgentId).toBe(nextAgentId);
+    expect(state.route).toBe('agent');
+    expect(state.agents[0]?.id).toBe(nextAgentId);
   });
 
   it('opens settings and keeps command menu closed', () => {
@@ -36,28 +36,26 @@ describe('app commands', () => {
     expect(state.isCommandOpen).toBe(false);
   });
 
-  it('reorders and selects an opened conversation', () => {
-    const secondConversationId = useAppStore.getState().conversations[1]?.id;
+  it('selects an opened agent', async () => {
+    await createAgent('Alpha');
+    const secondAgentId = await createAgent('Beta');
 
-    if (!secondConversationId) {
-      throw new Error('Expected a second seeded conversation.');
-    }
-
-    openConversation(secondConversationId);
+    openAgent(secondAgentId);
 
     const state = useAppStore.getState();
-    expect(state.selectedConversationId).toBe(secondConversationId);
-    expect(state.conversations[0]?.id).toBe(secondConversationId);
+    expect(state.selectedAgentId).toBe(secondAgentId);
   });
 
-  it('cycles through the current conversation list', () => {
+  it('cycles through the current agent list', async () => {
+    await createAgent('Alpha');
+    await createAgent('Beta');
     const stateBefore = useAppStore.getState();
-    const initialConversationId = stateBefore.selectedConversationId;
+    const initialAgentId = stateBefore.selectedAgentId;
 
-    cycleConversation(1);
+    cycleAgent(1);
 
     const stateAfter = useAppStore.getState();
-    expect(stateAfter.selectedConversationId).not.toBe(initialConversationId);
+    expect(stateAfter.selectedAgentId).not.toBe(initialAgentId);
   });
 
   it('toggles the inspector visibility', () => {

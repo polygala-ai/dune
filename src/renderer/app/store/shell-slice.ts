@@ -4,14 +4,11 @@ import type {
   ShellState,
 } from './types';
 
-export function createInitialShellState(
-  selectedConversationId: string,
-): ShellState {
+export function createInitialShellState(): ShellState {
   return {
     isCommandOpen: false,
     isContextPanelOpen: false,
-    route: 'chat',
-    selectedConversationId,
+    route: 'agent',
   };
 }
 
@@ -26,11 +23,6 @@ export function createShellSlice(initialState: ShellState): AppStoreSlice<ShellS
     },
     setRoute: (route) => {
       set({ route });
-    },
-    setSelectedConversationId: (selectedConversationId) => {
-      set({
-        selectedConversationId,
-      });
     },
   });
 }

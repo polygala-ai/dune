@@ -2,45 +2,45 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import {
-  presentConversation,
-  presentConversationSummary,
-  selectConversationById,
-} from '@/renderer/features/chat/model/conversation-presenters';
+  presentAgent,
+  presentAgentSummary,
+  selectAgentById,
+} from '@/renderer/features/agents/model/agent-presenters';
 
-export function useChatSession() {
+export function useAgentSession() {
   const {
-    conversations,
+    agents,
     draft,
     isStreaming,
-    selectedConversationId,
+    selectedAgentId,
   } = useAppStore(
     useShallow((state) => ({
-      conversations: state.conversations,
+      agents: state.agents,
       draft: state.draft,
       isStreaming: state.isStreaming,
-      selectedConversationId: state.selectedConversationId,
+      selectedAgentId: state.selectedAgentId,
     })),
   );
 
-  const activeConversation = selectConversationById(
-    conversations,
-    selectedConversationId,
+  const activeAgent = selectAgentById(
+    agents,
+    selectedAgentId,
   );
 
   return {
-    activeConversation: activeConversation
-      ? presentConversation(activeConversation)
+    activeAgent: activeAgent
+      ? presentAgent(activeAgent)
       : null,
-    commandConversations: conversations.map((conversation) => ({
-      ...presentConversationSummary(conversation),
-      workspace: conversation.workspace,
+    commandAgents: agents.map((agent) => ({
+      ...presentAgentSummary(agent),
+      workspace: agent.workspace,
     })),
-    conversationSummaries: conversations.map((conversation) =>
-      presentConversationSummary(conversation),
+    agentSummaries: agents.map((agent) =>
+      presentAgentSummary(agent),
     ),
     draft,
     isStreaming,
-    selectedConversationId,
+    selectedAgentId,
   };
 }
 
@@ -50,7 +50,6 @@ export function useShellState() {
       isCommandOpen: state.isCommandOpen,
       isContextPanelOpen: state.isContextPanelOpen,
       route: state.route,
-      selectedConversationId: state.selectedConversationId,
     })),
   );
 }

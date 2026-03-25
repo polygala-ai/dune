@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import type { AppRoute } from '@/renderer/app/store/types';
-import type { ConversationSummary } from '@/renderer/features/chat/types';
+import type { AgentSummary } from '@/renderer/features/agents/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -19,27 +19,27 @@ import {
 } from '@/renderer/shared/ui/tooltip';
 
 interface AppSidebarProps {
+  agents: AgentSummary[];
   className?: string;
-  conversations: ConversationSummary[];
   isCommandOpen: boolean;
-  onCreateConversation: () => void;
+  onCreateAgent: () => void;
   onOpenCommand: () => void;
   onOpenSettings: () => void;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectAgent: (agentId: string) => void;
   route: AppRoute;
-  selectedConversationId: string;
+  selectedAgentId: string | null;
 }
 
 export function AppSidebar({
+  agents,
   className,
-  conversations,
   isCommandOpen,
-  onCreateConversation,
+  onCreateAgent,
   onOpenCommand,
   onOpenSettings,
-  onSelectConversation,
+  onSelectAgent,
   route,
-  selectedConversationId,
+  selectedAgentId,
 }: AppSidebarProps) {
   const {
     isMac,
@@ -79,11 +79,11 @@ export function AppSidebar({
 
         <Button
           className="mt-4 w-full justify-between"
-          onClick={onCreateConversation}
+          onClick={onCreateAgent}
           size="sm"
           variant="quiet"
         >
-          New chat
+          New agent
           <Plus className="h-4 w-4" />
         </Button>
       </div>
@@ -92,9 +92,9 @@ export function AppSidebar({
 
       <ScrollArea className="min-h-0 flex-1 py-3 pr-1" contentWidth="fill">
         <div className="min-w-0 w-full space-y-0.5 pr-2">
-          {conversations.map((conversation) => {
+          {agents.map((agent) => {
             const isActive =
-              route === 'chat' && conversation.id === selectedConversationId;
+              route === 'agent' && agent.id === selectedAgentId;
 
             return (
               <button
@@ -106,20 +106,20 @@ export function AppSidebar({
                     ? 'bg-app-accent-soft text-app-text'
                     : 'text-app-text hover:bg-app-card',
                 )}
-                key={conversation.id}
-                onClick={() => onSelectConversation(conversation.id)}
+                key={agent.id}
+                onClick={() => onSelectAgent(agent.id)}
                 type="button"
               >
                 <div className="flex min-w-0 items-baseline gap-3">
                   <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-app-text">
-                    {conversation.title}
+                    {agent.name}
                   </p>
                   <span className="shrink-0 text-[10px] uppercase tracking-[0.16em] text-app-muted">
-                    {conversation.updatedLabel}
+                    {agent.updatedLabel}
                   </span>
                 </div>
                 <p className="mt-1 truncate text-[12px] leading-5 text-app-muted">
-                  {conversation.preview}
+                  {agent.preview}
                 </p>
               </button>
             );

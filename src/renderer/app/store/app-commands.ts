@@ -1,61 +1,61 @@
 import { useAppStore } from '@/renderer/app/store/use-app-store';
-import { createBlankConversation } from '@/renderer/features/chat/model/conversation-factories';
-import { reorderConversations } from '@/renderer/features/chat/model/conversation-transforms';
+import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
 import type {
   SettingsRoute,
   ThemePreference,
 } from '@/renderer/features/settings/types';
 
-function getConversationByOffset(
-  conversationIds: string[],
-  selectedConversationId: string,
+function getAgentByOffset(
+  agentIds: string[],
+  selectedAgentId: string | null,
   direction: -1 | 1,
 ) {
-  const currentIndex = conversationIds.findIndex((id) => id === selectedConversationId);
+  if (!selectedAgentId) {
+    return agentIds[0] ?? null;
+  }
 
-  if (currentIndex === -1 || conversationIds.length === 0) {
+  const currentIndex = agentIds.findIndex((id) => id === selectedAgentId);
+
+  if (currentIndex === -1 || agentIds.length === 0) {
     return null;
   }
 
-  const nextIndex = (currentIndex + direction + conversationIds.length) % conversationIds.length;
+  const nextIndex = (currentIndex + direction + agentIds.length) % agentIds.length;
 
-  return conversationIds[nextIndex] ?? null;
+  return agentIds[nextIndex] ?? null;
 }
 
-export function startConversation() {
+export async function createAgent(name: string) {
   const state = useAppStore.getState();
-  const nextConversation = createBlankConversation(state.conversations.length + 1);
+  const nextAgentId = await agentRuntime.service.createAgent(name);
 
-  state.insertConversation(nextConversation);
-  state.setRoute('chat');
-  state.setSelectedConversationId(nextConversation.id);
+  state.setRoute('agent');
 
-  return nextConversation.id;
+  return nextAgentId;
 }
 
-export function openConversation(conversationId: string) {
+export function openAgent(agentId: string) {
   const state = useAppStore.getState();
 
-  state.setConversations(reorderConversations(state.conversations, conversationId));
-  state.setRoute('chat');
-  state.setSelectedConversationId(conversationId);
+  agentRuntime.service.selectAgent(agentId);
+  state.setRoute('agent');
 }
 
-export function cycleConversation(direction: -1 | 1) {
+export function cycleAgent(direction: -1 | 1) {
   const state = useAppStore.getState();
-  const nextConversationId = getConversationByOffset(
-    state.conversations.map((conversation) => conversation.id),
-    state.selectedConversationId,
+  const nextAgentId = getAgentByOffset(
+    state.agents.map((agent) => agent.id),
+    state.selectedAgentId,
     direction,
   );
 
-  if (!nextConversationId) {
+  if (!nextAgentId) {
     return;
   }
 
-  state.setRoute('chat');
-  state.setSelectedConversationId(nextConversationId);
+  agentRuntime.service.selectAgent(nextAgentId);
+  state.setRoute('agent');
 }
 
 export function openSettings() {
@@ -89,14 +89,14 @@ export function setThemePreference(preference: ThemePreference) {
 
 export function useAppCommands() {
   return {
-    cycleConversation,
-    openConversation,
+    createAgent,
+    cycleAgent,
+    openAgent,
     openSettings,
     setCommandOpen,
     setDraft,
     setSettingsRoute,
     setThemePreference,
-    startConversation,
     toggleInspector,
   };
 }

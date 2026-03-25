@@ -7,8 +7,8 @@ interface UseGlobalShortcutsOptions {
   isMac: boolean;
   onCloseCommand: () => void;
   onCloseContextPanel: () => void;
-  onCreateConversation: () => void;
-  onCycleConversation: (direction: -1 | 1) => void;
+  onCreateAgent: () => void;
+  onCycleAgent: (direction: -1 | 1) => void;
   onOpenCommand: () => void;
   onOpenSettings: () => void;
   onToggleContextPanel: () => void;
@@ -36,8 +36,8 @@ export function useGlobalShortcuts({
   isMac,
   onCloseCommand,
   onCloseContextPanel,
-  onCreateConversation,
-  onCycleConversation,
+  onCreateAgent,
+  onCycleAgent,
   onOpenCommand,
   onOpenSettings,
   onToggleContextPanel,
@@ -56,7 +56,7 @@ export function useGlobalShortcuts({
 
     if (usesPrimaryModifier && key === 'n') {
       event.preventDefault();
-      onCreateConversation();
+      onCreateAgent();
       return;
     }
 
@@ -69,7 +69,7 @@ export function useGlobalShortcuts({
     if (usesPrimaryModifier && event.key === '\\') {
       event.preventDefault();
 
-      if (route === 'chat') {
+      if (route === 'agent') {
         onToggleContextPanel();
       }
       return;
@@ -88,24 +88,24 @@ export function useGlobalShortcuts({
     }
 
     if (
-      route === 'chat' &&
+      route === 'agent' &&
       !isCommandOpen &&
       !isEditableTarget(event.target) &&
       event.key === 'ArrowUp'
     ) {
       event.preventDefault();
-      onCycleConversation(-1);
+      onCycleAgent(-1);
       return;
     }
 
     if (
-      route === 'chat' &&
+      route === 'agent' &&
       !isCommandOpen &&
       !isEditableTarget(event.target) &&
       event.key === 'ArrowDown'
     ) {
       event.preventDefault();
-      onCycleConversation(1);
+      onCycleAgent(1);
     }
   });
 

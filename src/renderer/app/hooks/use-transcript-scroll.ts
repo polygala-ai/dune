@@ -2,22 +2,22 @@ import { useEffect } from 'react';
 
 import type { RefObject } from 'react';
 
-import type { PresentedConversation } from '@/renderer/features/chat/types';
+import type { PresentedAgent } from '@/renderer/features/agents/types';
 import type { AppRoute } from '@/renderer/app/store/types';
 
 interface UseTranscriptScrollOptions {
-  conversation: PresentedConversation | null;
+  agent: PresentedAgent | null;
   route: AppRoute;
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
 export function useTranscriptScroll({
-  conversation,
+  agent,
   route,
   transcriptRef,
 }: UseTranscriptScrollOptions) {
   useEffect(() => {
-    if (route !== 'chat') {
+    if (route !== 'agent') {
       return;
     }
 
@@ -26,9 +26,9 @@ export function useTranscriptScroll({
       behavior: 'smooth',
     });
   }, [
-    conversation?.id,
-    conversation?.messages.length,
-    conversation?.messages.at(-1)?.content,
+    agent?.id,
+    agent?.messages.length,
+    agent?.messages.at(-1)?.content,
     route,
     transcriptRef,
   ]);

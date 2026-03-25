@@ -1,6 +1,6 @@
 import { startTransition } from 'react';
 import {
-  MessageSquareDot,
+  Bot,
   PanelRight,
   Plus,
   Settings2,
@@ -18,32 +18,32 @@ import {
   CommandShortcut,
 } from '@/renderer/shared/ui/command';
 
-interface CommandConversation {
+interface CommandAgent {
   id: string;
+  name: string;
   preview: string;
-  title: string;
   updatedLabel: string;
   workspace: string;
 }
 
 interface CommandMenuProps {
-  conversations: CommandConversation[];
+  agents: CommandAgent[];
   isContextPanelOpen: boolean;
-  onCreateConversation: () => void;
+  onCreateAgent: () => void;
   onOpenChange: (open: boolean) => void;
   onOpenSettings: () => void;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectAgent: (agentId: string) => void;
   onToggleContextPanel: () => void;
   open: boolean;
 }
 
 export function CommandMenu({
-  conversations,
+  agents,
   isContextPanelOpen,
-  onCreateConversation,
+  onCreateAgent,
   onOpenChange,
   onOpenSettings,
-  onSelectConversation,
+  onSelectAgent,
   onToggleContextPanel,
   open,
 }: CommandMenuProps) {
@@ -58,13 +58,13 @@ export function CommandMenu({
 
   return (
     <CommandDialog onOpenChange={onOpenChange} open={open}>
-      <CommandInput placeholder="Jump to a thread or action…" />
+      <CommandInput placeholder="Jump to an agent or action…" />
       <CommandList className="thin-scrollbar">
-        <CommandEmpty>No matching threads or actions.</CommandEmpty>
+        <CommandEmpty>No matching agents or actions.</CommandEmpty>
         <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => closeAndRun(onCreateConversation)}>
+          <CommandItem onSelect={() => closeAndRun(onCreateAgent)}>
             <Plus className="h-4 w-4 text-app-muted" />
-            <span className="flex-1 truncate">New chat</span>
+            <span className="flex-1 truncate">New agent</span>
             <CommandShortcut>{modifierLabel}N</CommandShortcut>
           </CommandItem>
 
@@ -85,21 +85,21 @@ export function CommandMenu({
 
         <CommandSeparator />
 
-        <CommandGroup heading="Conversations">
-          {conversations.map((conversation) => (
+        <CommandGroup heading="Agents">
+          {agents.map((agent) => (
             <CommandItem
-              key={conversation.id}
-              onSelect={() => closeAndRun(() => onSelectConversation(conversation.id))}
-              value={`${conversation.title} ${conversation.preview} ${conversation.workspace}`}
+              key={agent.id}
+              onSelect={() => closeAndRun(() => onSelectAgent(agent.id))}
+              value={`${agent.name} ${agent.preview} ${agent.workspace}`}
             >
-              <MessageSquareDot className="h-4 w-4 text-app-muted" />
+              <Bot className="h-4 w-4 text-app-muted" />
               <div className="flex min-w-0 flex-col">
-                <span className="truncate">{conversation.title}</span>
+                <span className="truncate">{agent.name}</span>
                 <span className="truncate text-xs text-app-muted">
-                  {conversation.workspace}
+                  {agent.workspace}
                 </span>
               </div>
-              <CommandShortcut>{conversation.updatedLabel}</CommandShortcut>
+              <CommandShortcut>{agent.updatedLabel}</CommandShortcut>
             </CommandItem>
           ))}
         </CommandGroup>

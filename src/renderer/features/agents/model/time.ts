@@ -1,7 +1,7 @@
 import type {
-  ConversationStatus,
+  AgentStatus,
   MessageStatus,
-} from '@/renderer/features/chat/types';
+} from '@/renderer/features/agents/types';
 
 const MINUTE_IN_MS = 60_000;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -46,24 +46,7 @@ function formatCalendarDate(timestamp: number, now: number) {
   return formatter.format(timestamp);
 }
 
-export function createRelativeTimestamp(
-  now: number,
-  offsets: {
-    days?: number;
-    hours?: number;
-    minutes?: number;
-  },
-) {
-  const {
-    days = 0,
-    hours = 0,
-    minutes = 0,
-  } = offsets;
-
-  return now - days * DAY_IN_MS - hours * 60 * MINUTE_IN_MS - minutes * MINUTE_IN_MS;
-}
-
-export function formatConversationTimestamp(timestamp: number, now: number = Date.now()) {
+export function formatAgentTimestamp(timestamp: number, now: number = Date.now()) {
   if (now - timestamp < 2 * MINUTE_IN_MS) {
     return 'Now';
   }
@@ -95,7 +78,7 @@ export function formatMessageTimestamp(timestamp: number, now: number = Date.now
   return formatCalendarDate(timestamp, now);
 }
 
-export function formatConversationStatus(status: ConversationStatus) {
+export function formatAgentStatus(status: AgentStatus) {
   switch (status) {
     case 'draft':
       return 'Draft';
@@ -114,3 +97,4 @@ export function formatMessageStatus(status: MessageStatus) {
       return 'Streaming';
   }
 }
+

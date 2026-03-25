@@ -39,7 +39,7 @@ async function expectRightEdgeWithin(container: Locator, item: Locator) {
   );
 }
 
-test('launches the built app, reflows responsively, and keeps overflow contained', async () => {
+test('launches the built app, creates an agent, reflows responsively, and keeps overflow contained', async () => {
   const appRoot = path.resolve(__dirname, '../../');
   const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
   const app = await electron.launch({
@@ -47,26 +47,33 @@ test('launches the built app, reflows responsively, and keeps overflow contained
     cwd: appRoot,
   });
   const page = await app.firstWindow();
-  const sidebar = page.locator('[data-testid="app-sidebar"]:visible');
-  const activeConversation = sidebar.locator('button[aria-current="true"]').first();
-  const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
 
-  await expect(page.getByRole('heading', { name: 'Studio shell' })).toBeVisible();
-  await expect(page.getByLabel('Composer')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No agents yet.' })).toBeVisible();
   await expect(
     page.locator('meta[http-equiv="Content-Security-Policy"]'),
   ).toHaveCount(1);
+
+  await page.getByRole('button', { name: /^New agent$/i }).first().click();
+  await page.getByLabel('Agent name').fill('Navigator');
+  await page.getByRole('button', { name: /^Create agent$/i }).click();
+
+  await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
+  await expect(page.getByLabel('Agent composer')).toBeVisible();
+
+  const sidebar = page.locator('[data-testid="app-sidebar"]:visible');
+  const activeAgent = sidebar.locator('button[aria-current="true"]').first();
+  const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
 
   await resizeWindow(app, 1560, 920);
   await expect(sidebar).toBeVisible();
   await expect(page.getByTestId('compact-shell-toolbar')).toHaveCount(0);
   await expect(page.getByTestId('context-panel')).toHaveCount(0);
-  await expectRightEdgeWithin(sidebar, activeConversation);
+  await expectRightEdgeWithin(sidebar, activeAgent);
 
   await resizeHandle.focus();
   await page.keyboard.press('Home');
   await expect(resizeHandle).toHaveAttribute('aria-valuenow', '208');
-  await expectRightEdgeWithin(sidebar, activeConversation);
+  await expectRightEdgeWithin(sidebar, activeAgent);
 
   await resizeWindow(app, 1360, 920);
   await page.keyboard.press(`${modifier}+\\`);
@@ -79,15 +86,15 @@ test('launches the built app, reflows responsively, and keeps overflow contained
   await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
   await page.getByRole('button', { name: /open sidebar/i }).click();
   await expect(page.getByTestId('app-sidebar')).toBeVisible();
-  await page.getByRole('button', { name: /composer polish/i }).click();
-  await expect(page.getByRole('heading', { name: 'Composer polish' })).toBeVisible();
+  await page.getByRole('button', { name: /navigator/i }).click();
+  await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
   await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
 
   const tallMessage = Array.from(
     { length: 180 },
     (_, index) => `line ${index} keeps the transcript busy`,
   ).join('\n');
-  await page.getByLabel('Composer').fill(tallMessage);
+  await page.getByLabel('Agent composer').fill(tallMessage);
   await page.getByRole('button', { name: /^Send$/i }).click();
   await page.waitForTimeout(300);
 
@@ -102,7 +109,7 @@ test('launches the built app, reflows responsively, and keeps overflow contained
   expect(tallMetrics.scrollWidth).toBeLessThanOrEqual(tallMetrics.innerWidth + 1);
 
   const longToken = 'x'.repeat(1400);
-  await page.getByLabel('Composer').fill(longToken);
+  await page.getByLabel('Agent composer').fill(longToken);
   await page.getByRole('button', { name: /^Send$/i }).click();
   await page.waitForTimeout(300);
 
@@ -117,7 +124,7 @@ test('launches the built app, reflows responsively, and keeps overflow contained
   await expect(page.getByTestId('settings-view')).toBeVisible();
   await page.keyboard.press(`${modifier}+K`);
   await expect(
-    page.getByPlaceholder('Jump to a thread or action…'),
+    page.getByPlaceholder('Jump to an agent or action…'),
   ).toBeVisible();
 
   await app.close();

@@ -1,14 +1,14 @@
 import { type KeyboardEvent, type RefObject } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 
-import type { PresentedConversation } from '@/renderer/features/chat/types';
+import type { PresentedAgent } from '@/renderer/features/agents/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 
-interface ChatPanelProps {
+interface AgentPanelProps {
+  agent: PresentedAgent;
   composerRef: RefObject<HTMLTextAreaElement | null>;
-  conversation: PresentedConversation;
   draft: string;
   isStreaming: boolean;
   onDraftChange: (value: string) => void;
@@ -16,10 +16,10 @@ interface ChatPanelProps {
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
-function roleLabel(role: PresentedConversation['messages'][number]['role']) {
+function roleLabel(role: PresentedAgent['messages'][number]['role']) {
   switch (role) {
     case 'assistant':
-      return 'Assistant';
+      return 'Agent';
     case 'user':
       return 'You';
     default:
@@ -27,15 +27,15 @@ function roleLabel(role: PresentedConversation['messages'][number]['role']) {
   }
 }
 
-export function ChatPanel({
+export function AgentPanel({
+  agent,
   composerRef,
-  conversation,
   draft,
   isStreaming,
   onDraftChange,
   onSubmit,
   transcriptRef,
-}: ChatPanelProps) {
+}: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
 
   const handleComposerKeyDown = async (
@@ -57,17 +57,32 @@ export function ChatPanel({
       >
         <div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
           <div className="mb-3 border-b border-app-border pb-4">
-            <h2 className="truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
-              {conversation.title}
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+              Active agent
+            </div>
+            <h2 className="mt-2 truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
+              {agent.name}
             </h2>
             <div className="mt-1 flex items-center gap-2 text-[12px] text-app-muted">
-              <span>{conversation.workspace}</span>
+              <span>{agent.workspace}</span>
               <span className="h-1 w-1 rounded-full bg-app-border-strong" />
-              <span>{conversation.updatedLabel}</span>
+              <span>{agent.updatedLabel}</span>
             </div>
           </div>
 
-          {conversation.messages.map((message) => {
+          {agent.messages.length === 0 ? (
+            <article className="rounded-[24px] border border-dashed border-app-border bg-app-card/60 px-5 py-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                Agent ready
+              </div>
+              <p className="mt-3 text-sm leading-6 text-app-muted">
+                Start with an implementation slice, a product question, or a shell
+                refinement. This transcript stays attached to the same agent workspace.
+              </p>
+            </article>
+          ) : null}
+
+          {agent.messages.map((message) => {
             const isUser = message.role === 'user';
 
             return (
@@ -116,14 +131,14 @@ export function ChatPanel({
       >
         <div className="mx-auto max-w-3xl">
           <textarea
-            aria-label="Composer"
+            aria-label="Agent composer"
             className="min-h-[84px] w-full bg-transparent px-1 text-[14px] leading-7 text-app-text outline-none placeholder:text-app-muted"
             disabled={isStreaming}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               void handleComposerKeyDown(event);
             }}
-            placeholder="Reply..."
+            placeholder="Message agent..."
             ref={composerRef}
             rows={4}
             value={draft}
@@ -144,3 +159,4 @@ export function ChatPanel({
     </div>
   );
 }
+

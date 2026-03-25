@@ -54,7 +54,7 @@ export function AppearanceSettings({
   return (
     <>
       <SettingsSectionIntro
-        description="Theme is live in-session. The rest of settings stay descriptive in v1."
+        description="Theme is live while the prototype is open. The rest of settings stay descriptive in v1."
         eyebrow="Appearance"
         title="Visual tone"
       />
