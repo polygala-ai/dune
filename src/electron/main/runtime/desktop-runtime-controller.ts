@@ -6,11 +6,9 @@ import { createMockAgentRuntime, type AgentRuntime } from '@/renderer/features/a
 import type { CreateAgentInput } from '@/renderer/features/agents/types';
 import {
   AgentLiteHost,
-  type AgentLiteHostOptions,
-} from '@/electron/main/runtime/agentlite-host';
-import {
   resolveAgentLiteRuntimeRoot,
-} from '@/electron/runtime-core/agentlite-host-core';
+  type AgentLiteHostOptions,
+} from '@/electron/runtime-core/agentlite-host';
 
 type ActiveRuntime = AgentRuntime & {
   shutdown?: () => Promise<void>;
