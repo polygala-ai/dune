@@ -37,6 +37,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
       agents: initialState.agents,
       draft: initialState.draft,
       isStreaming: initialState.isStreaming,
+      runtimeInfo: initialState.runtimeInfo,
       selectedAgentId: initialState.selectedAgentId,
     })(set, get, store),
     ...createShellSlice({

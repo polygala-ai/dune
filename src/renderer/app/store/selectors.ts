@@ -12,12 +12,14 @@ export function useAgentSession() {
     agents,
     draft,
     isStreaming,
+    runtimeInfo,
     selectedAgentId,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
       draft: state.draft,
       isStreaming: state.isStreaming,
+      runtimeInfo: state.runtimeInfo,
       selectedAgentId: state.selectedAgentId,
     })),
   );
@@ -40,6 +42,7 @@ export function useAgentSession() {
     ),
     draft,
     isStreaming,
+    runtimeInfo,
     selectedAgentId,
   };
 }
@@ -57,6 +60,7 @@ export function useShellState() {
 export function useSettingsState() {
   return useAppStore(
     useShallow((state) => ({
+      runtimeInfo: state.runtimeInfo,
       settingsRoute: state.settingsRoute,
       themePreference: state.themePreference,
     })),

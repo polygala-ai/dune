@@ -13,4 +13,33 @@ describe('createDesktopBridge', () => {
       platform: 'win32',
     });
   });
+
+  it('merges runtime methods into the bridge surface when provided', async () => {
+    const createAgent = async () => 'agent-1';
+    const getRuntimeSnapshot = async () => ({
+      agents: [],
+      isStreaming: false,
+      runtimeInfo: {
+        mode: 'real' as const,
+        status: 'ready' as const,
+      },
+      selectedAgentId: null,
+    });
+
+    const bridge = createDesktopBridge('darwin', {
+      createAgent,
+      getRuntimeSnapshot,
+    });
+
+    expect(bridge.createAgent).toBe(createAgent);
+    expect(await bridge.getRuntimeSnapshot?.()).toEqual({
+      agents: [],
+      isStreaming: false,
+      runtimeInfo: {
+        mode: 'real',
+        status: 'ready',
+      },
+      selectedAgentId: null,
+    });
+  });
 });

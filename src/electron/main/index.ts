@@ -1,7 +1,13 @@
-import { app, BrowserWindow } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+} from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
+import { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import { runtimeIpcChannels } from '@/shared/electron/runtime-ipc';
 import { createMainWindowOptions } from '../window/create-main-window-options';
 
 if (started) {
@@ -9,6 +15,11 @@ if (started) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+const runtimeController = new DesktopRuntimeController({
+  ...(process.env.DUNE_AGENTLITE_HOME_DIR
+    ? { homeDir: process.env.DUNE_AGENTLITE_HOME_DIR }
+    : {}),
+});
 
 const createWindow = () => {
   mainWindow = new BrowserWindow(
@@ -33,6 +44,26 @@ const createWindow = () => {
 };
 
 void app.whenReady().then(() => {
+  runtimeController.subscribe((snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(runtimeIpcChannels.runtimeSnapshotUpdated, snapshot);
+    }
+  });
+
+  ipcMain.handle(runtimeIpcChannels.getRuntimeSnapshot, () => runtimeController.getSnapshot());
+  ipcMain.handle(runtimeIpcChannels.createAgent, (_event, input) =>
+    runtimeController.createAgent(input),
+  );
+  ipcMain.handle(runtimeIpcChannels.selectAgent, (_event, agentId) => {
+    runtimeController.selectAgent(agentId);
+  });
+  ipcMain.handle(runtimeIpcChannels.sendAgentMessage, (_event, agentId, text) =>
+    runtimeController.sendAgentMessage(agentId, text),
+  );
+  ipcMain.handle(runtimeIpcChannels.resetRuntime, () => runtimeController.reset());
+
+  return runtimeController.start();
+}).then(() => {
   createWindow();
 
   app.on('activate', () => {
@@ -46,4 +77,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  void runtimeController.shutdown();
 });

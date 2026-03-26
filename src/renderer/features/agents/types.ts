@@ -4,6 +4,15 @@ export type AgentStatus = 'draft' | 'live' | 'ready';
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
 export type AgentChannelKind = 'built-in' | 'external';
 export type AgentChannelStatus = 'coming-soon' | 'connected' | 'ready';
+export type AgentRuntimeMode = 'mock-fallback' | 'real';
+export type AgentRuntimeStatus = 'error' | 'ready' | 'starting';
+
+export interface AgentRuntimeInfo {
+  mode: AgentRuntimeMode;
+  status: AgentRuntimeStatus;
+  message?: string;
+  rootPath?: string;
+}
 
 export interface AgentChannelBinding {
   id: AgentChannelId;

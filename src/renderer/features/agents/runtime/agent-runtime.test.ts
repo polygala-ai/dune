@@ -33,6 +33,11 @@ describe('agent runtime', () => {
     expect(runtime.getSnapshot()).toEqual({
       agents: [],
       isStreaming: false,
+      runtimeInfo: {
+        message: 'AgentLite is unavailable, so Dune is using the mock runtime.',
+        mode: 'mock-fallback',
+        status: 'ready',
+      },
       selectedAgentId: null,
     });
   });

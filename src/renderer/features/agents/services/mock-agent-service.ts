@@ -6,6 +6,7 @@ import type {
 import type {
   Agent,
   AgentMessage,
+  AgentRuntimeInfo,
   CreateAgentInput,
 } from '@/renderer/features/agents/types';
 import { createChannelBinding } from '@/renderer/features/agents/model/channels';
@@ -139,7 +140,16 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       messages: agent.messages.map((message) => ({ ...message })),
     })),
     isStreaming: snapshot.isStreaming,
+    runtimeInfo: { ...snapshot.runtimeInfo },
     selectedAgentId: snapshot.selectedAgentId,
+  };
+}
+
+function createDefaultRuntimeInfo(): AgentRuntimeInfo {
+  return {
+    message: 'AgentLite is unavailable, so Dune is using the mock runtime.',
+    mode: 'mock-fallback',
+    status: 'ready',
   };
 }
 
@@ -153,13 +163,18 @@ export interface AgentRuntime {
 class MockAgentService implements AgentService {
   private listeners = new Set<AgentServiceListener>();
 
-  private pendingTimers = new Set<number>();
+  private pendingTimers = new Set<ReturnType<typeof globalThis.setTimeout>>();
 
-  private snapshot: AgentServiceSnapshot = {
-    agents: [],
-    isStreaming: false,
-    selectedAgentId: null,
-  };
+  private snapshot: AgentServiceSnapshot;
+
+  constructor(runtimeInfo?: AgentRuntimeInfo) {
+    this.snapshot = {
+      agents: [],
+      isStreaming: false,
+      runtimeInfo: runtimeInfo ?? createDefaultRuntimeInfo(),
+      selectedAgentId: null,
+    };
+  }
 
   getSnapshot() {
     return cloneSnapshot(this.snapshot);
@@ -304,13 +319,14 @@ class MockAgentService implements AgentService {
 
   reset() {
     for (const timer of this.pendingTimers) {
-      window.clearTimeout(timer);
+      globalThis.clearTimeout(timer);
     }
 
     this.pendingTimers.clear();
     this.snapshot = {
       agents: [],
       isStreaming: false,
+      runtimeInfo: { ...this.snapshot.runtimeInfo },
       selectedAgentId: null,
     };
     this.emit();
@@ -326,7 +342,7 @@ class MockAgentService implements AgentService {
 
   private wait(duration: number) {
     return new Promise<void>((resolve) => {
-      const timer = window.setTimeout(() => {
+      const timer = globalThis.setTimeout(() => {
         this.pendingTimers.delete(timer);
         resolve();
       }, duration);
@@ -336,8 +352,8 @@ class MockAgentService implements AgentService {
   }
 }
 
-export function createMockAgentRuntime(): AgentRuntime {
-  const service = new MockAgentService();
+export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntime {
+  const service = new MockAgentService(runtimeInfo);
 
   return {
     getSnapshot: () => service.getSnapshot(),

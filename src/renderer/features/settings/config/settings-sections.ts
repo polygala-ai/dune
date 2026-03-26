@@ -9,9 +9,11 @@ import type {
   SettingsSection,
   ThemePreference,
 } from '@/renderer/features/settings/types';
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 
 export interface SettingsSectionComponentProps {
   onThemeChange: (preference: ThemePreference) => void;
+  runtimeInfo: AgentRuntimeInfo;
   themePreference: ThemePreference;
 }
 

@@ -4,7 +4,10 @@ import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { AgentPanel } from '@/renderer/features/agents/components/AgentPanel';
 import { EmptyAgentState } from '@/renderer/features/agents/components/EmptyAgentState';
 
-import type { PresentedAgent } from '@/renderer/features/agents/types';
+import type {
+  PresentedAgent,
+  AgentRuntimeInfo,
+} from '@/renderer/features/agents/types';
 
 interface AgentWorkspaceProps {
   agent: PresentedAgent | null;
@@ -19,6 +22,7 @@ interface AgentWorkspaceProps {
   onSubmit: (value: string) => Promise<void>;
   onToggleInspector: () => void;
   onToggleSidebar: () => void;
+  runtimeInfo: AgentRuntimeInfo;
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -35,6 +39,7 @@ export function AgentWorkspace({
   onSubmit,
   onToggleInspector,
   onToggleSidebar,
+  runtimeInfo,
   transcriptRef,
 }: AgentWorkspaceProps) {
   return (
@@ -66,7 +71,10 @@ export function AgentWorkspace({
             transcriptRef={transcriptRef}
           />
         ) : (
-          <EmptyAgentState onCreateAgent={onCreateAgent} />
+          <EmptyAgentState
+            onCreateAgent={onCreateAgent}
+            runtimeInfo={runtimeInfo}
+          />
         )}
       </div>
     </>

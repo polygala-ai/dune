@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 
 import type {
   Agent,
+  AgentRuntimeInfo,
   AgentSummary,
   PresentedAgent,
 } from '@/renderer/features/agents/types';
@@ -17,6 +18,7 @@ export interface AgentState {
   agents: Agent[];
   draft: string;
   isStreaming: boolean;
+  runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
 }
 
@@ -63,5 +65,6 @@ export interface AgentSessionState {
   commandAgents: Array<AgentSummary & { workspace: string }>;
   draft: string;
   isStreaming: boolean;
+  runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
 }

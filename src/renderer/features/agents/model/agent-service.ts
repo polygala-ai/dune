@@ -1,11 +1,13 @@
 import type {
   Agent,
+  AgentRuntimeInfo,
   CreateAgentInput,
 } from '@/renderer/features/agents/types';
 
 export interface AgentServiceSnapshot {
   agents: Agent[];
   isStreaming: boolean;
+  runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
 }
 

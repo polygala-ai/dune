@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "electron-forge start",
     "start": "electron-forge start",
+    "postinstall": "node build/prepare-agentlite-runtime.cjs",
     "package": "electron-forge package",
     "package:mac": "electron-forge package --platform darwin",
     "make": "electron-forge make",
@@ -19,6 +20,9 @@
     "test:watch": "vitest",
     "pretest:e2e": "npm run package",
     "test:e2e": "playwright test"
+  },
+  "overrides": {
+    "better-sqlite3": "12.8.0"
   },
   "keywords": [],
   "author": {
@@ -37,10 +41,12 @@
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@onecli-sh/sdk": "^0.2.0",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -61,6 +67,10 @@
     "vitest": "^4.1.1"
   },
   "dependencies": {
+    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#ac903d3",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/instrument-sans": "^5.2.8",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@radix-ui/react-dialog": "^1.1.15",

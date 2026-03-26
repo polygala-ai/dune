@@ -1,0 +1,51 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host-core';
+import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
+
+describe('DesktopRuntimeController', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      fs.rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it('falls back to the mock runtime when AgentLite startup fails', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
+    tempDirs.push(homeDir);
+
+    const controller = new DesktopRuntimeController({
+      createRealRuntime: () => ({
+        ...createMockAgentRuntime(),
+        start: async () => {
+          throw new Error('BoxLite unavailable');
+        },
+      }),
+      homeDir,
+    });
+
+    await controller.start();
+
+    expect(controller.getSnapshot()).toEqual({
+      agents: [],
+      isStreaming: false,
+      runtimeInfo: {
+        message:
+          'AgentLite is unavailable, so Dune is using the mock runtime. Error: BoxLite unavailable',
+        mode: 'mock-fallback',
+        rootPath: resolveAgentLiteRuntimeRoot(homeDir),
+        status: 'ready',
+      },
+      selectedAgentId: null,
+    });
+
+    await controller.shutdown();
+  });
+});

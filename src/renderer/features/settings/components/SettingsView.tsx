@@ -7,11 +7,13 @@ import type {
   SettingsRoute,
   ThemePreference,
 } from '@/renderer/features/settings/types';
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 
 interface SettingsViewProps {
   isCompactShell: boolean;
   onSelectRoute: (route: SettingsRoute) => void;
   onThemeChange: (preference: ThemePreference) => void;
+  runtimeInfo: AgentRuntimeInfo;
   settingsRoute: SettingsRoute;
   themePreference: ThemePreference;
 }
@@ -20,6 +22,7 @@ export function SettingsView({
   isCompactShell,
   onSelectRoute,
   onThemeChange,
+  runtimeInfo,
   settingsRoute,
   themePreference,
 }: SettingsViewProps) {
@@ -49,6 +52,7 @@ export function SettingsView({
         >
           <SectionComponent
             onThemeChange={onThemeChange}
+            runtimeInfo={runtimeInfo}
             themePreference={themePreference}
           />
         </div>

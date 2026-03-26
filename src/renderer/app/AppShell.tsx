@@ -38,6 +38,7 @@ export default function AppShell() {
     commandAgents,
     draft,
     isStreaming,
+    runtimeInfo,
     selectedAgentId,
   } = useAgentSession();
   const {
@@ -46,6 +47,7 @@ export default function AppShell() {
     route,
   } = useShellState();
   const {
+    runtimeInfo: settingsRuntimeInfo,
     settingsRoute,
     themePreference,
   } = useSettingsState();
@@ -150,6 +152,7 @@ export default function AppShell() {
                 onSubmit={handleSubmit}
                 onToggleInspector={controller.handleToggleContextPanel}
                 onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={runtimeInfo}
                 transcriptRef={transcriptRef}
               />
             ) : (
@@ -159,6 +162,7 @@ export default function AppShell() {
                 onSelectRoute={commands.setSettingsRoute}
                 onThemeChange={commands.setThemePreference}
                 onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={settingsRuntimeInfo}
                 settingsRoute={settingsRoute}
                 themePreference={themePreference}
               />

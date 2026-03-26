@@ -5,6 +5,7 @@ import type {
   SettingsRoute,
   ThemePreference,
 } from '@/renderer/features/settings/types';
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 
 interface SettingsWorkspaceProps {
   isCompactShell: boolean;
@@ -12,6 +13,7 @@ interface SettingsWorkspaceProps {
   onSelectRoute: (route: SettingsRoute) => void;
   onThemeChange: (preference: ThemePreference) => void;
   onToggleSidebar: () => void;
+  runtimeInfo: AgentRuntimeInfo;
   settingsRoute: SettingsRoute;
   themePreference: ThemePreference;
 }
@@ -22,6 +24,7 @@ export function SettingsWorkspace({
   onSelectRoute,
   onThemeChange,
   onToggleSidebar,
+  runtimeInfo,
   settingsRoute,
   themePreference,
 }: SettingsWorkspaceProps) {
@@ -39,6 +42,7 @@ export function SettingsWorkspace({
           isCompactShell={isCompactShell}
           onSelectRoute={onSelectRoute}
           onThemeChange={onThemeChange}
+          runtimeInfo={runtimeInfo}
           settingsRoute={settingsRoute}
           themePreference={themePreference}
         />

@@ -4,8 +4,10 @@ import { Button } from '@/renderer/shared/ui/button';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
-export function ChannelsSettings(props: SettingsSectionComponentProps) {
-  void props;
+export function ChannelsSettings({
+  runtimeInfo,
+}: SettingsSectionComponentProps) {
+  const runtimeLabel = runtimeInfo.mode === 'real' ? 'Real AgentLite' : 'Mock fallback';
 
   return (
     <>
@@ -14,6 +16,21 @@ export function ChannelsSettings(props: SettingsSectionComponentProps) {
         eyebrow="Channels"
         title="External channel catalog"
       />
+
+      <section className="mt-6 rounded-[20px] border border-app-border bg-app-panel/60 p-5">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-semibold text-app-text">Runtime status</h3>
+          <span className="pill-key shrink-0">{runtimeLabel}</span>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-app-muted">
+          {runtimeInfo.message}
+        </p>
+        {runtimeInfo.rootPath ? (
+          <p className="mt-2 font-mono text-[11px] leading-5 text-app-muted">
+            {runtimeInfo.rootPath}
+          </p>
+        ) : null}
+      </section>
 
       <div className="mt-6 space-y-3">
         {externalChannelOptions.map((channel) => (

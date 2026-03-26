@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -6,6 +7,11 @@ export default defineConfig({
       output: {
         entryFileNames: 'preload.js',
       },
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
     },
   },
 });
