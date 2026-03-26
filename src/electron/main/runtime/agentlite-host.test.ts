@@ -13,28 +13,6 @@ function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-agentlite-home-'));
 }
 
-function createPackageFixture(rootDir: string) {
-  const packageRoot = path.join(rootDir, 'agentlite-package');
-
-  fs.mkdirSync(path.join(packageRoot, 'groups', 'global'), { recursive: true });
-  fs.mkdirSync(path.join(packageRoot, 'groups', 'main'), { recursive: true });
-  fs.mkdirSync(path.join(packageRoot, 'container', 'oci-image'), { recursive: true });
-  fs.writeFileSync(
-    path.join(packageRoot, 'groups', 'global', 'CLAUDE.md'),
-    'global template',
-  );
-  fs.writeFileSync(
-    path.join(packageRoot, 'groups', 'main', 'CLAUDE.md'),
-    'main template',
-  );
-  fs.writeFileSync(
-    path.join(packageRoot, 'container', 'oci-image', 'manifest.json'),
-    '{}',
-  );
-
-  return packageRoot;
-}
-
 function createAgentLiteModuleHarness() {
   const registerGroup = vi.fn();
   const registerChannel = vi.fn().mockResolvedValue(undefined);
@@ -88,7 +66,6 @@ describe('AgentLiteHost', () => {
 
   it('uses ~/.dune/agentlite as the runtime root and starts AgentLite with a Claude OAuth token when present', async () => {
     const homeDir = createTempHome();
-    const packageRoot = createPackageFixture(homeDir);
     const harness = createAgentLiteModuleHarness();
 
     tempDirs.push(homeDir);
@@ -99,7 +76,6 @@ describe('AgentLiteHost', () => {
       },
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
-      resolveAgentLitePackageRoot: () => packageRoot,
     });
 
     await host.start();
@@ -128,15 +104,6 @@ describe('AgentLiteHost', () => {
         requiresTrigger: false,
       }),
     );
-    expect(fs.existsSync(path.join(runtimeRoot, 'groups', 'main', 'CLAUDE.md'))).toBe(
-      true,
-    );
-    expect(
-      fs.existsSync(path.join(runtimeRoot, 'groups', 'global', 'CLAUDE.md')),
-    ).toBe(true);
-    expect(
-      fs.existsSync(path.join(runtimeRoot, 'container', 'oci-image', 'manifest.json')),
-    ).toBe(true);
 
     await host.shutdown();
 
@@ -145,7 +112,6 @@ describe('AgentLiteHost', () => {
 
   it('falls back to ANTHROPIC_API_KEY when no Claude OAuth token is present', async () => {
     const homeDir = createTempHome();
-    const packageRoot = createPackageFixture(homeDir);
     const harness = createAgentLiteModuleHarness();
 
     tempDirs.push(homeDir);
@@ -156,7 +122,6 @@ describe('AgentLiteHost', () => {
       },
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
-      resolveAgentLitePackageRoot: () => packageRoot,
     });
 
     await host.start();
@@ -171,7 +136,6 @@ describe('AgentLiteHost', () => {
 
   it('starts without credentials and reports that replies will fail', async () => {
     const homeDir = createTempHome();
-    const packageRoot = createPackageFixture(homeDir);
     const harness = createAgentLiteModuleHarness();
 
     tempDirs.push(homeDir);
@@ -180,7 +144,6 @@ describe('AgentLiteHost', () => {
       credentialEnv: {},
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
-      resolveAgentLitePackageRoot: () => packageRoot,
     });
 
     await host.start();
