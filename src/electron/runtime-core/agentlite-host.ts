@@ -125,7 +125,7 @@ interface PendingAssistantMessage {
   safetyTimer: ReturnType<typeof globalThis.setTimeout> | null;
 }
 
-export interface AgentLiteHostCoreOptions {
+export interface AgentLiteHostOptions {
   credentialEnv?: NodeJS.ProcessEnv;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<AgentLiteModule>;
@@ -315,7 +315,7 @@ export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
   return path.join(homeDir, '.dune', 'agentlite');
 }
 
-export class AgentLiteHostCore implements AgentRuntime {
+export class AgentLiteHost implements AgentRuntime {
   private readonly duneChannel: DuneChannel;
 
   private readonly listeners = new Set<AgentServiceListener>();
@@ -340,7 +340,7 @@ export class AgentLiteHostCore implements AgentRuntime {
 
   readonly service: AgentService;
 
-  constructor(options: AgentLiteHostCoreOptions = {}) {
+  constructor(options: AgentLiteHostOptions = {}) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.stateFilePath = path.join(
       this.runtimeRoot,

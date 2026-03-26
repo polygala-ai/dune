@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host-core';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 
 describe('DesktopRuntimeController', () => {

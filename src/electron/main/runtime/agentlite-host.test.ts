@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AgentLiteHost,
   resolveAgentLiteRuntimeRoot,
-} from '@/electron/main/runtime/agentlite-host';
+} from '@/electron/runtime-core/agentlite-host';
 
 function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-agentlite-home-'));

@@ -1,7 +1,7 @@
 import type {
   DuneChannelCallbacks,
   RegisteredGroup,
-} from './agentlite-host-core';
+} from './agentlite-host';
 
 interface DuneChannelOptions {
   onOutboundMessage: (jid: string, text: string) => Promise<void> | void;
