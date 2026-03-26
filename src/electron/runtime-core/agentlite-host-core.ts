@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import type {
   Agent,
@@ -131,33 +130,6 @@ export interface AgentLiteHostCoreOptions {
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<AgentLiteModule>;
   now?: () => number;
-  resolveAgentLitePackageRoot?: () => string;
-}
-
-function resolveRuntimeModuleDir() {
-  if (typeof __dirname === 'string') {
-    return __dirname;
-  }
-
-  return path.dirname(fileURLToPath(import.meta.url));
-}
-
-function resolveInstalledAgentLitePackageRoot() {
-  const moduleDir = resolveRuntimeModuleDir();
-  const candidateRoots = [
-    path.resolve(process.cwd(), 'node_modules', '@boxlite-ai', 'agentlite'),
-    path.resolve(moduleDir, '../../../node_modules/@boxlite-ai/agentlite'),
-    path.resolve(moduleDir, '../../node_modules/@boxlite-ai/agentlite'),
-    path.resolve(moduleDir, '../node_modules/@boxlite-ai/agentlite'),
-  ];
-
-  for (const candidateRoot of candidateRoots) {
-    if (fs.existsSync(path.join(candidateRoot, 'package.json'))) {
-      return candidateRoot;
-    }
-  }
-
-  throw new Error('Unable to locate the installed AgentLite package root.');
 }
 
 function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
@@ -339,23 +311,6 @@ function ensureDirectory(dirPath: string) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function copyDirectoryIfMissing(source: string, destination: string) {
-  if (!fs.existsSync(source) || fs.existsSync(destination)) {
-    return;
-  }
-
-  fs.cpSync(source, destination, { recursive: true });
-}
-
-function copyFileIfMissing(source: string, destination: string) {
-  if (!fs.existsSync(source) || fs.existsSync(destination)) {
-    return;
-  }
-
-  ensureDirectory(path.dirname(destination));
-  fs.copyFileSync(source, destination);
-}
-
 export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
   return path.join(homeDir, '.dune', 'agentlite');
 }
@@ -372,8 +327,6 @@ export class AgentLiteHostCore implements AgentRuntime {
   private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
 
   private readonly credentialEnv: NodeJS.ProcessEnv;
-
-  private readonly resolveAgentLitePackageRoot: () => string;
 
   private readonly runtimeRoot: string;
 
@@ -399,9 +352,6 @@ export class AgentLiteHostCore implements AgentRuntime {
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
       (async () => import('@boxlite-ai/agentlite') as Promise<AgentLiteModule>);
-    this.resolveAgentLitePackageRoot =
-      options.resolveAgentLitePackageRoot ??
-      (() => resolveInstalledAgentLitePackageRoot());
     this.snapshot = {
       agents: [],
       isStreaming: false,
@@ -437,8 +387,6 @@ export class AgentLiteHostCore implements AgentRuntime {
   }
 
   async start() {
-    this.ensureRuntimeDirectories();
-    this.seedRuntimeAssets(this.resolveAgentLitePackageRoot());
     this.loadPersistedState();
 
     const { AgentLite } = await this.loadAgentLiteModule();
@@ -594,36 +542,6 @@ export class AgentLiteHostCore implements AgentRuntime {
     this.emit();
 
     await this.duneChannel.pushInboundMessage(agentId, trimmedText);
-  }
-
-  private ensureRuntimeDirectories() {
-    ensureDirectory(this.runtimeRoot);
-    ensureDirectory(path.join(this.runtimeRoot, 'data'));
-    ensureDirectory(path.join(this.runtimeRoot, 'groups'));
-    ensureDirectory(path.join(this.runtimeRoot, 'store'));
-  }
-
-  private seedRuntimeAssets(packageRoot: string) {
-    copyDirectoryIfMissing(
-      path.join(packageRoot, 'container'),
-      path.join(this.runtimeRoot, 'container'),
-    );
-    copyDirectoryIfMissing(
-      path.join(packageRoot, 'groups', 'global'),
-      path.join(this.runtimeRoot, 'groups', 'global'),
-    );
-    copyDirectoryIfMissing(
-      path.join(packageRoot, 'groups', 'main'),
-      path.join(this.runtimeRoot, 'groups', 'main'),
-    );
-    copyFileIfMissing(
-      path.join(packageRoot, 'groups', 'global', 'CLAUDE.md'),
-      path.join(this.runtimeRoot, 'groups', 'global', 'CLAUDE.md'),
-    );
-    copyFileIfMissing(
-      path.join(packageRoot, 'groups', 'main', 'CLAUDE.md'),
-      path.join(this.runtimeRoot, 'groups', 'main', 'CLAUDE.md'),
-    );
   }
 
   private loadPersistedState() {
