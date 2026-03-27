@@ -3,7 +3,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const rootDir = path.join(__dirname, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const tscCommand = path.join(
   rootDir,
   'node_modules',
@@ -17,8 +16,6 @@ const agentLitePackageRoot = path.join(
   'agentlite',
 );
 const agentLiteDistEntry = path.join(agentLitePackageRoot, 'dist', 'sdk.js');
-const betterSqliteRoot = path.join(rootDir, 'node_modules', 'better-sqlite3');
-const electronPackageJsonPath = path.join(rootDir, 'node_modules', 'electron', 'package.json');
 
 function run(command, args, cwd = rootDir) {
   const result = spawnSync(command, args, {
@@ -31,7 +28,7 @@ function run(command, args, cwd = rootDir) {
   }
 }
 
-if (!fs.existsSync(agentLitePackageRoot) || !fs.existsSync(electronPackageJsonPath)) {
+if (!fs.existsSync(agentLitePackageRoot)) {
   process.exit(0);
 }
 
@@ -41,21 +38,4 @@ if (!fs.existsSync(agentLiteDistEntry)) {
   }
 
   run(tscCommand, ['-p', path.join(agentLitePackageRoot, 'tsconfig.json')], rootDir);
-}
-
-if (fs.existsSync(betterSqliteRoot)) {
-  const electronVersion = JSON.parse(fs.readFileSync(electronPackageJsonPath, 'utf8')).version;
-
-  run(
-    npmCommand,
-    [
-      'rebuild',
-      'better-sqlite3',
-      '--runtime=electron',
-      `--target=${electronVersion}`,
-      '--dist-url=https://electronjs.org/headers',
-      '--build-from-source',
-    ],
-    rootDir,
-  );
 }

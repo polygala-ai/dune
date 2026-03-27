@@ -64,32 +64,10 @@ export function AgentPanel({
       >
         <div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
           <div className="mb-3 border-b border-app-border pb-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-              Active agent
-            </div>
-            <h2 className="mt-2 truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
+            <h2 className="truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
               {agent.name}
             </h2>
-            <div className="mt-1 flex items-center gap-2 text-[12px] text-app-muted">
-              <span>{agent.workspace}</span>
-              <span className="h-1 w-1 rounded-full bg-app-border-strong" />
-              <span>{agent.channel.label}</span>
-              <span className="h-1 w-1 rounded-full bg-app-border-strong" />
-              <span>{agent.updatedLabel}</span>
-            </div>
           </div>
-
-          {agent.messages.length === 0 ? (
-            <article className="rounded-[24px] border border-dashed border-app-border bg-app-card/60 px-5 py-5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                Agent ready
-              </div>
-              <p className="mt-3 text-sm leading-6 text-app-muted">
-                Start with an implementation slice, a product question, or a shell
-                refinement. This transcript stays attached to the same agent workspace.
-              </p>
-            </article>
-          ) : null}
 
           {agent.messages.map((message) => {
             const isUser = message.role === 'user';
