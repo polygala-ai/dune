@@ -22,18 +22,13 @@ function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   };
 }
 
+type ConnectedBridge = DesktopBridge & Required<
+  Pick<DesktopBridge, 'createAgent' | 'getRuntimeSnapshot' | 'selectAgent' | 'sendAgentMessage' | 'subscribe'>
+>;
+
 function hasRuntimeBridge(
   bridge: DesktopBridge | undefined,
-): bridge is DesktopBridge & Required<
-  Pick<
-    DesktopBridge,
-    | 'createAgent'
-    | 'getRuntimeSnapshot'
-    | 'selectAgent'
-    | 'sendAgentMessage'
-    | 'subscribe'
-  >
-> {
+): bridge is ConnectedBridge {
   return Boolean(
     bridge?.createAgent &&
       bridge.getRuntimeSnapshot &&
@@ -65,16 +60,7 @@ class BridgeAgentRuntime implements AgentRuntime {
     subscribe: (listener: AgentServiceListener) => this.subscribe(listener),
   };
 
-  constructor(private readonly bridge: DesktopBridge & Required<
-    Pick<
-      DesktopBridge,
-      | 'createAgent'
-      | 'getRuntimeSnapshot'
-      | 'selectAgent'
-      | 'sendAgentMessage'
-      | 'subscribe'
-    >
-  >) {
+  constructor(private readonly bridge: ConnectedBridge) {
     this.unsubscribeBridge = bridge.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.emit();

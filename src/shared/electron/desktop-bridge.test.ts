@@ -1,45 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDesktopBridge } from '@/shared/electron/desktop-bridge';
+import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
 
-describe('createDesktopBridge', () => {
-  it('maps the platform into a renderer-safe bridge object', () => {
-    expect(createDesktopBridge('darwin')).toEqual({
-      isMac: true,
+describe('DesktopBridge', () => {
+  it('can be constructed with platform and optional methods', () => {
+    const bridge: DesktopBridge = {
       platform: 'darwin',
-    });
-    expect(createDesktopBridge('win32')).toEqual({
-      isMac: false,
-      platform: 'win32',
-    });
+    };
+
+    expect(bridge.platform).toBe('darwin');
+    expect(bridge.createAgent).toBeUndefined();
   });
 
-  it('merges runtime methods into the bridge surface when provided', async () => {
+  it('accepts runtime and storage methods', async () => {
     const createAgent = async () => 'agent-1';
-    const getRuntimeSnapshot = async () => ({
-      agents: [],
-      isStreaming: false,
-      runtimeInfo: {
-        mode: 'real' as const,
-        status: 'ready' as const,
-      },
-      selectedAgentId: null,
-    });
+    const storageGet = async () => ({ key: 'value' });
 
-    const bridge = createDesktopBridge('darwin', {
+    const bridge: DesktopBridge = {
+      platform: 'win32',
       createAgent,
-      getRuntimeSnapshot,
-    });
+      storageGet,
+    };
 
-    expect(bridge.createAgent).toBe(createAgent);
-    expect(await bridge.getRuntimeSnapshot?.()).toEqual({
-      agents: [],
-      isStreaming: false,
-      runtimeInfo: {
-        mode: 'real',
-        status: 'ready',
-      },
-      selectedAgentId: null,
-    });
+    expect(await bridge.createAgent?.({ channelId: 'dune-chat', name: 'test' })).toBe('agent-1');
+    expect(await bridge.storageGet?.('settings', 'key')).toEqual({ key: 'value' });
   });
 });

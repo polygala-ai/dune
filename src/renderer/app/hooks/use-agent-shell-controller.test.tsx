@@ -36,7 +36,7 @@ describe('useAgentShellController', () => {
     openAgent: vi.fn<(agentId: string) => void>(),
     openSettings: vi.fn<() => void>(),
     setCommandOpen: vi.fn<(isOpen: boolean) => void>(),
-    setSettingsRoute: vi.fn<(route: 'appearance' | 'channels' | 'shortcuts') => void>(),
+    setSettingsRoute: vi.fn<(route: 'appearance' | 'channels' | 'models' | 'shortcuts') => void>(),
     toggleInspector: vi.fn<(force?: boolean) => void>(),
   };
   const focusComposer = vi.fn();

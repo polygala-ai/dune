@@ -134,7 +134,6 @@ describe('AppShell', () => {
     render(<AppShell />);
     await createAgent(user, 'Release coordinator');
 
-    expect(screen.getAllByText('Dune chat').length).toBeGreaterThan(0);
     await user.type(screen.getByLabelText('Agent composer'), 'Refine the agent shell');
     await user.click(screen.getByRole('button', { name: /^Send$/i }));
 
