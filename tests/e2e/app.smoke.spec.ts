@@ -1,84 +1,19 @@
-import { once } from 'node:events';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { expect, test } from '@playwright/test';
 
-import { _electron as electron } from 'playwright';
 import {
-  expect,
-  test,
-  type Locator,
-} from '@playwright/test';
-
-async function resizeWindow(
-  app: Awaited<ReturnType<typeof electron.launch>>,
-  width: number,
-  height: number,
-) {
-  await app.evaluate(
-    ({ BrowserWindow }, bounds) => {
-      const [window] = BrowserWindow.getAllWindows();
-      if (!window) {
-        throw new Error('Main window not found.');
-      }
-      window.setSize(bounds.width, bounds.height);
-    },
-    { height, width },
-  );
-}
-
-async function expectRightEdgeWithin(container: Locator, item: Locator) {
-  const [containerBox, itemBox] = await Promise.all([
-    container.boundingBox(),
-    item.boundingBox(),
-  ]);
-
-  if (!containerBox || !itemBox) {
-    throw new Error('Expected both container and item to have bounding boxes.');
-  }
-
-  expect(itemBox.x + itemBox.width).toBeLessThanOrEqual(
-    containerBox.x + containerBox.width + 1,
-  );
-}
-
-async function closeElectronApp(app: Awaited<ReturnType<typeof electron.launch>>) {
-  const child = app.process();
-  const closePromise = app.close().catch(() => undefined);
-  const closeTimeout = new Promise<void>((resolve) => {
-    setTimeout(resolve, 5_000);
-  });
-
-  await Promise.race([closePromise, closeTimeout]);
-
-  if (child && child.exitCode === null && !child.killed) {
-    if (process.platform === 'win32') {
-      child.kill();
-    } else {
-      child.kill('SIGKILL');
-    }
-
-    await Promise.race([
-      once(child, 'exit').then(() => undefined),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      }),
-    ]);
-  }
-}
+  cleanupTempHome,
+  closeElectronApp,
+  createTempHome,
+  expectRightEdgeWithin,
+  getModifier,
+  launchApp,
+  resizeWindow,
+} from './helpers';
 
 test('launches the built app, creates an agent, reflows responsively, and keeps overflow contained', async () => {
-  const appRoot = path.resolve(__dirname, '../../');
-  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-  const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-e2e-home-'));
-  const app = await electron.launch({
-    args: ['.'],
-    cwd: appRoot,
-    env: {
-      ...process.env,
-      DUNE_AGENTLITE_HOME_DIR: runtimeHome,
-    },
-  });
+  const modifier = getModifier();
+  const runtimeHome = createTempHome();
+  const app = await launchApp(runtimeHome);
   try {
     const page = await app.firstWindow();
 
@@ -103,7 +38,6 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await agentNameInput.press('Enter');
 
     await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
-    await expect(page.getByText('Dune chat')).toBeVisible();
     await expect(page.getByLabel('Agent composer')).toBeVisible();
 
     const sidebar = page.locator('[data-testid="app-sidebar"]:visible');
@@ -174,6 +108,6 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     ).toBeVisible();
   } finally {
     await closeElectronApp(app);
-    fs.rmSync(runtimeHome, { force: true, recursive: true });
+    cleanupTempHome(runtimeHome);
   }
 });

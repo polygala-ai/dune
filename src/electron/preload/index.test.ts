@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
-import { runtimeIpcChannels } from '@/shared/electron/runtime-ipc';
+import { ipcChannels } from '@/shared/electron/ipc-channels';
 
 const exposeInMainWorld = vi.fn();
 const invoke = vi.fn();
@@ -35,7 +35,6 @@ describe('preload bridge', () => {
     expect(exposeInMainWorld).toHaveBeenCalledWith(
       'duneDesktop',
       expect.objectContaining({
-        isMac: process.platform === 'darwin',
         platform: process.platform,
       }),
     );
@@ -74,21 +73,69 @@ describe('preload bridge', () => {
 
     const unsubscribe = desktopBridge?.subscribe?.(() => {});
 
-    expect(invoke).toHaveBeenCalledWith(runtimeIpcChannels.getRuntimeSnapshot);
-    expect(invoke).toHaveBeenCalledWith(runtimeIpcChannels.createAgent, {
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.createAgent, {
       channelId: 'dune-chat',
       name: 'Navigator',
     });
     expect(on).toHaveBeenCalledWith(
-      runtimeIpcChannels.runtimeSnapshotUpdated,
+      ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
     );
 
     unsubscribe?.();
 
     expect(removeListener).toHaveBeenCalledWith(
-      runtimeIpcChannels.runtimeSnapshotUpdated,
+      ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
     );
+  });
+
+  it('proxies storage calls through ipcRenderer', async () => {
+    invoke.mockResolvedValue(null);
+
+    await import('@/electron/preload/index');
+
+    const bridge = exposeInMainWorld.mock.calls[0]?.[1] as
+      | DesktopBridge
+      | undefined;
+
+    await bridge?.storageGet?.('settings', 'theme');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageGet, 'settings', 'theme');
+
+    await bridge?.storageSet?.('settings', 'theme', 'dark');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageSet, 'settings', 'theme', 'dark');
+
+    await bridge?.storageDelete?.('settings', 'theme');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageDelete, 'settings', 'theme');
+
+    await bridge?.storageKeys?.('settings');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageKeys, 'settings');
+  });
+
+  it('exposes all expected bridge methods', async () => {
+    await import('@/electron/preload/index');
+
+    const bridge = exposeInMainWorld.mock.calls[0]?.[1] as
+      | DesktopBridge
+      | undefined;
+
+    const expectedMethods = [
+      'createAgent',
+      'getRuntimeSnapshot',
+      'resetRuntime',
+      'selectAgent',
+      'sendAgentMessage',
+      'storageDelete',
+      'storageGet',
+      'storageKeys',
+      'storageSet',
+      'subscribe',
+    ];
+
+    for (const method of expectedMethods) {
+      expect(bridge).toHaveProperty(method);
+      expect(typeof (bridge as unknown as Record<string, unknown>)?.[method]).toBe('function');
+    }
   });
 });

@@ -19,7 +19,7 @@ function createAgentLiteModuleHarness() {
   const start = vi.fn().mockResolvedValue(undefined);
   const stop = vi.fn().mockResolvedValue(undefined);
   let capturedOptions: {
-    llm?: {
+    model?: {
       credentials?: () => Promise<Record<string, string>>;
     };
     name?: string;

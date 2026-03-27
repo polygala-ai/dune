@@ -57,7 +57,6 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 beforeEach(() => {
   window.duneDesktop = {
-    isMac: true,
     platform: 'darwin',
   };
   document.documentElement.dataset.theme = 'light';

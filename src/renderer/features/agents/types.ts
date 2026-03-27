@@ -24,6 +24,7 @@ export interface AgentChannelBinding {
 
 export interface CreateAgentInput {
   channelId: AgentChannelId;
+  model?: { providerId: string; modelId: string };
   name: string;
 }
 

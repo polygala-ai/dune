@@ -1,5 +1,3 @@
-import { createDesktopBridge } from '@/shared/electron/desktop-bridge';
-
 function inferBrowserPlatform(): NodeJS.Platform {
   const normalizedPlatform = navigator.platform.toLowerCase();
 
@@ -14,15 +12,12 @@ function inferBrowserPlatform(): NodeJS.Platform {
   return 'linux';
 }
 
-function getDesktopBridge() {
-  return (
-    window.duneDesktop ??
-    createDesktopBridge(inferBrowserPlatform())
-  );
+function getPlatform(): NodeJS.Platform {
+  return window.duneDesktop?.platform ?? inferBrowserPlatform();
 }
 
 export function isMacPlatform() {
-  return getDesktopBridge().isMac;
+  return getPlatform() === 'darwin';
 }
 
 export function primaryModifierLabel() {
@@ -30,5 +25,5 @@ export function primaryModifierLabel() {
 }
 
 export function platformName() {
-  return getDesktopBridge().platform;
+  return getPlatform();
 }

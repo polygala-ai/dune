@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
 import { ChannelsSettings } from '@/renderer/features/settings/components/ChannelsSettings';
+import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
 
 import type {
@@ -33,6 +34,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Channels',
     description: 'External channel catalog',
     Component: ChannelsSettings,
+  },
+  {
+    id: 'models',
+    title: 'Models',
+    description: 'LLM provider catalog',
+    Component: ModelsSettings,
   },
   {
     id: 'shortcuts',

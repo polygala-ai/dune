@@ -3,35 +3,35 @@ import {
   ipcRenderer,
 } from 'electron';
 
-import { createDesktopBridge } from '../../shared/electron/desktop-bridge';
-import { runtimeIpcChannels } from '../../shared/electron/runtime-ipc';
+import type { DesktopBridge } from '../../shared/electron/desktop-bridge';
+import { ipcChannels } from '../../shared/electron/ipc-channels';
 
-const desktopBridge = Object.freeze(
-  createDesktopBridge(process.platform, {
-    createAgent: (input) => ipcRenderer.invoke(runtimeIpcChannels.createAgent, input),
-    getRuntimeSnapshot: () => ipcRenderer.invoke(runtimeIpcChannels.getRuntimeSnapshot),
-    resetRuntime: () => ipcRenderer.invoke(runtimeIpcChannels.resetRuntime),
-    selectAgent: (agentId) => ipcRenderer.invoke(runtimeIpcChannels.selectAgent, agentId),
-    sendAgentMessage: (agentId, text) =>
-      ipcRenderer.invoke(runtimeIpcChannels.sendAgentMessage, agentId, text),
-    subscribe: (listener) => {
-      const handleRuntimeSnapshot = (
-        _event: Electron.IpcRendererEvent,
-        snapshot: Parameters<typeof listener>[0],
-      ) => {
-        listener(snapshot);
-      };
+const bridge: DesktopBridge = {
+  platform: process.platform,
+  createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
+  getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
+  resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
+  selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
+  sendAgentMessage: (agentId, text) =>
+    ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
+  storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
+  storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
+  storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
+  storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
+  subscribe: (listener) => {
+    const handleSnapshot = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: Parameters<typeof listener>[0],
+    ) => {
+      listener(snapshot);
+    };
 
-      ipcRenderer.on(runtimeIpcChannels.runtimeSnapshotUpdated, handleRuntimeSnapshot);
+    ipcRenderer.on(ipcChannels.runtimeSnapshotUpdated, handleSnapshot);
 
-      return () => {
-        ipcRenderer.removeListener(
-          runtimeIpcChannels.runtimeSnapshotUpdated,
-          handleRuntimeSnapshot,
-        );
-      };
-    },
-  }),
-);
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.runtimeSnapshotUpdated, handleSnapshot);
+    };
+  },
+};
 
-contextBridge.exposeInMainWorld('duneDesktop', desktopBridge);
+contextBridge.exposeInMainWorld('duneDesktop', Object.freeze(bridge));
