@@ -2,12 +2,15 @@ import { expect, test } from '@playwright/test';
 
 import {
   addProvider,
+  cancelRestartDialog,
   cleanupTempHome,
   closeElectronApp,
   createTempHome,
   launchApp,
   navigateToModels,
   providerCard,
+  readUserDataJson,
+  toggleDefaultProvider,
 } from './helpers';
 
 test.describe('Storage persistence', () => {
@@ -26,7 +29,14 @@ test.describe('Storage persistence', () => {
     try {
       const page = await app1.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'Persistent', 'https://persist.com/v1', 'sk-persist123');
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://persist.com/v1',
+        name: 'Persistent',
+        secret: 'sk-persist123',
+      });
+      await toggleDefaultProvider(page, 'Persistent');
+      await cancelRestartDialog(page);
     } finally {
       await closeElectronApp(app1);
     }
@@ -39,9 +49,39 @@ test.describe('Storage persistence', () => {
       const card = providerCard(page, 'Persistent');
       await expect(card).toBeVisible();
       await expect(card.getByText('https://persist.com/v1')).toBeVisible();
+      await expect(
+        card.getByRole('switch', { name: 'Default provider Persistent' }),
+      ).toHaveAttribute('aria-checked', 'true');
     } finally {
       await closeElectronApp(app2);
     }
+  });
+
+  test('stores secrets outside settings.json', async () => {
+    const app = await launchApp(runtimeHome);
+    try {
+      const page = await app.firstWindow();
+      await navigateToModels(page);
+      await addProvider(page, {
+        authType: 'oauth-token',
+        name: 'Secretive',
+        secret: 'oauth-secret-9999',
+      });
+      await toggleDefaultProvider(page, 'Secretive');
+      await cancelRestartDialog(page);
+    } finally {
+      await closeElectronApp(app);
+    }
+
+    const settings = readUserDataJson(runtimeHome, 'settings.json');
+    const secrets = readUserDataJson(runtimeHome, 'secrets.json');
+    const settingsText = JSON.stringify(settings);
+    const secretValues = Object.values(secrets).join(' ');
+
+    expect(settingsText).not.toContain('oauth-secret-9999');
+    expect(settingsText).not.toContain('apiKey');
+    expect(settingsText).not.toContain('enabled');
+    expect(secretValues).toBeTruthy();
   });
 
   test('deleted providers stay deleted after restart', async () => {
@@ -49,7 +89,12 @@ test.describe('Storage persistence', () => {
     try {
       const page = await app1.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'Ephemeral', 'https://gone.com', 'sk-gone1234');
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://gone.com',
+        name: 'Ephemeral',
+        secret: 'sk-gone1234',
+      });
 
       await page.getByLabel('Remove Ephemeral').click();
       await expect(providerCard(page, 'Ephemeral')).not.toBeVisible();

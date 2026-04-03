@@ -16,9 +16,19 @@ export function cleanupTempHome(dir: string) {
   fs.rmSync(dir, { force: true, recursive: true });
 }
 
+export function getUserDataDir(runtimeHome: string) {
+  return path.join(runtimeHome, 'userdata');
+}
+
+export function readUserDataJson(runtimeHome: string, fileName: string) {
+  return JSON.parse(
+    fs.readFileSync(path.join(getUserDataDir(runtimeHome), fileName), 'utf-8'),
+  ) as Record<string, unknown>;
+}
+
 export async function launchApp(runtimeHome: string): Promise<ElectronApp> {
   const appRoot = path.resolve(__dirname, '../../');
-  const userDataDir = path.join(runtimeHome, 'userdata');
+  const userDataDir = getUserDataDir(runtimeHome);
   fs.mkdirSync(userDataDir, { recursive: true });
   return electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
@@ -96,18 +106,53 @@ export async function navigateToModels(page: Awaited<ReturnType<ElectronApp['fir
   await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
 }
 
-export async function addProvider(page: Awaited<ReturnType<ElectronApp['firstWindow']>>, name: string, baseUrl: string, apiKey: string) {
+export async function addProvider(
+  page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
+  input: {
+    authType?: 'api-key' | 'oauth-token';
+    baseUrl?: string;
+    name: string;
+    secret: string;
+  },
+) {
   const addBtn = page.getByRole('button', { name: /Add provider/i });
   await expect(addBtn).toBeVisible();
   await addBtn.click();
 
   await expect(page.getByPlaceholder('Provider name')).toBeVisible();
-  await page.getByPlaceholder('Provider name').fill(name);
-  await page.getByPlaceholder('Base URL').fill(baseUrl);
-  await page.getByPlaceholder('API key').fill(apiKey);
+  await page.getByPlaceholder('Provider name').fill(input.name);
+
+  if (input.authType === 'oauth-token') {
+    await page.getByLabel('Auth type').selectOption('oauth-token');
+    await page.getByPlaceholder('Claude Code OAuth token').fill(input.secret);
+  } else {
+    await page.getByLabel('Auth type').selectOption('api-key');
+    await page.getByPlaceholder('Base URL').fill(input.baseUrl ?? '');
+    await page.getByPlaceholder('API key').fill(input.secret);
+  }
 
   await page.getByRole('button', { name: /^Save$/i }).click();
-  await expect(page.locator('[data-testid^="provider-card"]', { hasText: name })).toBeVisible();
+  await expect(page.locator('[data-testid^="provider-card"]', { hasText: input.name })).toBeVisible();
+}
+
+export async function toggleDefaultProvider(
+  page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
+  name: string,
+) {
+  await providerCard(page, name).getByRole('switch', { name: `Default provider ${name}` }).click();
+}
+
+export function restartDialog(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
+  return page.getByRole('dialog', { name: 'Restart to enable the new default model' });
+}
+
+export async function cancelRestartDialog(
+  page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
+) {
+  const dialog = restartDialog(page);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
 }
 
 export async function addWorkflowItem(

@@ -8,6 +8,7 @@ export interface DesktopBridge {
   deleteAgent?: (agentId: string) => Promise<void>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   resetRuntime?: () => Promise<void>;
+  restartApp?: () => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
   storageDelete?: (store: string, key: string) => Promise<void>;
