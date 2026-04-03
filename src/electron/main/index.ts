@@ -49,6 +49,7 @@ void app.whenReady().then(() => {
   const stores: Record<string, AppStorage> = {
     secrets: new EncryptedFileStorage(userDataDir, 'secrets'),
     settings: new JsonFileStorage(userDataDir, 'settings'),
+    workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
 
   function resolveStore(name: string): AppStorage {
@@ -66,6 +67,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(ipcChannels.getRuntimeSnapshot, () => runtimeController.getSnapshot());
   ipcMain.handle(ipcChannels.createAgent, (_event, input) =>
     runtimeController.createAgent(input),
+  );
+  ipcMain.handle(ipcChannels.deleteAgent, (_event, agentId) =>
+    runtimeController.deleteAgent(agentId),
   );
   ipcMain.handle(ipcChannels.selectAgent, (_event, agentId) => {
     runtimeController.selectAgent(agentId);

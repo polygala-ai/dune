@@ -15,6 +15,7 @@ export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
 
 export interface AgentService {
   createAgent: (input: CreateAgentInput) => Promise<string>;
+  deleteAgent: (agentId: string) => Promise<void>;
   getSnapshot: () => AgentServiceSnapshot;
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;

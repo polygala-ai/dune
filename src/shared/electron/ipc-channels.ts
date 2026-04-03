@@ -1,5 +1,6 @@
 export const ipcChannels = {
   createAgent: 'dune:runtime:create-agent',
+  deleteAgent: 'dune:runtime:delete-agent',
   getRuntimeSnapshot: 'dune:runtime:get-snapshot',
   resetRuntime: 'dune:runtime:reset',
   runtimeSnapshotUpdated: 'dune:runtime:snapshot-updated',

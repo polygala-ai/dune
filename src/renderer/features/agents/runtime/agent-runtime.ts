@@ -23,14 +23,18 @@ function createInitialBridgeSnapshot(): AgentServiceSnapshot {
 }
 
 type ConnectedBridge = DesktopBridge & Required<
-  Pick<DesktopBridge, 'createAgent' | 'getRuntimeSnapshot' | 'selectAgent' | 'sendAgentMessage' | 'subscribe'>
+  Pick<
+    DesktopBridge,
+    'createAgent' | 'deleteAgent' | 'getRuntimeSnapshot' | 'selectAgent' | 'sendAgentMessage' | 'subscribe'
+  >
 >;
 
 function hasRuntimeBridge(
   bridge: DesktopBridge | undefined,
 ): bridge is ConnectedBridge {
-  return Boolean(
-    bridge?.createAgent &&
+    return Boolean(
+      bridge?.createAgent &&
+      bridge.deleteAgent &&
       bridge.getRuntimeSnapshot &&
       bridge.selectAgent &&
       bridge.sendAgentMessage &&
@@ -48,6 +52,9 @@ class BridgeAgentRuntime implements AgentRuntime {
   readonly service = {
     createAgent: async (input: CreateAgentInput) => {
       return this.bridge.createAgent(input);
+    },
+    deleteAgent: async (agentId: string) => {
+      await this.bridge.deleteAgent(agentId);
     },
     getSnapshot: () => this.getSnapshot(),
     listAgents: () => this.getSnapshot().agents,

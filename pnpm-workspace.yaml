@@ -1,3 +1,6 @@
+packages:
+  - "."
+
 onlyBuiltDependencies:
   - "@boxlite-ai/agentlite"
   - "better-sqlite3"

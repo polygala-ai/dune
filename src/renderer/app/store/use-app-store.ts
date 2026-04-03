@@ -9,6 +9,10 @@ import {
   createSettingsSlice,
 } from '@/renderer/app/store/settings-slice';
 import {
+  createInitialWorkflowState,
+  createWorkflowSlice,
+} from '@/renderer/app/store/workflow-slice';
+import {
   createInitialShellState,
   createShellSlice,
 } from '@/renderer/app/store/shell-slice';
@@ -26,6 +30,7 @@ function createInitialState(): AppStoreState {
     ...agentState,
     ...createInitialShellState(),
     ...createInitialSettingsState(),
+    ...createInitialWorkflowState(),
   };
 }
 
@@ -48,6 +53,16 @@ export const useAppStore = create<AppStore>((set, get, store) => {
     ...createSettingsSlice({
       settingsRoute: initialState.settingsRoute,
       themePreference: initialState.themePreference,
+    })(set, get, store),
+    ...createWorkflowSlice({
+      isWorkflowHydrated: initialState.isWorkflowHydrated,
+      items: initialState.items,
+      projects: initialState.projects,
+      selectedItemId: initialState.selectedItemId,
+      selectedProjectFilter: initialState.selectedProjectFilter,
+      selectedProjectId: initialState.selectedProjectId,
+      selectedProjectScreen: initialState.selectedProjectScreen,
+      selectedProjectView: initialState.selectedProjectView,
     })(set, get, store),
   };
 });

@@ -69,6 +69,23 @@ export async function navigateToSettings(page: Awaited<ReturnType<ElectronApp['f
   await expect(page.getByTestId('settings-view')).toBeVisible();
 }
 
+export async function navigateToWorkflow(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
+  const modifier = getModifier();
+
+  await expect(page.getByTestId('app-shell-layout')).toBeVisible();
+  if (await page.getByTestId('workflow-board').count()) {
+    await expect(page.getByTestId('workflow-board')).toBeVisible();
+    return;
+  }
+
+  await page.keyboard.press(`${modifier}+K`);
+  await expect(
+    page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
+  ).toBeVisible();
+  await page.getByText('Project board', { exact: true }).click();
+  await expect(page.getByTestId('workflow-board')).toBeVisible();
+}
+
 export async function clickSettingsNav(page: Awaited<ReturnType<ElectronApp['firstWindow']>>, sectionTitle: string) {
   await page.getByTestId('settings-nav').getByText(sectionTitle, { exact: true }).click();
 }
@@ -91,6 +108,24 @@ export async function addProvider(page: Awaited<ReturnType<ElectronApp['firstWin
 
   await page.getByRole('button', { name: /^Save$/i }).click();
   await expect(page.locator('[data-testid^="provider-card"]', { hasText: name })).toBeVisible();
+}
+
+export async function addWorkflowItem(
+  page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
+  title: string,
+  brief: string,
+) {
+  await page.keyboard.press(`${getModifier()}+N`);
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Work item title')).toBeVisible();
+  await dialog.getByLabel('Work item title').fill(title);
+  await dialog.getByLabel('Brief').fill(brief);
+  await dialog
+    .getByRole('button', { name: /^Create work item$/i })
+    .evaluate((element) => {
+      (element as HTMLButtonElement).click();
+    });
+  await expect(page.locator(`input[value="${title}"]`).first()).toBeVisible();
 }
 
 export function providerCard(page: Awaited<ReturnType<ElectronApp['firstWindow']>>, name: string) {

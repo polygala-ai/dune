@@ -26,6 +26,7 @@ export interface CreateAgentInput {
   channelId: AgentChannelId;
   model?: { providerId: string; modelId: string };
   name: string;
+  projectId?: string | null;
 }
 
 export interface AgentMessage {
@@ -58,6 +59,7 @@ export interface AgentSummary {
 export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   channel: AgentChannelBinding;
   note: string;
+  projectId: string | null;
   status: AgentStatus;
   updatedAt: number;
   workspace: string;

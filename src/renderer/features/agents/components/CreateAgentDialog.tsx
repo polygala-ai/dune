@@ -17,6 +17,7 @@ import {
   getChannelOption,
 } from '@/renderer/features/agents/model/channels';
 import type { CreateAgentInput } from '@/renderer/features/agents/types';
+import type { WorkflowProject } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import {
@@ -34,10 +35,12 @@ import {
 import { Separator } from '@/renderer/shared/ui/separator';
 
 interface CreateAgentDialogProps {
+  defaultProjectId: string | null;
   onCreateAgent: (input: CreateAgentInput) => Promise<void>;
   onOpenChange: (open: boolean) => void;
   onOpenChannelsSettings: () => void;
   open: boolean;
+  projects: WorkflowProject[];
 }
 
 function getChannelBadgeLabel(channelId: CreateAgentInput['channelId']) {
@@ -45,14 +48,17 @@ function getChannelBadgeLabel(channelId: CreateAgentInput['channelId']) {
 }
 
 export function CreateAgentDialog({
+  defaultProjectId,
   onCreateAgent,
   onOpenChange,
   onOpenChannelsSettings,
   open,
+  projects,
 }: CreateAgentDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const channelListRef = useRef<HTMLDivElement | null>(null);
   const [isChannelPickerOpen, setChannelPickerOpen] = useState(false);
+  const [projectId, setProjectId] = useState(defaultProjectId ?? projects[0]?.id ?? '');
   const [value, setValue] = useState('');
   const [selectedChannelId, setSelectedChannelId] = useState<CreateAgentInput['channelId']>(
     builtInChannelOption.id,
@@ -62,10 +68,11 @@ export function CreateAgentDialog({
   useEffect(() => {
     if (!open) {
       setValue('');
+      setProjectId(defaultProjectId ?? projects[0]?.id ?? '');
       setSelectedChannelId(builtInChannelOption.id);
       setChannelPickerOpen(false);
     }
-  }, [open]);
+  }, [defaultProjectId, open, projects]);
 
   const focusChannelAction = (direction: 'first' | 'last' | -1 | 1) => {
     const actions = Array.from(
@@ -129,6 +136,7 @@ export function CreateAgentDialog({
     await onCreateAgent({
       channelId: selectedChannelId,
       name: trimmedValue,
+      projectId: projectId || null,
     });
     setValue('');
   };
@@ -144,9 +152,8 @@ export function CreateAgentDialog({
       >
         <DialogTitle>Name the agent</DialogTitle>
         <DialogDescription className="mt-2 leading-6">
-          Start with one durable agent workspace and choose how it should show up in
-          Dune. External channels will live in Settings once the real AgentLite wiring
-          lands.
+          Create a project-owned agent workspace and choose how it should show up in
+          Dune. External channels will live in Settings once the real AgentLite wiring lands.
         </DialogDescription>
 
         <form className="mt-6 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -165,6 +172,27 @@ export function CreateAgentDialog({
                 ref={inputRef}
                 value={value}
               />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                htmlFor="create-agent-project"
+              >
+                Project
+              </label>
+              <select
+                className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                id="create-agent-project"
+                onChange={(event) => setProjectId(event.target.value)}
+                value={projectId}
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-3">
@@ -296,7 +324,7 @@ export function CreateAgentDialog({
               <Button onClick={() => onOpenChange(false)} type="button" variant="quiet">
                 Cancel
               </Button>
-              <Button disabled={!value.trim()} type="submit">
+              <Button disabled={!value.trim() || !projectId} type="submit">
                 Create agent
               </Button>
             </div>
