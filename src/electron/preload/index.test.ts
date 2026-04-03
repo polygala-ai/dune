@@ -70,6 +70,7 @@ describe('preload bridge', () => {
       channelId: 'dune-chat',
       name: 'Navigator',
     });
+    await desktopBridge?.restartApp?.();
 
     const unsubscribe = desktopBridge?.subscribe?.(() => {});
 
@@ -78,6 +79,7 @@ describe('preload bridge', () => {
       channelId: 'dune-chat',
       name: 'Navigator',
     });
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.restartApp);
     expect(on).toHaveBeenCalledWith(
       ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
@@ -124,6 +126,7 @@ describe('preload bridge', () => {
       'createAgent',
       'getRuntimeSnapshot',
       'resetRuntime',
+      'restartApp',
       'selectAgent',
       'sendAgentMessage',
       'storageDelete',

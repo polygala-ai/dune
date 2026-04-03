@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   addProvider,
+  cancelRestartDialog,
   cleanupTempHome,
   clickSettingsNav,
   closeElectronApp,
@@ -10,6 +11,8 @@ import {
   navigateToModels,
   navigateToSettings,
   providerCard,
+  restartDialog,
+  toggleDefaultProvider,
 } from './helpers';
 
 test.describe('Settings', () => {
@@ -50,29 +53,87 @@ test.describe('Settings', () => {
     try {
       const page = await app.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'OpenAI', 'https://api.openai.com/v1', 'sk-test-12345678');
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://api.openai.com/v1',
+        name: 'OpenAI',
+        secret: 'sk-test-12345678',
+      });
 
       const card = providerCard(page, 'OpenAI');
       await expect(card.getByText('https://api.openai.com/v1')).toBeVisible();
       await expect(card.getByText('sk-t...5678')).toBeVisible();
+      await expect(card.getByText('API key')).toBeVisible();
     } finally {
       await closeElectronApp(app);
     }
   });
 
-  test('toggles a model provider off and on', async () => {
+  test('adds an oauth-token provider', async () => {
     const app = await launchApp(runtimeHome);
     try {
       const page = await app.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'ToggleTest', 'https://toggle.com', 'sk-toggle99');
+      await addProvider(page, {
+        authType: 'oauth-token',
+        name: 'Claude Code',
+        secret: 'oauth-token-1234',
+      });
 
-      const card = providerCard(page, 'ToggleTest');
-      await expect(card.getByText('On')).toBeVisible();
-      await card.getByText('On').click();
-      await expect(card.getByText('Off')).toBeVisible();
-      await card.getByText('Off').click();
-      await expect(card.getByText('On')).toBeVisible();
+      const card = providerCard(page, 'Claude Code');
+      await expect(card.getByText('OAuth token')).toBeVisible();
+      await expect(card.getByText('oaut...1234')).toBeVisible();
+      await expect(card.getByText('https://')).toHaveCount(0);
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
+
+  test('toggles the default provider and keeps it exclusive', async () => {
+    const app = await launchApp(runtimeHome);
+    try {
+      const page = await app.firstWindow();
+      await navigateToModels(page);
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://first.com',
+        name: 'First',
+        secret: 'sk-first-1234',
+      });
+      await addProvider(page, {
+        authType: 'oauth-token',
+        name: 'Second',
+        secret: 'oauth-second-1234',
+      });
+
+      await toggleDefaultProvider(page, 'First');
+      await expect(restartDialog(page)).toBeVisible();
+      await expect(restartDialog(page).getByRole('button', { name: 'Restart' })).toBeVisible();
+      await expect(restartDialog(page).getByRole('button', { name: 'Cancel' })).toBeVisible();
+      await cancelRestartDialog(page);
+      await expect(
+        providerCard(page, 'First').getByRole('switch', { name: 'Default provider First' }),
+      ).toHaveAttribute('aria-checked', 'true');
+      await expect(
+        providerCard(page, 'Second').getByRole('switch', { name: 'Default provider Second' }),
+      ).toHaveAttribute('aria-checked', 'false');
+
+      await toggleDefaultProvider(page, 'Second');
+      await expect(restartDialog(page)).toBeVisible();
+      await cancelRestartDialog(page);
+      await expect(
+        providerCard(page, 'First').getByRole('switch', { name: 'Default provider First' }),
+      ).toHaveAttribute('aria-checked', 'false');
+      await expect(
+        providerCard(page, 'Second').getByRole('switch', { name: 'Default provider Second' }),
+      ).toHaveAttribute('aria-checked', 'true');
+
+      await toggleDefaultProvider(page, 'Second');
+      await expect(restartDialog(page)).toBeVisible();
+      await cancelRestartDialog(page);
+      await expect(
+        providerCard(page, 'Second').getByRole('switch', { name: 'Default provider Second' }),
+      ).toHaveAttribute('aria-checked', 'false');
     } finally {
       await closeElectronApp(app);
     }
@@ -83,7 +144,12 @@ test.describe('Settings', () => {
     try {
       const page = await app.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'OldName', 'https://old.com', 'sk-oldkey99');
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://old.com',
+        name: 'OldName',
+        secret: 'sk-oldkey99',
+      });
 
       const card = providerCard(page, 'OldName');
       await card.getByRole('button', { name: 'Edit' }).click();
@@ -107,7 +173,12 @@ test.describe('Settings', () => {
     try {
       const page = await app.firstWindow();
       await navigateToModels(page);
-      await addProvider(page, 'ToDelete', 'https://delete.com', 'sk-delete99');
+      await addProvider(page, {
+        authType: 'api-key',
+        baseUrl: 'https://delete.com',
+        name: 'ToDelete',
+        secret: 'sk-delete99',
+      });
 
       await page.getByLabel('Remove ToDelete').click();
       await expect(providerCard(page, 'ToDelete')).toHaveCount(0);

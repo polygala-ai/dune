@@ -15,8 +15,6 @@ import { DuneChannel } from './dune-channel';
 
 const HIDDEN_MAIN_GROUP_ID = 'dune:main';
 const DUNE_RUNTIME_STATE_FILENAME = 'dune-runtime-state.json';
-const ANTHROPIC_API_KEY_ENV = 'ANTHROPIC_API_KEY';
-const CLAUDE_CODE_OAUTH_TOKEN_ENV = 'CLAUDE_CODE_OAUTH_TOKEN';
 const STREAMING_IDLE_WINDOW_MS = 320;
 const STREAMING_SAFETY_TIMEOUT_MS = 30_000;
 
@@ -127,10 +125,10 @@ interface PendingAssistantMessage {
 }
 
 export interface AgentLiteHostOptions {
-  credentialEnv?: NodeJS.ProcessEnv;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<AgentLiteModule>;
   now?: () => number;
+  resolveModelCredentials?: () => Promise<Record<string, string>>;
 }
 
 function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
@@ -156,30 +154,10 @@ function summarizePreview(content: string) {
   return content.replace(/\s+/g, ' ').trim().slice(0, 92);
 }
 
-function resolveAgentLiteCredentials(env: NodeJS.ProcessEnv) {
-  const claudeOauthToken = env[CLAUDE_CODE_OAUTH_TOKEN_ENV]?.trim();
-
-  if (claudeOauthToken) {
-    return {
-      [CLAUDE_CODE_OAUTH_TOKEN_ENV]: claudeOauthToken,
-    };
-  }
-
-  const anthropicApiKey = env[ANTHROPIC_API_KEY_ENV]?.trim();
-
-  if (anthropicApiKey) {
-    return {
-      [ANTHROPIC_API_KEY_ENV]: anthropicApiKey,
-    };
-  }
-
-  return {} satisfies Record<string, string>;
-}
-
 function createRuntimeReadyMessage(credentials: Record<string, string>) {
   return Object.keys(credentials).length > 0
-    ? 'AgentLite is running with explicit Claude credentials.'
-    : 'AgentLite is running without model credentials; replies will fail.';
+    ? 'AgentLite is running with saved model credentials.'
+    : 'AgentLite is running without saved model credentials; replies will fail.';
 }
 
 function createRuntimeInfo(
@@ -330,8 +308,6 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
 
-  private readonly credentialEnv: NodeJS.ProcessEnv;
-
   private readonly runtimeRoot: string;
 
   private readonly stateFilePath: string;
@@ -339,6 +315,10 @@ export class AgentLiteHost implements AgentRuntime {
   private agentLite: AgentLiteInstance | null = null;
 
   private readonly loadAgentLiteModule: () => Promise<AgentLiteModule>;
+
+  private readonly resolveModelCredentials: () => Promise<Record<string, string>>;
+
+  private startupModelCredentials: Record<string, string> = {};
 
   private snapshot: AgentServiceSnapshot;
 
@@ -351,11 +331,13 @@ export class AgentLiteHost implements AgentRuntime {
       'data',
       DUNE_RUNTIME_STATE_FILENAME,
     );
-    this.credentialEnv = options.credentialEnv ?? process.env;
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
       (async () => import('@boxlite-ai/agentlite') as Promise<AgentLiteModule>);
+    this.resolveModelCredentials =
+      options.resolveModelCredentials ??
+      (async () => ({} satisfies Record<string, string>));
     this.snapshot = {
       agents: [],
       isStreaming: false,
@@ -395,10 +377,11 @@ export class AgentLiteHost implements AgentRuntime {
     this.loadPersistedState();
 
     const { AgentLite } = await this.loadAgentLiteModule();
-    const credentials = resolveAgentLiteCredentials(this.credentialEnv);
+    const credentials = await this.resolveModelCredentials();
+    this.startupModelCredentials = { ...credentials };
     const agentLite = new AgentLite({
       model: {
-        credentials: async () => ({ ...credentials }),
+        credentials: async () => ({ ...this.startupModelCredentials }),
       },
       name: 'Dune',
       workdir: this.runtimeRoot,

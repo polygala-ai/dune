@@ -64,18 +64,19 @@ describe('AgentLiteHost', () => {
     }
   });
 
-  it('uses ~/.dune/agentlite as the runtime root and starts AgentLite with a Claude OAuth token when present', async () => {
+  it('uses ~/.dune/agentlite as the runtime root and starts AgentLite with saved oauth-token credentials', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
+    let credentials: Record<string, string> = {
+      CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
+    };
 
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
-      credentialEnv: {
-        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
-      },
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => credentials,
     });
 
     await host.start();
@@ -88,8 +89,14 @@ describe('AgentLiteHost', () => {
     await expect(capturedOptions?.model?.credentials?.()).resolves.toEqual({
       CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
     });
+    credentials = {
+      CLAUDE_CODE_OAUTH_TOKEN: 'updated-oauth-token',
+    };
+    await expect(capturedOptions?.model?.credentials?.()).resolves.toEqual({
+      CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
+    });
     expect(host.getSnapshot().runtimeInfo).toEqual({
-      message: 'AgentLite is running with explicit Claude credentials.',
+      message: 'AgentLite is running with saved model credentials.',
       mode: 'real',
       rootPath: runtimeRoot,
       status: 'ready',
@@ -110,47 +117,49 @@ describe('AgentLiteHost', () => {
     expect(harness.stop).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to ANTHROPIC_API_KEY when no Claude OAuth token is present', async () => {
+  it('passes saved api-key credentials through to AgentLite', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
 
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
-      credentialEnv: {
-        ANTHROPIC_API_KEY: 'test-anthropic-key',
-      },
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({
+        ANTHROPIC_API_KEY: 'test-anthropic-key',
+        ANTHROPIC_BASE_URL: 'https://compatible.example/v1',
+      }),
     });
 
     await host.start();
 
     await expect(harness.capturedOptions()?.model?.credentials?.()).resolves.toEqual({
+      ANTHROPIC_BASE_URL: 'https://compatible.example/v1',
       ANTHROPIC_API_KEY: 'test-anthropic-key',
     });
     expect(host.getSnapshot().runtimeInfo.message).toBe(
-      'AgentLite is running with explicit Claude credentials.',
+      'AgentLite is running with saved model credentials.',
     );
   });
 
-  it('starts without credentials and reports that replies will fail', async () => {
+  it('starts without saved credentials and reports that replies will fail', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
 
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
-      credentialEnv: {},
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
     });
 
     await host.start();
 
     await expect(harness.capturedOptions()?.model?.credentials?.()).resolves.toEqual({});
     expect(host.getSnapshot().runtimeInfo.message).toBe(
-      'AgentLite is running without model credentials; replies will fail.',
+      'AgentLite is running without saved model credentials; replies will fail.',
     );
   });
 });

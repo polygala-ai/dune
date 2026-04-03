@@ -12,6 +12,7 @@ const bridge: DesktopBridge = {
   deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
+  restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   sendAgentMessage: (agentId, text) =>
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),

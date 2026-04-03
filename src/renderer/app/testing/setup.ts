@@ -58,6 +58,7 @@ Object.defineProperty(window, 'ResizeObserver', {
 beforeEach(() => {
   window.duneDesktop = {
     platform: 'darwin',
+    restartApp: vi.fn(async () => undefined),
   };
   document.documentElement.dataset.theme = 'light';
 });
