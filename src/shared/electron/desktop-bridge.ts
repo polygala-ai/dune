@@ -5,6 +5,7 @@ import type { CreateAgentInput } from '@/renderer/features/agents/types';
 export interface DesktopBridge {
   platform: NodeJS.Platform;
   createAgent?: (input: CreateAgentInput) => Promise<string>;
+  deleteAgent?: (agentId: string) => Promise<void>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   resetRuntime?: () => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;

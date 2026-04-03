@@ -8,6 +8,8 @@ interface UseGlobalShortcutsOptions {
   onCloseCommand: () => void;
   onCloseContextPanel: () => void;
   onCreateAgent: () => void;
+  onCreateItem: () => void;
+  onCreateProject: () => void;
   onCycleAgent: (direction: -1 | 1) => void;
   onOpenCommand: () => void;
   onOpenSettings: () => void;
@@ -37,6 +39,8 @@ export function useGlobalShortcuts({
   onCloseCommand,
   onCloseContextPanel,
   onCreateAgent,
+  onCreateItem,
+  onCreateProject,
   onCycleAgent,
   onOpenCommand,
   onOpenSettings,
@@ -56,7 +60,13 @@ export function useGlobalShortcuts({
 
     if (usesPrimaryModifier && key === 'n') {
       event.preventDefault();
-      onCreateAgent();
+      if (route === 'workflow') {
+        onCreateItem();
+      } else if (route === 'plugins') {
+        onCreateProject();
+      } else {
+        onCreateAgent();
+      }
       return;
     }
 

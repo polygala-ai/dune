@@ -31,6 +31,7 @@ export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
 
 export interface AgentService {
   createAgent: (input: CreateAgentInput) => Promise<string>;
+  deleteAgent: (agentId: string) => Promise<void>;
   getSnapshot: () => AgentServiceSnapshot;
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;
@@ -139,6 +140,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       channel: { ...agent.channel },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({ ...message })),
+      projectId: agent.projectId ?? null,
     })),
     isStreaming: snapshot.isStreaming,
     runtimeInfo: { ...snapshot.runtimeInfo },
@@ -248,6 +250,7 @@ function createDraftAgent(
   name: string,
   now: number,
   channelId: CreateAgentInput['channelId'],
+  projectId: string | null,
 ): Agent {
   const channel = createChannelBinding(channelId);
   const isBuiltInChannel = channel.kind === 'built-in';
@@ -281,6 +284,7 @@ function createDraftAgent(
     preview: isBuiltInChannel
       ? 'Ready for a first instruction.'
       : `Attached to ${channel.label}. Dune mirrors the transcript.`,
+    projectId,
     status: 'draft',
     updatedAt: now,
     workspace: 'AgentLite agent',
@@ -365,6 +369,7 @@ export class AgentLiteHost implements AgentRuntime {
     });
     this.service = {
       createAgent: async (input) => this.createAgent(input),
+      deleteAgent: async (agentId) => this.deleteAgent(agentId),
       getSnapshot: () => this.getSnapshot(),
       listAgents: () => this.getSnapshot().agents,
       selectAgent: (agentId) => {
@@ -459,7 +464,13 @@ export class AgentLiteHost implements AgentRuntime {
     const now = this.now();
     const agentId = createAgentId();
     const groupFolder = createGroupFolder(trimmedName, agentId);
-    const nextAgent = createDraftAgent(agentId, trimmedName, now, input.channelId);
+    const nextAgent = createDraftAgent(
+      agentId,
+      trimmedName,
+      now,
+      input.channelId,
+      input.projectId ?? null,
+    );
 
     this.persistedAgents.set(agentId, {
       agent: nextAgent,
@@ -480,6 +491,28 @@ export class AgentLiteHost implements AgentRuntime {
     });
 
     return agentId;
+  }
+
+  private async deleteAgent(agentId: string) {
+    if (!this.persistedAgents.has(agentId)) {
+      return;
+    }
+
+    this.clearPendingAssistantMessage(agentId);
+    this.persistedAgents.delete(agentId);
+    const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
+    const nextSelectedAgentId = this.snapshot.selectedAgentId === agentId
+      ? nextAgents[0]?.id ?? null
+      : this.snapshot.selectedAgentId;
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: nextAgents,
+      isStreaming: this.pendingAssistantMessages.size > 0,
+      selectedAgentId: nextSelectedAgentId,
+    };
+    this.persistState();
+    this.emit();
   }
 
   private selectAgent(agentId: string) {
@@ -585,6 +618,24 @@ export class AgentLiteHost implements AgentRuntime {
     };
 
     fs.writeFileSync(this.stateFilePath, JSON.stringify(persistedState, null, 2));
+  }
+
+  private clearPendingAssistantMessage(agentId: string) {
+    const pending = this.pendingAssistantMessages.get(agentId);
+
+    if (!pending) {
+      return;
+    }
+
+    if (pending.idleTimer) {
+      globalThis.clearTimeout(pending.idleTimer);
+    }
+
+    if (pending.safetyTimer) {
+      globalThis.clearTimeout(pending.safetyTimer);
+    }
+
+    this.pendingAssistantMessages.delete(agentId);
   }
 
   private handleOutboundMessage(agentId: string, text: string) {

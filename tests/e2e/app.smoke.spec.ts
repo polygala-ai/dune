@@ -17,15 +17,21 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
   try {
     const page = await app.firstWindow();
 
-    await expect(page.getByRole('heading', { name: 'No agents yet.' })).toBeVisible();
+    await expect(page.getByTestId('workflow-board')).toBeVisible();
     await expect(
       page.locator('meta[http-equiv="Content-Security-Policy"]'),
     ).toHaveCount(1);
 
-    await page.getByRole('button', { name: /^New agent$/i }).first().click();
+    await page.keyboard.press(`${modifier}+K`);
+    await expect(
+      page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
+    ).toBeVisible();
+    await page.getByText('New agent', { exact: true }).click();
     await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Select Telegram/i })).toHaveCount(0);
-    await page.getByRole('button', { name: /Channel: Dune chat/i }).click();
+    await page.getByRole('button', { name: /Channel: Dune chat/i }).evaluate((element) => {
+      (element as HTMLButtonElement).click();
+    });
     await expect(page.getByTestId('channel-select-popover')).toBeVisible();
     await expect(page.getByRole('button', { name: /Select Telegram/i })).toBeDisabled();
     await page.getByRole('button', { name: /Open Channels settings/i }).click();
@@ -41,19 +47,28 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByLabel('Agent composer')).toBeVisible();
 
     const sidebar = page.locator('[data-testid="app-sidebar"]:visible');
-    const activeAgent = sidebar.locator('button[aria-current="true"]').first();
+    const selectedProjectRow = sidebar.locator('button[aria-current="true"]').first();
     const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
 
     await resizeWindow(app, 1560, 920);
     await expect(sidebar).toBeVisible();
     await expect(page.getByTestId('compact-shell-toolbar')).toHaveCount(0);
     await expect(page.getByTestId('context-panel')).toHaveCount(0);
-    await expectRightEdgeWithin(sidebar, activeAgent);
+    await expectRightEdgeWithin(sidebar, selectedProjectRow);
+    await page.getByRole('button', { name: /^Plugins$/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Plugins', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /^Research Platform$/i }).click();
+    await expect(page.getByTestId('workflow-board')).toBeVisible();
+    await page.getByRole('tab', { name: /^Agents$/i }).click();
+    await page.getByRole('button', { name: /^Open agent$/i }).click();
+    await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
 
     await resizeHandle.focus();
     await page.keyboard.press('Home');
     await expect(resizeHandle).toHaveAttribute('aria-valuenow', '208');
-    await expectRightEdgeWithin(sidebar, activeAgent);
+    await expectRightEdgeWithin(sidebar, selectedProjectRow);
 
     await resizeWindow(app, 1360, 920);
     await page.keyboard.press(`${modifier}+\\`);
@@ -66,7 +81,8 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
     await page.getByRole('button', { name: /open sidebar/i }).click();
     await expect(page.getByTestId('app-sidebar')).toBeVisible();
-    await page.getByRole('button', { name: /navigator/i }).click();
+    await page.getByRole('button', { name: /close sidebar/i }).click();
+    await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
     await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
 
@@ -104,7 +120,7 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
     await page.keyboard.press(`${modifier}+K`);
     await expect(
-      page.getByPlaceholder('Jump to an agent or action…'),
+      page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
     ).toBeVisible();
   } finally {
     await closeElectronApp(app);

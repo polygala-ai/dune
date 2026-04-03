@@ -9,6 +9,7 @@ import { ipcChannels } from '../../shared/electron/ipc-channels';
 const bridge: DesktopBridge = {
   platform: process.platform,
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
+  deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),

@@ -8,7 +8,7 @@ import {
 } from 'react';
 
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'dune.shell.sidebarWidth';
-export const SIDEBAR_WIDTH_DEFAULT = 232;
+export const SIDEBAR_WIDTH_DEFAULT = 216;
 export const SIDEBAR_WIDTH_MIN = 208;
 export const SIDEBAR_WIDTH_MAX = 360;
 

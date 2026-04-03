@@ -8,7 +8,7 @@ export function createInitialShellState(): ShellState {
   return {
     isCommandOpen: false,
     isContextPanelOpen: false,
-    route: 'agent',
+    route: 'workflow',
   };
 }
 

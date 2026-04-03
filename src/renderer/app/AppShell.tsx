@@ -1,6 +1,8 @@
 import {
   useRef,
+  useState,
 } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
 import { useAgentSubmit } from '@/renderer/app/hooks/use-agent-submit';
@@ -11,6 +13,7 @@ import { useGlobalShortcuts } from '@/renderer/app/hooks/use-global-shortcuts';
 import { useResponsiveShell } from '@/renderer/app/hooks/use-responsive-shell';
 import { useThemeSync } from '@/renderer/app/hooks/use-theme-sync';
 import { useTranscriptScroll } from '@/renderer/app/hooks/use-transcript-scroll';
+import { useWorkflowPersistence } from '@/renderer/app/hooks/use-workflow-persistence';
 import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
 import { CommandMenu } from '@/renderer/app/shell/CommandMenu';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
@@ -20,27 +23,37 @@ import {
   useAgentSession,
   useSettingsState,
   useShellState,
+  useWorkflowSession,
 } from '@/renderer/app/store/selectors';
+import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { AgentWorkspace } from '@/renderer/app/workspaces/AgentWorkspace';
 import { SettingsWorkspace } from '@/renderer/app/workspaces/SettingsWorkspace';
+import { WorkflowWorkspace } from '@/renderer/app/workspaces/WorkflowWorkspace';
+import { PluginsWorkspace } from '@/renderer/app/workspaces/PluginsWorkspace';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { TooltipProvider } from '@/renderer/shared/ui/tooltip';
 
 export default function AppShell() {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const [isCreateWorkItemOpen, setCreateWorkItemOpen] = useState(false);
+  const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
   const { composerRef, focusComposer } = useComposerFocus();
   const { isMac } = useDesktopPlatform();
   const commands = useAppCommands();
   const {
     activeAgent,
-    agentSummaries,
     commandAgents,
     draft,
     isStreaming,
     runtimeInfo,
-    selectedAgentId,
   } = useAgentSession();
+  const {
+    activityEntries,
+    filteredItemSummaries,
+    projects,
+    selectedProjectId,
+  } = useWorkflowSession();
   const {
     isCommandOpen,
     isContextPanelOpen,
@@ -51,6 +64,13 @@ export default function AppShell() {
     settingsRoute,
     themePreference,
   } = useSettingsState();
+  const {
+    selectProject,
+  } = useAppStore(
+    useShallow((state) => ({
+      selectProject: state.selectProject,
+    })),
+  );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
   const { isCompactShell, usesInlineContext, usesOverlayContext } =
     useResponsiveShell(showContextPanel);
@@ -63,6 +83,7 @@ export default function AppShell() {
   });
 
   useThemeSync(themePreference);
+  useWorkflowPersistence();
 
   useTranscriptScroll({
     agent: activeAgent,
@@ -79,19 +100,35 @@ export default function AppShell() {
     route,
   });
   const sidebarProps = {
-    agents: agentSummaries,
     isCommandOpen,
-    onCreateAgent: controller.handleOpenCreateAgent,
     onOpenCommand: controller.handleOpenCommand,
-    onOpenSettings: controller.handleOpenSettings,
-    onSelectAgent: controller.handleSelectAgent,
     route,
-    selectedAgentId,
+    workflow: {
+      onCreateProject: () => {
+        controller.handleSidebarDrawerOpenChange(false);
+        setCreateProjectOpen(true);
+      },
+      onOpenPlugins: () => {
+        controller.handleSidebarDrawerOpenChange(false);
+        commands.openPlugins();
+      },
+      onOpenSettings: controller.handleOpenSettings,
+      onSelectProject: (projectId: string) => {
+        controller.handleSidebarDrawerOpenChange(false);
+        selectProject(projectId);
+        commands.openWorkflow();
+      },
+      projects,
+      selectedProjectId,
+    },
   };
-  const sidebar = (className: string) => (
+  const sidebar = (className: string, options?: { showQuickSwitch?: boolean }) => (
     <AppSidebar
       {...sidebarProps}
       className={className}
+      {...(options?.showQuickSwitch !== undefined
+        ? { showQuickSwitch: options.showQuickSwitch }
+        : {})}
     />
   );
 
@@ -101,6 +138,15 @@ export default function AppShell() {
     onCloseCommand: controller.handleCloseCommand,
     onCloseContextPanel: controller.handleCloseContextPanel,
     onCreateAgent: controller.handleOpenCreateAgent,
+    onCreateItem: () => {
+      if (selectedProjectId) {
+        setCreateWorkItemOpen(true);
+        return;
+      }
+
+      setCreateProjectOpen(true);
+    },
+    onCreateProject: () => setCreateProjectOpen(true),
     onCycleAgent: commands.cycleAgent,
     onOpenCommand: controller.handleOpenCommand,
     onOpenSettings: controller.handleOpenSettings,
@@ -155,6 +201,23 @@ export default function AppShell() {
                 runtimeInfo={runtimeInfo}
                 transcriptRef={transcriptRef}
               />
+            ) : route === 'workflow' ? (
+              <WorkflowWorkspace
+                isCompactShell={isCompactShell}
+                isCreateProjectOpen={isCreateProjectOpen}
+                isCreateWorkItemOpen={isCreateWorkItemOpen}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onCreateProjectOpenChange={setCreateProjectOpen}
+                onCreateWorkItemOpenChange={setCreateWorkItemOpen}
+                onOpenCreateAgent={controller.handleOpenCreateAgent}
+                onToggleSidebar={controller.handleToggleSidebar}
+              />
+            ) : route === 'plugins' ? (
+              <PluginsWorkspace
+                isCompactShell={isCompactShell}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onToggleSidebar={controller.handleToggleSidebar}
+              />
             ) : (
               <SettingsWorkspace
                 isCompactShell={isCompactShell}
@@ -187,25 +250,44 @@ export default function AppShell() {
         <SidebarDrawer
           isOpen={isCompactShell && controller.isSidebarDrawerOpen}
           onOpenChange={controller.handleSidebarDrawerOpenChange}
-          sidebar={sidebar('h-full rounded-[24px]')}
+          sidebar={sidebar('h-full rounded-[24px]', { showQuickSwitch: false })}
         />
 
         <CommandMenu
-          agents={commandAgents}
+          agents={commandAgents.filter((agent) =>
+            selectedProjectId ? agent.projectId === selectedProjectId : true,
+          )}
           isContextPanelOpen={isContextPanelOpen}
+          items={filteredItemSummaries.map((item) => ({
+            id: item.id,
+            statusLabel: item.statusLabel,
+            title: item.title,
+            updatedLabel: item.updatedLabel,
+          }))}
           onCreateAgent={controller.handleOpenCreateAgent}
+          onCreateItem={() => setCreateWorkItemOpen(true)}
+          onCreateProject={() => setCreateProjectOpen(true)}
           onOpenChange={commands.setCommandOpen}
+          onOpenBoard={commands.openWorkflow}
           onOpenSettings={controller.handleOpenSettings}
           onSelectAgent={controller.handleSelectAgent}
+          onSelectItem={commands.openItem}
+          onSelectProject={(projectId) => {
+            selectProject(projectId);
+            commands.openWorkflow();
+          }}
           onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
+          projects={projects}
         />
 
         <CreateAgentDialog
+          defaultProjectId={selectedProjectId}
           onCreateAgent={controller.handleCreateAgent}
           onOpenChange={controller.handleCreateAgentDialogOpenChange}
           onOpenChannelsSettings={controller.handleOpenChannelsSettings}
           open={controller.isCreateAgentOpen}
+          projects={projects}
         />
       </div>
     </TooltipProvider>

@@ -33,6 +33,7 @@ function createDraftAgent(
   name: string,
   now: number,
   channelId: CreateAgentInput['channelId'],
+  projectId: string | null,
 ): Agent {
   const channel = createChannelBinding(channelId);
   const isBuiltInChannel = channel.kind === 'built-in';
@@ -48,6 +49,7 @@ function createDraftAgent(
     preview: isBuiltInChannel
       ? 'Ready for a first instruction.'
       : `Attached to ${channel.label}. Dune mirrors the transcript.`,
+    projectId,
     updatedAt: now,
     status: 'draft',
     workspace: 'Prototype agent',
@@ -138,6 +140,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       channel: { ...agent.channel },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({ ...message })),
+      projectId: agent.projectId ?? null,
     })),
     isStreaming: snapshot.isStreaming,
     runtimeInfo: { ...snapshot.runtimeInfo },
@@ -160,10 +163,17 @@ export interface AgentRuntime {
   subscribe: (listener: AgentServiceListener) => () => void;
 }
 
+interface PendingTimerRecord {
+  resolve: (completed: boolean) => void;
+  timer: ReturnType<typeof globalThis.setTimeout>;
+}
+
 class MockAgentService implements AgentService {
   private listeners = new Set<AgentServiceListener>();
 
-  private pendingTimers = new Set<ReturnType<typeof globalThis.setTimeout>>();
+  private pendingTimersByAgent = new Map<string, Set<PendingTimerRecord>>();
+
+  private streamingAgentIds = new Set<string>();
 
   private snapshot: AgentServiceSnapshot;
 
@@ -213,7 +223,12 @@ class MockAgentService implements AgentService {
     }
 
     const now = Date.now();
-    const nextAgent = createDraftAgent(trimmedName, now, input.channelId);
+    const nextAgent = createDraftAgent(
+      trimmedName,
+      now,
+      input.channelId,
+      input.projectId ?? null,
+    );
 
     this.snapshot = {
       ...this.snapshot,
@@ -223,6 +238,29 @@ class MockAgentService implements AgentService {
     this.emit();
 
     return nextAgent.id;
+  }
+
+  async deleteAgent(agentId: string) {
+    const agentExists = this.snapshot.agents.some((agent) => agent.id === agentId);
+
+    if (!agentExists) {
+      return;
+    }
+
+    this.clearPendingTimers(agentId);
+    this.streamingAgentIds.delete(agentId);
+    const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
+    const nextSelectedAgentId = this.snapshot.selectedAgentId === agentId
+      ? nextAgents[0]?.id ?? null
+      : this.snapshot.selectedAgentId;
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: nextAgents,
+      isStreaming: this.streamingAgentIds.size > 0,
+      selectedAgentId: nextSelectedAgentId,
+    };
+    this.emit();
   }
 
   async sendMessage(agentId: string, text: string) {
@@ -241,6 +279,7 @@ class MockAgentService implements AgentService {
     const now = Date.now();
     const assistantMessage = createAssistantMessage(now);
     const userMessage = createUserMessage(trimmedText, now);
+    this.streamingAgentIds.add(agentId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -265,7 +304,13 @@ class MockAgentService implements AgentService {
     let streamedContent = '';
 
     for (const [index, chunk] of chunks.entries()) {
-      await this.wait(index === 0 ? 120 : 70);
+      const completedDelay = await this.wait(agentId, index === 0 ? 120 : 70);
+
+      if (!completedDelay || !this.snapshot.agents.some((item) => item.id === agentId)) {
+        this.streamingAgentIds.delete(agentId);
+        return;
+      }
+
       streamedContent += chunk;
 
       this.snapshot = {
@@ -291,6 +336,12 @@ class MockAgentService implements AgentService {
       this.emit();
     }
 
+    if (!this.snapshot.agents.some((item) => item.id === agentId)) {
+      this.streamingAgentIds.delete(agentId);
+      return;
+    }
+
+    this.streamingAgentIds.delete(agentId);
     this.snapshot = {
       ...this.snapshot,
       agents: this.snapshot.agents.map((item) =>
@@ -312,17 +363,14 @@ class MockAgentService implements AgentService {
             }
           : item,
       ),
-      isStreaming: false,
+      isStreaming: this.streamingAgentIds.size > 0,
     };
     this.emit();
   }
 
   reset() {
-    for (const timer of this.pendingTimers) {
-      globalThis.clearTimeout(timer);
-    }
-
-    this.pendingTimers.clear();
+    this.clearAllPendingTimers();
+    this.streamingAgentIds.clear();
     this.snapshot = {
       agents: [],
       isStreaming: false,
@@ -340,15 +388,50 @@ class MockAgentService implements AgentService {
     }
   }
 
-  private wait(duration: number) {
-    return new Promise<void>((resolve) => {
+  private wait(agentId: string, duration: number) {
+    return new Promise<boolean>((resolve) => {
+      const timers = this.pendingTimersByAgent.get(agentId) ?? new Set<PendingTimerRecord>();
+      let pendingTimer: PendingTimerRecord;
+
       const timer = globalThis.setTimeout(() => {
-        this.pendingTimers.delete(timer);
-        resolve();
+        timers.delete(pendingTimer);
+
+        if (timers.size === 0) {
+          this.pendingTimersByAgent.delete(agentId);
+        }
+
+        resolve(true);
       }, duration);
 
-      this.pendingTimers.add(timer);
+      pendingTimer = {
+        resolve,
+        timer,
+      };
+
+      timers.add(pendingTimer);
+      this.pendingTimersByAgent.set(agentId, timers);
     });
+  }
+
+  private clearPendingTimers(agentId: string) {
+    const timers = this.pendingTimersByAgent.get(agentId);
+
+    if (!timers) {
+      return;
+    }
+
+    for (const pendingTimer of timers) {
+      globalThis.clearTimeout(pendingTimer.timer);
+      pendingTimer.resolve(false);
+    }
+
+    this.pendingTimersByAgent.delete(agentId);
+  }
+
+  private clearAllPendingTimers() {
+    for (const agentId of [...this.pendingTimersByAgent.keys()]) {
+      this.clearPendingTimers(agentId);
+    }
   }
 }
 

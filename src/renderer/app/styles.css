@@ -99,6 +99,14 @@ textarea {
   animation: shell-reveal 520ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
 }
 
+.dialog-surface-motion {
+  animation: dialog-surface-reveal 520ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
+}
+
+.dialog-surface-motion[data-dialog-motion='drawer'] {
+  animation: shell-reveal 520ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
+}
+
 .panel-reveal {
   animation: panel-reveal 320ms cubic-bezier(0.2, 0.9, 0.18, 1) both;
 }
@@ -128,6 +136,15 @@ textarea {
 
 .thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .window-shell {
@@ -301,6 +318,18 @@ textarea {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-surface-reveal {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 18px)) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 

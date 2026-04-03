@@ -83,6 +83,10 @@ export class DesktopRuntimeController {
     return this.activeRuntime.service.createAgent(input);
   }
 
+  async deleteAgent(agentId: string) {
+    await this.activeRuntime.service.deleteAgent(agentId);
+  }
+
   async sendAgentMessage(agentId: string, text: string) {
     await this.activeRuntime.service.sendMessage(agentId, text);
   }
