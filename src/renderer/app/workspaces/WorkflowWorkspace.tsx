@@ -115,7 +115,10 @@ export function WorkflowWorkspace({
 
   if (!isWorkflowHydrated) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center">
+      <div
+        aria-busy="true"
+        className="flex min-h-0 flex-1 items-center justify-center"
+      >
         <div className="text-center">
           <div className="surface-eyebrow">Project</div>
           <h2 className="surface-title">Loading project page</h2>

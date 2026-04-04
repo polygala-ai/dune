@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 
 import type {
   Agent,
+  ExternalChannelsState,
   AgentRuntimeInfo,
   AgentSummary,
   PresentedAgent,
@@ -27,6 +28,7 @@ export type AppRoute = 'agent' | 'plugins' | 'settings' | 'workflow';
 export interface AgentState {
   agents: Agent[];
   draft: string;
+  externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
@@ -130,6 +132,7 @@ export interface AgentSessionState {
   agentSummaries: AgentSummary[];
   commandAgents: Array<AgentSummary & { projectId: string | null; workspace: string }>;
   draft: string;
+  externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;

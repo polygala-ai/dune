@@ -5,9 +5,15 @@ import type {
   SettingsRoute,
   ThemePreference,
 } from '@/renderer/features/settings/types';
-import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
+import type {
+  Agent,
+  AgentRuntimeInfo,
+  ExternalChannelsState,
+} from '@/renderer/features/agents/types';
 
 interface SettingsWorkspaceProps {
+  agents: Agent[];
+  externalChannels: ExternalChannelsState;
   isCompactShell: boolean;
   isSidebarOpen: boolean;
   onSelectRoute: (route: SettingsRoute) => void;
@@ -19,6 +25,8 @@ interface SettingsWorkspaceProps {
 }
 
 export function SettingsWorkspace({
+  agents,
+  externalChannels,
   isCompactShell,
   isSidebarOpen,
   onSelectRoute,
@@ -39,6 +47,8 @@ export function SettingsWorkspace({
 
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <SettingsView
+          agents={agents}
+          externalChannels={externalChannels}
           isCompactShell={isCompactShell}
           onSelectRoute={onSelectRoute}
           onThemeChange={onThemeChange}

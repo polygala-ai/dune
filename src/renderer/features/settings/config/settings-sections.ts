@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
 import { ChannelsSettings } from '@/renderer/features/settings/components/ChannelsSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
+import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
 
 import type {
@@ -10,9 +11,15 @@ import type {
   SettingsSection,
   ThemePreference,
 } from '@/renderer/features/settings/types';
-import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
+import type {
+  Agent,
+  AgentRuntimeInfo,
+  ExternalChannelsState,
+} from '@/renderer/features/agents/types';
 
 export interface SettingsSectionComponentProps {
+  agents: Agent[];
+  externalChannels: ExternalChannelsState;
   onThemeChange: (preference: ThemePreference) => void;
   runtimeInfo: AgentRuntimeInfo;
   themePreference: ThemePreference;
@@ -32,8 +39,14 @@ export const settingsSections: SettingsSectionDefinition[] = [
   {
     id: 'channels',
     title: 'Channels',
-    description: 'External channel catalog',
+    description: 'Telegram and agent channels',
     Component: ChannelsSettings,
+  },
+  {
+    id: 'network',
+    title: 'Network',
+    description: 'Proxy and transport path',
+    Component: NetworkSettings,
   },
   {
     id: 'models',

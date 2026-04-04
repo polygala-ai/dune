@@ -1,7 +1,11 @@
 export const ipcChannels = {
+  applyNetworkSettings: 'dune:runtime:apply-network-settings',
+  copyText: 'dune:runtime:copy-text',
   createAgent: 'dune:runtime:create-agent',
   deleteAgent: 'dune:runtime:delete-agent',
   getRuntimeSnapshot: 'dune:runtime:get-snapshot',
+  openExternal: 'dune:runtime:open-external',
+  reloadExternalChannels: 'dune:runtime:reload-external-channels',
   resetRuntime: 'dune:runtime:reset',
   restartApp: 'dune:runtime:restart-app',
   runtimeSnapshotUpdated: 'dune:runtime:snapshot-updated',

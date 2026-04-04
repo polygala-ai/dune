@@ -37,13 +37,14 @@ export function AgentPanel({
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
+  const attachedLabel = agent.channel.target?.name ?? agent.channel.label;
   const isComposerDisabled = isStreaming || !agent.channel.canCompose;
   const composerHint = agent.channel.canCompose
     ? `${modifierLabel} Enter to send · Shift Enter for a new line`
-    : `This agent is attached to ${agent.channel.label}. Reply in the source channel.`;
+    : `This agent is attached to ${attachedLabel}. Reply in the source channel.`;
   const composerPlaceholder = agent.channel.canCompose
     ? 'Message agent...'
-    : `Attached to ${agent.channel.label}`;
+    : `Attached to ${attachedLabel}`;
 
   const handleComposerKeyDown = async (
     event: KeyboardEvent<HTMLTextAreaElement>,

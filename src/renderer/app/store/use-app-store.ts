@@ -41,6 +41,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
     ...createAgentSlice({
       agents: initialState.agents,
       draft: initialState.draft,
+      externalChannels: initialState.externalChannels,
       isStreaming: initialState.isStreaming,
       runtimeInfo: initialState.runtimeInfo,
       selectedAgentId: initialState.selectedAgentId,

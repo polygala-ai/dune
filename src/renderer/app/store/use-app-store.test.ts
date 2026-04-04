@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useAppStore, resetAppStore } from '@/renderer/app/store/use-app-store';
+import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
 describe('app store agent runtime sync', () => {
@@ -32,6 +33,7 @@ describe('app store agent runtime sync', () => {
     expect(useAppStore.getState().draft).toBe('');
     expect(agentRuntime.getSnapshot()).toEqual({
       agents: [],
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
         message: 'AgentLite is unavailable, so Dune is using the mock runtime.',

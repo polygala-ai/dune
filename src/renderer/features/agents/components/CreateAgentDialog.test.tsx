@@ -3,6 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
+import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
+import type {
+  Agent,
+  CreateAgentInput,
+  ExternalChannelsState,
+} from '@/renderer/features/agents/types';
 
 describe('CreateAgentDialog', () => {
   const projects = [
@@ -16,19 +22,30 @@ describe('CreateAgentDialog', () => {
     },
   ];
 
-  it('shows a compact channel trigger and renders disabled external channels in the popover', async () => {
-    const user = userEvent.setup();
-
+  function renderDialog(options: {
+    existingAgents?: Agent[];
+    externalChannels?: ExternalChannelsState;
+    onCreateAgent?: (input: CreateAgentInput) => Promise<void>;
+    onOpenChannelsSettings?: () => void;
+  } = {}) {
     render(
       <CreateAgentDialog
         defaultProjectId="project-1"
-        onCreateAgent={vi.fn().mockResolvedValue(undefined)}
+        existingAgents={options.existingAgents ?? []}
+        externalChannels={options.externalChannels ?? createDefaultExternalChannelsState()}
+        onCreateAgent={options.onCreateAgent ?? vi.fn().mockResolvedValue(undefined)}
         onOpenChange={vi.fn()}
-        onOpenChannelsSettings={vi.fn()}
+        onOpenChannelsSettings={options.onOpenChannelsSettings ?? vi.fn()}
         open
         projects={projects}
       />,
     );
+  }
+
+  it('shows a compact channel trigger and renders disabled external channels in the popover', async () => {
+    const user = userEvent.setup();
+
+    renderDialog();
 
     const trigger = screen.getByRole('button', { name: /Channel: Dune chat/i });
 
@@ -49,16 +66,7 @@ describe('CreateAgentDialog', () => {
     const user = userEvent.setup();
     const onCreateAgent = vi.fn().mockResolvedValue(undefined);
 
-    render(
-      <CreateAgentDialog
-        defaultProjectId="project-1"
-        onCreateAgent={onCreateAgent}
-        onOpenChange={vi.fn()}
-        onOpenChannelsSettings={vi.fn()}
-        open
-        projects={projects}
-      />,
-    );
+    renderDialog({ onCreateAgent });
 
     await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
     await user.click(
@@ -87,16 +95,7 @@ describe('CreateAgentDialog', () => {
     const user = userEvent.setup();
     const onOpenChannelsSettings = vi.fn();
 
-    render(
-      <CreateAgentDialog
-        defaultProjectId="project-1"
-        onCreateAgent={vi.fn().mockResolvedValue(undefined)}
-        onOpenChange={vi.fn()}
-        onOpenChannelsSettings={onOpenChannelsSettings}
-        open
-        projects={projects}
-      />,
-    );
+    renderDialog({ onOpenChannelsSettings });
 
     await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
     await user.click(screen.getByRole('button', { name: /Open Channels settings/i }));
@@ -109,16 +108,7 @@ describe('CreateAgentDialog', () => {
   });
 
   it('uses the centered shared dialog surface motion', () => {
-    render(
-      <CreateAgentDialog
-        defaultProjectId="project-1"
-        onCreateAgent={vi.fn().mockResolvedValue(undefined)}
-        onOpenChange={vi.fn()}
-        onOpenChannelsSettings={vi.fn()}
-        open
-        projects={projects}
-      />,
-    );
+    renderDialog();
 
     const dialog = screen.getByRole('dialog', { name: 'Name the agent' });
 
@@ -130,5 +120,83 @@ describe('CreateAgentDialog', () => {
       '-translate-y-1/2',
     );
     expect(dialog).not.toHaveClass('shell-reveal');
+  });
+
+  it('enables Telegram selection when configured and submits the discovered chat target', async () => {
+    const user = userEvent.setup();
+    const onCreateAgent = vi.fn().mockResolvedValue(undefined);
+    const externalChannels: ExternalChannelsState = {
+      telegram: {
+        botUsername: 'agentlite_test_bot',
+        configured: true,
+        discoveredChats: [
+          {
+            channelId: 'telegram',
+            jid: 'tg:123',
+            kind: 'group',
+            lastSeenAt: 1,
+            name: 'Product QA',
+          },
+        ],
+        errorMessage: null,
+        status: 'connected',
+      },
+    };
+
+    renderDialog({
+      externalChannels,
+      onCreateAgent,
+    });
+
+    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
+    await user.click(await screen.findByRole('button', { name: /Select Telegram/i }));
+
+    expect(screen.getByTestId('telegram-chat-select')).toBeInTheDocument();
+    await user.selectOptions(screen.getByTestId('telegram-chat-select'), 'tg:123');
+    await user.type(screen.getByLabelText('Agent name'), 'Release triage');
+    await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
+
+    await waitFor(() => {
+      expect(onCreateAgent).toHaveBeenCalledWith({
+        channelId: 'telegram',
+        externalTarget: {
+          channelId: 'telegram',
+          jid: 'tg:123',
+          kind: 'group',
+          name: 'Product QA',
+        },
+        name: 'Release triage',
+        projectId: 'project-1',
+      });
+    });
+  });
+
+  it('shows actionable Telegram empty-state guidance and opens the connected bot', async () => {
+    const user = userEvent.setup();
+    const externalChannels: ExternalChannelsState = {
+      telegram: {
+        botUsername: 'agentlite_test_bot',
+        configured: true,
+        discoveredChats: [],
+        errorMessage: null,
+        status: 'connected',
+      },
+    };
+
+    renderDialog({ externalChannels });
+
+    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
+    await user.click(await screen.findByRole('button', { name: /Select Telegram/i }));
+
+    expect(
+      screen.getByText(
+        'DM @agentlite_test_bot once, or add it to a group and mention it once there. This list updates automatically when the bot receives the message.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Open bot$/i }));
+
+    expect(window.duneDesktop?.openExternal).toHaveBeenCalledWith('https://t.me/agentlite_test_bot');
+    expect(screen.getByRole('button', { name: /Open Channels settings/i })).toBeInTheDocument();
   });
 });

@@ -66,19 +66,27 @@ describe('preload bridge', () => {
       | undefined;
 
     await desktopBridge?.getRuntimeSnapshot?.();
+    await desktopBridge?.applyNetworkSettings?.();
     await desktopBridge?.createAgent?.({
       channelId: 'dune-chat',
       name: 'Navigator',
     });
+    await desktopBridge?.copyText?.('@agentlite_test_bot');
+    await desktopBridge?.openExternal?.('https://t.me/BotFather');
+    await desktopBridge?.reloadExternalChannels?.();
     await desktopBridge?.restartApp?.();
 
     const unsubscribe = desktopBridge?.subscribe?.(() => {});
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.createAgent, {
       channelId: 'dune-chat',
       name: 'Navigator',
     });
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.copyText, '@agentlite_test_bot');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.openExternal, 'https://t.me/BotFather');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.reloadExternalChannels);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.restartApp);
     expect(on).toHaveBeenCalledWith(
       ipcChannels.runtimeSnapshotUpdated,
@@ -123,8 +131,12 @@ describe('preload bridge', () => {
       | undefined;
 
     const expectedMethods = [
+      'applyNetworkSettings',
       'createAgent',
+      'copyText',
       'getRuntimeSnapshot',
+      'openExternal',
+      'reloadExternalChannels',
       'resetRuntime',
       'restartApp',
       'selectAgent',

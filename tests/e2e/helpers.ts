@@ -20,6 +20,20 @@ export function getUserDataDir(runtimeHome: string) {
   return path.join(runtimeHome, 'userdata');
 }
 
+export function readDesktopRuntimeChunk() {
+  const appRoot = path.resolve(__dirname, '../../');
+  const buildDir = path.join(appRoot, '.vite', 'build');
+  const chunkName = fs.readdirSync(buildDir).find((entry) =>
+    /^desktop-runtime-controller-.*\.js$/.test(entry),
+  );
+
+  if (!chunkName) {
+    throw new Error('Desktop runtime controller chunk was not found in .vite/build.');
+  }
+
+  return fs.readFileSync(path.join(buildDir, chunkName), 'utf-8');
+}
+
 export function readUserDataJson(runtimeHome: string, fileName: string) {
   return JSON.parse(
     fs.readFileSync(path.join(getUserDataDir(runtimeHome), fileName), 'utf-8'),
@@ -42,6 +56,44 @@ export async function launchApp(runtimeHome: string): Promise<ElectronApp> {
 
 export function getModifier() {
   return process.platform === 'darwin' ? 'Meta' : 'Control';
+}
+
+type AppPage = Awaited<ReturnType<ElectronApp['firstWindow']>>;
+
+export async function dispatchWindowKey(
+  page: AppPage,
+  key: string,
+  options?: {
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+  },
+) {
+  await page.evaluate(
+    ({ ctrlKey, key, metaKey }) => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey,
+          key,
+          metaKey,
+        }),
+      );
+    },
+    {
+      ctrlKey: options?.ctrlKey ?? false,
+      key,
+      metaKey: options?.metaKey ?? false,
+    },
+  );
+}
+
+export async function dispatchPrimaryShortcut(page: AppPage, key: string) {
+  const usesMeta = process.platform === 'darwin';
+  await dispatchWindowKey(page, key, {
+    ctrlKey: !usesMeta,
+    metaKey: usesMeta,
+  });
 }
 
 export async function resizeWindow(app: ElectronApp, width: number, height: number) {
@@ -72,23 +124,24 @@ export async function expectRightEdgeWithin(container: Locator, item: Locator) {
   );
 }
 
-export async function navigateToSettings(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
-  const modifier = getModifier();
-  await expect(page.getByTestId('app-shell-layout')).toBeVisible();
-  await page.keyboard.press(`${modifier}+,`);
+export async function navigateToSettings(page: AppPage) {
+  await page.waitForFunction(
+    () => Boolean(document.querySelector('[data-testid="app-shell-layout"]')),
+  );
+  await dispatchPrimaryShortcut(page, ',');
   await expect(page.getByTestId('settings-view')).toBeVisible();
 }
 
-export async function navigateToWorkflow(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
-  const modifier = getModifier();
-
-  await expect(page.getByTestId('app-shell-layout')).toBeVisible();
+export async function navigateToWorkflow(page: AppPage) {
+  await page.waitForFunction(
+    () => Boolean(document.querySelector('[data-testid="app-shell-layout"]')),
+  );
   if (await page.getByTestId('workflow-board').count()) {
     await expect(page.getByTestId('workflow-board')).toBeVisible();
     return;
   }
 
-  await page.keyboard.press(`${modifier}+K`);
+  await dispatchPrimaryShortcut(page, 'k');
   await expect(
     page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
   ).toBeVisible();
@@ -156,11 +209,11 @@ export async function cancelRestartDialog(
 }
 
 export async function addWorkflowItem(
-  page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
+  page: AppPage,
   title: string,
   brief: string,
 ) {
-  await page.keyboard.press(`${getModifier()}+N`);
+  await dispatchPrimaryShortcut(page, 'n');
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('Work item title')).toBeVisible();
   await dialog.getByLabel('Work item title').fill(title);

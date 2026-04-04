@@ -5,11 +5,16 @@ import type {
 } from '@/renderer/features/agents/model/agent-service';
 import type {
   Agent,
+  AgentExternalTarget,
   AgentMessage,
   AgentRuntimeInfo,
   CreateAgentInput,
 } from '@/renderer/features/agents/types';
-import { createChannelBinding } from '@/renderer/features/agents/model/channels';
+import {
+  cloneExternalChannelsState,
+  createChannelBinding,
+  createDefaultExternalChannelsState,
+} from '@/renderer/features/agents/model/channels';
 
 function createAgentId(name: string, now: number) {
   const slug = name
@@ -33,10 +38,15 @@ function createDraftAgent(
   name: string,
   now: number,
   channelId: CreateAgentInput['channelId'],
+  externalTarget: AgentExternalTarget | null,
   projectId: string | null,
 ): Agent {
-  const channel = createChannelBinding(channelId);
+  const channel = createChannelBinding(channelId, {
+    externalChannels: createDefaultExternalChannelsState(),
+    target: externalTarget,
+  });
   const isBuiltInChannel = channel.kind === 'built-in';
+  const attachedLabel = channel.target?.name ?? channel.label;
 
   return {
     channel,
@@ -45,32 +55,15 @@ function createDraftAgent(
     note:
       isBuiltInChannel
         ? 'This prototype agent stays inside Dune while the app is open. AgentLite runtime wiring lands in the next phase.'
-        : `This prototype agent mirrors ${channel.label} into Dune. Real channel wiring lands in the AgentLite phase.`,
+        : `This prototype agent mirrors ${attachedLabel} through ${channel.label}. Real channel wiring lands in the AgentLite phase.`,
     preview: isBuiltInChannel
       ? 'Ready for a first instruction.'
-      : `Attached to ${channel.label}. Dune mirrors the transcript.`,
+      : `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
     projectId,
     updatedAt: now,
     status: 'draft',
     workspace: 'Prototype agent',
-    contextCards: [
-      {
-        id: `context-${now}-1`,
-        eyebrow: 'Connection',
-        title: isBuiltInChannel
-          ? 'Dune chat is attached by default'
-          : `${channel.label} is attached to this agent`,
-        body: isBuiltInChannel
-          ? 'Dune chat is built in and writable here, so the agent behaves like a long-lived workspace inside the app.'
-          : 'This UI-first phase can already present a wrapped external channel, but the actual transport is still mocked.',
-      },
-      {
-        id: `context-${now}-2`,
-        eyebrow: 'Phase one',
-        title: 'UI first, runtime next',
-        body: 'Responses are still mocked in this phase, but the shell is shaped to match the AgentLite model that will replace them.',
-      },
-    ],
+    contextCards: [],
     messages: [],
   };
 }
@@ -137,11 +130,15 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
       ...agent,
-      channel: { ...agent.channel },
+      channel: {
+        ...agent.channel,
+        target: agent.channel.target ? { ...agent.channel.target } : null,
+      },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({ ...message })),
       projectId: agent.projectId ?? null,
     })),
+    externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
     isStreaming: snapshot.isStreaming,
     runtimeInfo: { ...snapshot.runtimeInfo },
     selectedAgentId: snapshot.selectedAgentId,
@@ -180,6 +177,7 @@ class MockAgentService implements AgentService {
   constructor(runtimeInfo?: AgentRuntimeInfo) {
     this.snapshot = {
       agents: [],
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: runtimeInfo ?? createDefaultRuntimeInfo(),
       selectedAgentId: null,
@@ -215,11 +213,15 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
-  async createAgent(input: CreateAgentInput) {
+  createAgent(input: CreateAgentInput) {
     const trimmedName = input.name.trim();
 
     if (!trimmedName) {
       throw new Error('Agent name is required.');
+    }
+
+    if (input.channelId !== 'dune-chat' && !input.externalTarget) {
+      throw new Error('External channel target is required.');
     }
 
     const now = Date.now();
@@ -227,6 +229,7 @@ class MockAgentService implements AgentService {
       trimmedName,
       now,
       input.channelId,
+      input.externalTarget ?? null,
       input.projectId ?? null,
     );
 
@@ -237,14 +240,14 @@ class MockAgentService implements AgentService {
     };
     this.emit();
 
-    return nextAgent.id;
+    return Promise.resolve(nextAgent.id);
   }
 
-  async deleteAgent(agentId: string) {
+  deleteAgent(agentId: string) {
     const agentExists = this.snapshot.agents.some((agent) => agent.id === agentId);
 
     if (!agentExists) {
-      return;
+      return Promise.resolve();
     }
 
     this.clearPendingTimers(agentId);
@@ -261,6 +264,8 @@ class MockAgentService implements AgentService {
       selectedAgentId: nextSelectedAgentId,
     };
     this.emit();
+
+    return Promise.resolve();
   }
 
   async sendMessage(agentId: string, text: string) {
@@ -373,6 +378,7 @@ class MockAgentService implements AgentService {
     this.streamingAgentIds.clear();
     this.snapshot = {
       agents: [],
+      externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),
       isStreaming: false,
       runtimeInfo: { ...this.snapshot.runtimeInfo },
       selectedAgentId: null,
@@ -391,21 +397,17 @@ class MockAgentService implements AgentService {
   private wait(agentId: string, duration: number) {
     return new Promise<boolean>((resolve) => {
       const timers = this.pendingTimersByAgent.get(agentId) ?? new Set<PendingTimerRecord>();
-      let pendingTimer: PendingTimerRecord;
-
-      const timer = globalThis.setTimeout(() => {
-        timers.delete(pendingTimer);
-
-        if (timers.size === 0) {
-          this.pendingTimersByAgent.delete(agentId);
-        }
-
-        resolve(true);
-      }, duration);
-
-      pendingTimer = {
+      const pendingTimer: PendingTimerRecord = {
         resolve,
-        timer,
+        timer: globalThis.setTimeout(() => {
+          timers.delete(pendingTimer);
+
+          if (timers.size === 0) {
+            this.pendingTimersByAgent.delete(agentId);
+          }
+
+          resolve(true);
+        }, duration),
       };
 
       timers.add(pendingTimer);
