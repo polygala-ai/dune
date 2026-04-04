@@ -170,6 +170,7 @@ void app.whenReady().then(async () => {
       const homeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
 
       runtimeController = new DesktopRuntimeController({
+        agentStore: new JsonFileStorage(userDataDir, 'agents'),
         ...(homeDir ? { homeDir } : {}),
         resolveModelCredentials: () => resolveDefaultModelCredentials({
           secretsStore: stores.secrets,

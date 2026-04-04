@@ -23,6 +23,7 @@ describe('DesktopRuntimeController', () => {
     tempDirs.push(homeDir);
 
     const controller = new DesktopRuntimeController({
+      agentStore: { get: async () => null, set: async () => {} },
       createRealRuntime: () => ({
         ...createMockAgentRuntime(),
         start: async () => {
@@ -62,6 +63,7 @@ describe('DesktopRuntimeController', () => {
         }),
     );
     const controller = new DesktopRuntimeController({
+      agentStore: { get: async () => null, set: async () => {} },
       createRealRuntime: () => ({
         ...createMockAgentRuntime(),
         shutdown,
