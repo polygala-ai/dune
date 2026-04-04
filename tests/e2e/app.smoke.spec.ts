@@ -4,17 +4,22 @@ import {
   cleanupTempHome,
   closeElectronApp,
   createTempHome,
+  dispatchPrimaryShortcut,
+  dispatchWindowKey,
   expectRightEdgeWithin,
-  getModifier,
   launchApp,
+  readDesktopRuntimeChunk,
   resizeWindow,
 } from './helpers';
 
 test('launches the built app, creates an agent, reflows responsively, and keeps overflow contained', async () => {
-  const modifier = getModifier();
   const runtimeHome = createTempHome();
+  const desktopRuntimeChunk = readDesktopRuntimeChunk();
   const app = await launchApp(runtimeHome);
   try {
+    expect(desktopRuntimeChunk).not.toContain('pino-pretty');
+    expect(desktopRuntimeChunk).not.toContain('thread-stream-worker');
+
     const page = await app.firstWindow();
 
     await expect(page.getByTestId('workflow-board')).toBeVisible();
@@ -22,7 +27,7 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
       page.locator('meta[http-equiv="Content-Security-Policy"]'),
     ).toHaveCount(1);
 
-    await page.keyboard.press(`${modifier}+K`);
+    await dispatchPrimaryShortcut(page, 'k');
     await expect(
       page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
     ).toBeVisible();
@@ -35,9 +40,9 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByTestId('channel-select-popover')).toBeVisible();
     await expect(page.getByRole('button', { name: /Select Telegram/i })).toBeDisabled();
     await page.getByRole('button', { name: /Open Channels settings/i }).click();
-    await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
 
-    await page.keyboard.press(`${modifier}+N`);
+    await dispatchPrimaryShortcut(page, 'n');
     await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
     const agentNameInput = page.getByLabel('Agent name');
     await agentNameInput.fill('Navigator');
@@ -66,14 +71,15 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByRole('heading', { name: 'Navigator' })).toBeVisible();
 
     await resizeHandle.focus();
-    await page.keyboard.press('Home');
+    await resizeHandle.press('Home');
     await expect(resizeHandle).toHaveAttribute('aria-valuenow', '208');
     await expectRightEdgeWithin(sidebar, selectedProjectRow);
 
     await resizeWindow(app, 1360, 920);
-    await page.keyboard.press(`${modifier}+\\`);
-    await expect(page.getByLabel('Close context panel backdrop')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await dispatchPrimaryShortcut(page, '\\');
+    await expect(page.getByTestId('context-panel-overlay')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Agent inspector' })).toBeVisible();
+    await dispatchWindowKey(page, 'Escape');
     await expect(page.getByTestId('context-panel')).toHaveCount(0);
 
     await resizeWindow(app, 1040, 820);
@@ -114,11 +120,11 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     expect(tallMetrics.scrollHeight).toBeLessThanOrEqual(tallMetrics.innerHeight + 1);
     expect(tallMetrics.scrollWidth).toBeLessThanOrEqual(tallMetrics.innerWidth + 1);
 
-    await page.keyboard.press(`${modifier}+,`);
+    await dispatchPrimaryShortcut(page, ',');
     await expect(page.getByTestId('settings-view')).toBeVisible();
     await page.getByRole('button', { name: /Channels/i }).click();
-    await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
-    await page.keyboard.press(`${modifier}+K`);
+    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
+    await dispatchPrimaryShortcut(page, 'k');
     await expect(
       page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
     ).toBeVisible();

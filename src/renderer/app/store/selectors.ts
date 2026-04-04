@@ -19,6 +19,7 @@ export function useAgentSession() {
   const {
     agents,
     draft,
+    externalChannels,
     isStreaming,
     runtimeInfo,
     selectedAgentId,
@@ -26,6 +27,7 @@ export function useAgentSession() {
     useShallow((state) => ({
       agents: state.agents,
       draft: state.draft,
+      externalChannels: state.externalChannels,
       isStreaming: state.isStreaming,
       runtimeInfo: state.runtimeInfo,
       selectedAgentId: state.selectedAgentId,
@@ -47,6 +49,7 @@ export function useAgentSession() {
       workspace: agent.workspace,
     })),
     draft,
+    externalChannels,
     isStreaming,
     runtimeInfo,
     selectedAgentId,
@@ -193,6 +196,8 @@ export function useWorkflowSession() {
 export function useSettingsState() {
   return useAppStore(
     useShallow((state) => ({
+      agents: state.agents,
+      externalChannels: state.externalChannels,
       runtimeInfo: state.runtimeInfo,
       settingsRoute: state.settingsRoute,
       themePreference: state.themePreference,

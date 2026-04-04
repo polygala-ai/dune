@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { ModelsSettings } from './ModelsSettings';
 
 type StoreName = 'secrets' | 'settings';
@@ -23,6 +24,8 @@ function createDesktopBridge(stores: Record<StoreName, Record<string, unknown>>)
 function renderModelsSettings() {
   render(
     <ModelsSettings
+      agents={[]}
+      externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}
       themePreference="system"

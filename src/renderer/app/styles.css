@@ -7,7 +7,7 @@
 :root {
   color-scheme: light;
   --app-drag-strip-height: 2.9rem;
-  --app-shell-context-width: 280px;
+  --app-shell-context-width: 300px;
   --app-shell-overlay-context-width: 300px;
   --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
   --app-shell-sidebar-width: 232px;
@@ -34,7 +34,7 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
   --app-drag-strip-height: 2.9rem;
-  --app-shell-context-width: 280px;
+  --app-shell-context-width: 300px;
   --app-shell-overlay-context-width: 300px;
   --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
   --app-shell-sidebar-width: 232px;
@@ -247,25 +247,63 @@ textarea {
   outline: none;
 }
 
-.shell-overlay-backdrop {
+.context-panel-resize-handle {
   position: absolute;
-  inset-inline: 0;
-  top: var(--app-shell-overlay-top-offset);
+  top: 0;
+  left: -6px;
   bottom: 0;
-  z-index: 20;
-  background: rgb(0 0 0 / 8%);
+  z-index: 25;
+  width: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
 }
 
-.shell-overlay-context {
+.context-panel-resize-handle::after {
+  content: '';
   position: absolute;
-  top: calc(var(--app-shell-overlay-top-offset) + 0.25rem);
+  top: 20px;
+  bottom: 20px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: var(--app-border-strong);
+  opacity: 0.62;
+  transition:
+    width 160ms ease,
+    opacity 160ms ease,
+    background-color 160ms ease;
+}
+
+.context-panel-resize-handle:hover::after,
+.context-panel-resize-handle:focus-visible::after,
+.context-panel-resize-handle[data-resizing='true']::after {
+  width: 2px;
+  opacity: 1;
+  background: var(--app-accent);
+}
+
+.context-panel-resize-handle:focus-visible {
+  outline: none;
+}
+
+.shell-context-drawer {
+  left: auto;
+  top: calc(var(--app-shell-window-gap-y) + var(--app-drag-strip-height));
   right: var(--app-shell-window-gap-x);
   bottom: var(--app-shell-window-gap-y);
-  z-index: 30;
-  width: var(--app-shell-overlay-context-width);
-  max-width: calc(100vw - 2rem);
+  height: calc(100vh - var(--app-drag-strip-height) - 32px);
+  width: min(var(--app-shell-overlay-context-width), calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  transform: translate(0, 0);
+  border: 1px solid var(--app-border);
+  border-radius: 24px;
+  background: var(--app-panel-strong);
   overflow: hidden;
-  background: var(--app-panel);
+  padding: 0;
 }
 
 .surface-eyebrow {

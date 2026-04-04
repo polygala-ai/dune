@@ -11,6 +11,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AppShell from '@/renderer/app/AppShell';
 import {
+  CONTEXT_PANEL_WIDTH_DEFAULT,
+  CONTEXT_PANEL_WIDTH_MAX,
+  CONTEXT_PANEL_WIDTH_MIN,
+  CONTEXT_PANEL_WIDTH_STORAGE_KEY,
+} from '@/renderer/app/hooks/use-resizable-context-panel';
+import {
   SIDEBAR_WIDTH_DEFAULT,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
@@ -32,9 +38,26 @@ function getSidebarResizeHandle() {
   return screen.getByRole('separator', { name: 'Resize sidebar' });
 }
 
+function getContextPanelResizeHandle() {
+  return screen.getByRole('separator', { name: 'Resize inspector' });
+}
+
+function getContextPanelDialog() {
+  return screen.getByRole('dialog', { name: 'Agent inspector' });
+}
+
 function expectSidebarWidth(width: number) {
   expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
     `--app-shell-sidebar-width: ${width}px`,
+  );
+}
+
+function expectContextPanelWidth(width: number) {
+  expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
+    `--app-shell-context-width: ${width}px`,
+  );
+  expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
+    `--app-shell-overlay-context-width: ${width}px`,
   );
 }
 
@@ -69,6 +92,7 @@ async function createAgent(user: ReturnType<typeof userEvent.setup>, name: strin
 describe('AppShell', () => {
   beforeEach(() => {
     resetAppStore();
+    window.localStorage.removeItem(CONTEXT_PANEL_WIDTH_STORAGE_KEY);
     window.localStorage.removeItem(SIDEBAR_WIDTH_STORAGE_KEY);
     setWindowWidth(1440);
   });
@@ -102,9 +126,9 @@ describe('AppShell', () => {
 
     await user.click(screen.getByRole('button', { name: /Channels/i }));
     expect(
-      screen.getByRole('heading', { name: 'External channel catalog' }),
+      screen.getByRole('heading', { name: 'Channels' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Configure$/i })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: /^Configure$/i })).toHaveLength(2);
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     const commandDialog = screen.getByRole('dialog');
@@ -140,7 +164,7 @@ describe('AppShell', () => {
       expect(screen.queryByLabelText('Agent name')).not.toBeInTheDocument();
       expect(screen.getByTestId('settings-view')).toBeInTheDocument();
       expect(
-        screen.getByRole('heading', { name: 'External channel catalog' }),
+        screen.getByRole('heading', { name: 'Channels' }),
       ).toBeInTheDocument();
     });
   });
@@ -273,13 +297,14 @@ describe('AppShell', () => {
     await user.click(showInspectorButton);
 
     await waitFor(() => {
-      expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+      expect(getContextPanelDialog()).toBeInTheDocument();
+      expect(screen.getByTestId('context-panel-overlay')).toBeInTheDocument();
       expect(
-        screen.getByLabelText('Close context panel backdrop'),
+        within(getContextPanelDialog()).getByTestId('context-panel'),
       ).toBeInTheDocument();
     });
 
-    fireEvent.keyDown(window, { key: 'Escape' });
+    await user.click(screen.getByTestId('context-panel-overlay'));
 
     await waitFor(() => {
       expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
@@ -306,6 +331,12 @@ describe('AppShell', () => {
 
     await agentRuntime.service.createAgent({
       channelId: 'telegram',
+      externalTarget: {
+        channelId: 'telegram',
+        jid: 'tg:123',
+        kind: 'group',
+        name: 'QA Inbox',
+      },
       name: 'QA triage',
       projectId: useAppStore.getState().selectedProjectId,
     });
@@ -319,7 +350,7 @@ describe('AppShell', () => {
 
     expect(screen.getByLabelText('Agent composer')).toBeDisabled();
     expect(
-      screen.getByText(/This agent is attached to Telegram\. Reply in the source channel\./i),
+      screen.getByText(/This agent is attached to QA Inbox\. Reply in the source channel\./i),
     ).toBeInTheDocument();
   });
 
@@ -336,15 +367,18 @@ describe('AppShell', () => {
     });
 
     expect(
-      screen.queryByLabelText('Close context panel backdrop'),
+      screen.queryByTestId('context-panel-overlay'),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Agent inspector' })).not.toBeInTheDocument();
 
     setWindowWidth(1300);
 
     await waitFor(() => {
+      expect(getContextPanelDialog()).toBeInTheDocument();
+      expect(screen.getByTestId('context-panel-overlay')).toBeInTheDocument();
       expect(
-        screen.getByLabelText('Close context panel backdrop'),
-      ).toBeInTheDocument();
+        within(screen.getByTestId('app-shell-layout')).queryByTestId('context-panel'),
+      ).not.toBeInTheDocument();
     });
 
     setWindowWidth(960);
@@ -359,9 +393,7 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
       expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
-      expect(
-        screen.queryByLabelText('Close context panel backdrop'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('context-panel-overlay')).not.toBeInTheDocument();
     });
   });
 
@@ -486,6 +518,111 @@ describe('AppShell', () => {
     });
   });
 
+  it('supports keyboard resizing on the inline inspector and clamps the width', async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+    await createAgent(user, 'Orchestrator');
+
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+      expect(getContextPanelResizeHandle()).toHaveAttribute(
+        'aria-valuenow',
+        String(CONTEXT_PANEL_WIDTH_DEFAULT),
+      );
+    });
+
+    const resizeHandle = getContextPanelResizeHandle();
+
+    expectContextPanelWidth(CONTEXT_PANEL_WIDTH_DEFAULT);
+
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '316');
+    expectContextPanelWidth(316);
+
+    fireEvent.keyDown(resizeHandle, { key: 'End' });
+    expect(resizeHandle).toHaveAttribute(
+      'aria-valuenow',
+      String(CONTEXT_PANEL_WIDTH_MAX),
+    );
+
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
+    expect(resizeHandle).toHaveAttribute(
+      'aria-valuenow',
+      String(CONTEXT_PANEL_WIDTH_MAX),
+    );
+    expectContextPanelWidth(CONTEXT_PANEL_WIDTH_MAX);
+
+    fireEvent.keyDown(resizeHandle, { key: 'Home' });
+    expect(resizeHandle).toHaveAttribute(
+      'aria-valuenow',
+      String(CONTEXT_PANEL_WIDTH_MIN),
+    );
+
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowRight' });
+    expect(resizeHandle).toHaveAttribute(
+      'aria-valuenow',
+      String(CONTEXT_PANEL_WIDTH_MIN),
+    );
+    expectContextPanelWidth(CONTEXT_PANEL_WIDTH_MIN);
+    expect(window.localStorage.getItem(CONTEXT_PANEL_WIDTH_STORAGE_KEY)).toBe(
+      String(CONTEXT_PANEL_WIDTH_MIN),
+    );
+  });
+
+  it('restores a persisted inspector width across remounts', async () => {
+    window.localStorage.setItem(CONTEXT_PANEL_WIDTH_STORAGE_KEY, '344');
+
+    const user = userEvent.setup();
+    const firstRender = render(<AppShell />);
+
+    await createAgent(user, 'Orchestrator');
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+
+    await waitFor(() => {
+      expect(getContextPanelResizeHandle()).toHaveAttribute('aria-valuenow', '344');
+      expectContextPanelWidth(344);
+    });
+
+    firstRender.unmount();
+
+    render(<AppShell />);
+
+    expect(getContextPanelResizeHandle()).toHaveAttribute('aria-valuenow', '344');
+    expectContextPanelWidth(344);
+  });
+
+  it('uses the saved inspector width in overlay mode without rendering the inline handle', async () => {
+    window.localStorage.setItem(CONTEXT_PANEL_WIDTH_STORAGE_KEY, '360');
+
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+    await createAgent(user, 'Orchestrator');
+
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+      expect(getContextPanelResizeHandle()).toBeInTheDocument();
+      expectContextPanelWidth(360);
+    });
+
+    setWindowWidth(1300);
+
+    await waitFor(() => {
+      expect(getContextPanelDialog()).toBeInTheDocument();
+      expect(screen.getByTestId('context-panel-overlay')).toBeInTheDocument();
+      expect(
+        within(getContextPanelDialog()).getByTestId('context-panel'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('separator', { name: 'Resize inspector' })).not.toBeInTheDocument();
+      expectContextPanelWidth(360);
+    });
+  });
+
   it('switches to dark theme from settings while the prototype is open', async () => {
     const user = userEvent.setup();
 
@@ -529,7 +666,13 @@ describe('AppShell', () => {
       }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('button', { name: /^New work item$/i })[0]!);
+    const [newWorkItemButton] = screen.getAllByRole('button', { name: /^New work item$/i });
+
+    if (!newWorkItemButton) {
+      throw new Error('Expected to find a new work item button.');
+    }
+
+    await user.click(newWorkItemButton);
     await user.type(screen.getByLabelText('Work item title'), 'Review the first-run board');
     await user.type(
       screen.getByLabelText('Brief'),
@@ -645,7 +788,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
 
-    await act(async () => {
+    act(() => {
       useAppStore.getState().createProject({
         description: 'Support the calm project shell.',
         name: 'Studio Ops',
@@ -745,7 +888,7 @@ describe('AppShell', () => {
   });
 
   it('restores a persisted workflow snapshot from local storage', async () => {
-    const storageGet = vi.fn(async () => ({
+    const storageGet = vi.fn(() => Promise.resolve({
       missions: [
         {
           brief: 'Reload the saved mission from storage.',
@@ -780,7 +923,7 @@ describe('AppShell', () => {
       ...window.duneDesktop,
       platform: 'darwin',
       storageGet,
-      storageSet: vi.fn(async () => undefined),
+      storageSet: vi.fn(() => Promise.resolve(undefined)),
     };
 
     render(<AppShell />);

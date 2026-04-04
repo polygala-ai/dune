@@ -5,7 +5,7 @@ import {
   cleanupTempHome,
   closeElectronApp,
   createTempHome,
-  getModifier,
+  dispatchPrimaryShortcut,
   launchApp,
   navigateToWorkflow,
 } from './helpers';
@@ -48,7 +48,6 @@ test.describe('Workflow persistence', () => {
   });
 
   test('project settings persist across restart and deleting the last project falls back to the empty shell', async () => {
-    const modifier = getModifier();
     const app1 = await launchApp(runtimeHome);
 
     try {
@@ -71,7 +70,7 @@ test.describe('Workflow persistence', () => {
       await navigateToWorkflow(page);
       await expect(page.getByRole('heading', { name: 'Studio Systems' })).toBeVisible();
 
-      await page.keyboard.press(`${modifier}+K`);
+      await dispatchPrimaryShortcut(page, 'k');
       await page.getByText('New agent', { exact: true }).click();
       await page.getByLabel('Agent name').fill('Studio agent');
       await page.getByLabel('Agent name').press('Enter');

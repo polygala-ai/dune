@@ -9,6 +9,7 @@ export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentSt
   return {
     agents: snapshot.agents,
     draft: '',
+    externalChannels: snapshot.externalChannels,
     isStreaming: snapshot.isStreaming,
     runtimeInfo: snapshot.runtimeInfo,
     selectedAgentId: snapshot.selectedAgentId,
@@ -20,12 +21,14 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
     ...initialState,
     setAgentsSnapshot: ({
       agents,
+      externalChannels,
       isStreaming,
       runtimeInfo,
       selectedAgentId,
     }) => {
       set({
         agents,
+        externalChannels,
         isStreaming,
         runtimeInfo,
         selectedAgentId,

@@ -21,12 +21,23 @@ const DialogOverlay = React.forwardRef<
 
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+interface DialogContentProps
+  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  overlayClassName?: string;
+  overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
+    [key: `data-${string}`]: string | undefined;
+  };
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ children, className, ...props }, ref) => (
+  DialogContentProps
+>(({ children, className, overlayClassName, overlayProps, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay
+      {...overlayProps}
+      className={cn(overlayClassName, overlayProps?.className)}
+    />
     <DialogPrimitive.Content
       className={cn(
         'dialog-surface-motion fixed left-1/2 top-1/2 z-50 w-[min(92vw,760px)] -translate-x-1/2 -translate-y-1/2 rounded-[26px] border border-app-border bg-app-panel-strong p-6 shadow-[var(--app-shadow)] outline-none',

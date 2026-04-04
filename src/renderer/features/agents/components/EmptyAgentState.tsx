@@ -26,9 +26,10 @@ export function EmptyAgentState({
           No agents yet.
         </h2>
         <p className="mt-3 max-w-xl text-sm leading-7 text-app-muted">
-          Start by naming one agent and attaching it to Dune chat. Dune now resolves
-          its runtime through Electron main, so this shell can run on real AgentLite
-          or drop back to the mock provider when the runtime is unavailable.
+          Start by naming one agent and attaching it to Dune chat or a connected
+          Telegram conversation. Dune now resolves its runtime through Electron main,
+          so this shell can run on real AgentLite or drop back to the mock provider
+          when the runtime is unavailable.
         </p>
 
         <div className="mt-4 rounded-[18px] border border-app-border bg-app-panel/70 px-4 py-3">
@@ -47,8 +48,7 @@ export function EmptyAgentState({
             <Plus className="h-4 w-4" />
           </Button>
           <p className="text-[12px] leading-5 text-app-muted">
-            Create one durable workspace with a built-in channel instead of restarting
-            from scratch each time.
+            Create one durable workspace and keep its channel attached across sessions.
           </p>
         </div>
       </div>

@@ -13,18 +13,30 @@ describe('DesktopBridge', () => {
   });
 
   it('accepts runtime and storage methods', async () => {
+    const applyNetworkSettings = async () => undefined;
+    const copyText = async () => undefined;
     const createAgent = async () => 'agent-1';
+    const openExternal = async () => undefined;
+    const reloadExternalChannels = async () => undefined;
     const restartApp = async () => undefined;
     const storageGet = async () => ({ key: 'value' });
 
     const bridge: DesktopBridge = {
+      applyNetworkSettings,
       platform: 'win32',
+      copyText,
       createAgent,
+      openExternal,
+      reloadExternalChannels,
       restartApp,
       storageGet,
     };
 
+    await expect(bridge.applyNetworkSettings?.()).resolves.toBeUndefined();
+    await expect(bridge.copyText?.('@agentlite_test_bot')).resolves.toBeUndefined();
     expect(await bridge.createAgent?.({ channelId: 'dune-chat', name: 'test' })).toBe('agent-1');
+    await expect(bridge.openExternal?.('https://t.me/BotFather')).resolves.toBeUndefined();
+    await expect(bridge.reloadExternalChannels?.()).resolves.toBeUndefined();
     await expect(bridge.restartApp?.()).resolves.toBeUndefined();
     expect(await bridge.storageGet?.('settings', 'key')).toEqual({ key: 'value' });
   });

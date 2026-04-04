@@ -8,6 +8,7 @@ import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateA
 import { useAgentSubmit } from '@/renderer/app/hooks/use-agent-submit';
 import { useAgentShellController } from '@/renderer/app/hooks/use-agent-shell-controller';
 import { useComposerFocus } from '@/renderer/app/hooks/use-composer-focus';
+import { useResizableContextPanel } from '@/renderer/app/hooks/use-resizable-context-panel';
 import { useResizableSidebar } from '@/renderer/app/hooks/use-resizable-sidebar';
 import { useGlobalShortcuts } from '@/renderer/app/hooks/use-global-shortcuts';
 import { useResponsiveShell } from '@/renderer/app/hooks/use-responsive-shell';
@@ -45,6 +46,7 @@ export default function AppShell() {
     activeAgent,
     commandAgents,
     draft,
+    externalChannels,
     isStreaming,
     runtimeInfo,
   } = useAgentSession();
@@ -65,15 +67,24 @@ export default function AppShell() {
     themePreference,
   } = useSettingsState();
   const {
+    agents,
     selectProject,
   } = useAppStore(
     useShallow((state) => ({
+      agents: state.agents,
       selectProject: state.selectProject,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
   const { isCompactShell, usesInlineContext, usesOverlayContext } =
     useResponsiveShell(showContextPanel);
+  const {
+    contextPanelStyle,
+    isResizing: isContextPanelResizing,
+    resizeHandleProps: contextPanelResizeHandleProps,
+  } = useResizableContextPanel({
+    enabled: !isCompactShell && usesInlineContext,
+  });
   const {
     isResizing: isSidebarResizing,
     resizeHandleProps,
@@ -131,6 +142,12 @@ export default function AppShell() {
         : {})}
     />
   );
+  const shellStyle = isCompactShell
+    ? contextPanelStyle
+    : {
+        ...sidebarStyle,
+        ...contextPanelStyle,
+      };
 
   useGlobalShortcuts({
     isCommandOpen,
@@ -170,7 +187,7 @@ export default function AppShell() {
                 : 'grid-cols-[var(--app-shell-sidebar-width)_minmax(0,1fr)]',
           )}
           data-testid="app-shell-layout"
-          style={!isCompactShell ? sidebarStyle : undefined}
+          style={shellStyle}
         >
           {!isCompactShell ? (
             <div className="relative min-h-0 min-w-0">
@@ -220,6 +237,8 @@ export default function AppShell() {
               />
             ) : (
               <SettingsWorkspace
+                agents={agents}
+                externalChannels={externalChannels}
                 isCompactShell={isCompactShell}
                 isSidebarOpen={controller.isSidebarDrawerOpen}
                 onSelectRoute={commands.setSettingsRoute}
@@ -234,6 +253,8 @@ export default function AppShell() {
 
           <ContextPanelHost
             agent={activeAgent}
+            inlineResizeHandleProps={contextPanelResizeHandleProps}
+            isInlineResizing={isContextPanelResizing}
             mode={
               route !== 'agent' || !activeAgent
                 ? 'hidden'
@@ -283,6 +304,8 @@ export default function AppShell() {
 
         <CreateAgentDialog
           defaultProjectId={selectedProjectId}
+          existingAgents={agents}
+          externalChannels={externalChannels}
           onCreateAgent={controller.handleCreateAgent}
           onOpenChange={controller.handleCreateAgentDialogOpenChange}
           onOpenChannelsSettings={controller.handleOpenChannelsSettings}

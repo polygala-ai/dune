@@ -11,6 +11,7 @@ import {
 } from '@/electron/runtime-core/agentlite-host';
 
 type ActiveRuntime = AgentRuntime & {
+  reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
 
@@ -35,6 +36,8 @@ export class DesktopRuntimeController {
   private readonly runtimeRoot: string;
 
   private readonly runtimeOptions: DesktopRuntimeControllerOptions;
+
+  private shutdownPromise: Promise<void> | null = null;
 
   constructor(options: DesktopRuntimeControllerOptions = {}) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
@@ -87,6 +90,10 @@ export class DesktopRuntimeController {
     await this.activeRuntime.service.deleteAgent(agentId);
   }
 
+  async reloadExternalChannels() {
+    await this.activeRuntime.reloadExternalChannels?.();
+  }
+
   async sendAgentMessage(agentId: string, text: string) {
     await this.activeRuntime.service.sendMessage(agentId, text);
   }
@@ -101,13 +108,21 @@ export class DesktopRuntimeController {
     }
   }
 
-  async shutdown() {
-    this.activeRuntimeUnsubscribe?.();
-    this.activeRuntimeUnsubscribe = null;
-
-    if (typeof this.activeRuntime.shutdown === 'function') {
-      await this.activeRuntime.shutdown();
+  shutdown(): Promise<void> {
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
     }
+
+    this.shutdownPromise = (async () => {
+      this.activeRuntimeUnsubscribe?.();
+      this.activeRuntimeUnsubscribe = null;
+
+      if (typeof this.activeRuntime.shutdown === 'function') {
+        await this.activeRuntime.shutdown();
+      }
+    })();
+
+    return this.shutdownPromise;
   }
 
   private emit(snapshot: AgentServiceSnapshot) {

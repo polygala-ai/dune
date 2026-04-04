@@ -3,10 +3,14 @@ import type { CreateAgentInput } from '@/renderer/features/agents/types';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
+  applyNetworkSettings?: () => Promise<void>;
+  copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
   createAgent?: (input: CreateAgentInput) => Promise<string>;
   deleteAgent?: (agentId: string) => Promise<void>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
+  openExternal?: (url: string) => Promise<void>;
+  reloadExternalChannels?: () => Promise<void>;
   resetRuntime?: () => Promise<void>;
   restartApp?: () => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;

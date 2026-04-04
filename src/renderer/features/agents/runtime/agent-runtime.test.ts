@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
+import { createAgentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 
 describe('agent runtime', () => {
@@ -69,6 +72,7 @@ describe('agent runtime', () => {
 
     expect(runtime.getSnapshot()).toEqual({
       agents: [],
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
         message: 'AgentLite is unavailable, so Dune is using the mock runtime.',
@@ -76,6 +80,62 @@ describe('agent runtime', () => {
         status: 'ready',
       },
       selectedAgentId: null,
+    });
+  });
+
+  it('reconciles a stale desktop snapshot with the live runtime state', async () => {
+    const liveSnapshot: AgentServiceSnapshot = {
+      agents: [],
+      externalChannels: {
+        telegram: {
+          botUsername: 'agentlite_test_bot',
+          configured: true,
+          discoveredChats: [
+            {
+              channelId: 'telegram',
+              jid: 'tg:123',
+              kind: 'dm',
+              lastSeenAt: 1,
+              name: 'HashG',
+            },
+          ],
+          errorMessage: null,
+          status: 'connected',
+        },
+      },
+      isStreaming: false,
+      runtimeInfo: {
+        mode: 'real',
+        status: 'ready',
+      },
+      selectedAgentId: null,
+    };
+
+    const runtime = createAgentRuntime({
+      createAgent: vi.fn(async () => 'agent-1'),
+      deleteAgent: vi.fn(async () => undefined),
+      getRuntimeSnapshot: vi.fn(async () => liveSnapshot),
+      platform: 'darwin',
+      selectAgent: vi.fn(async () => undefined),
+      sendAgentMessage: vi.fn(async () => undefined),
+      subscribe: vi.fn(() => () => undefined),
+    });
+
+    await vi.waitFor(() => {
+      expect(runtime.getSnapshot().externalChannels.telegram).toMatchObject({
+        botUsername: 'agentlite_test_bot',
+        configured: true,
+        discoveredChats: [
+          {
+            channelId: 'telegram',
+            jid: 'tg:123',
+            kind: 'dm',
+            lastSeenAt: 1,
+            name: 'HashG',
+          },
+        ],
+        status: 'connected',
+      });
     });
   });
 });

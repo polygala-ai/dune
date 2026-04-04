@@ -1,17 +1,32 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { TelegramChannelOpts } from '@boxlite-ai/agentlite/channels/telegram';
 
 import type {
   Agent,
   AgentChannelBinding,
   AgentChannelId,
+  AgentChannelStatus,
+  AgentExternalTarget,
   AgentMessage,
   AgentRuntimeInfo,
   CreateAgentInput,
+  DiscoveredExternalChat,
+  ExternalChannelsState,
 } from '../../renderer/features/agents/types';
+import {
+  cloneExternalChannelsState,
+  createDefaultExternalChannelsState,
+} from '../../renderer/features/agents/model/channels';
 import { DuneChannel } from './dune-channel';
+import {
+  ManagedTelegramChannel,
+  type ManagedTelegramChannelHooks,
+  type RuntimeTelegramChannel,
+} from './managed-telegram-channel';
 
 const HIDDEN_MAIN_GROUP_ID = 'dune:main';
 const DUNE_RUNTIME_STATE_FILENAME = 'dune-runtime-state.json';
@@ -20,6 +35,7 @@ const STREAMING_SAFETY_TIMEOUT_MS = 30_000;
 
 export interface AgentServiceSnapshot {
   agents: Agent[];
+  externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
@@ -45,13 +61,14 @@ export interface AgentRuntime {
 }
 
 export interface AgentLiteChannel {
-  _setOpts?: (callbacks: DuneChannelCallbacks) => void;
+  _setOpts?: ((callbacks: DuneChannelCallbacks) => void) | ((callbacks: TelegramChannelOpts) => void);
   connect: () => Promise<void> | void;
   disconnect: () => Promise<void> | void;
   isConnected: () => boolean;
   name: string;
   ownsJid: (jid: string) => boolean;
   sendMessage: (jid: string, text: string) => Promise<void> | void;
+  setTyping?: (jid: string, isTyping: boolean) => Promise<void> | void;
 }
 
 export interface AgentLiteGroupRegistration {
@@ -115,7 +132,9 @@ interface PersistedAgentRecord {
 
 interface PersistedRuntimeState {
   agents: PersistedAgentRecord[];
+  externalChannels?: ExternalChannelsState;
   selectedAgentId: string | null;
+  telegramTokenFingerprint?: string | null;
 }
 
 interface PendingAssistantMessage {
@@ -125,21 +144,27 @@ interface PendingAssistantMessage {
 }
 
 export interface AgentLiteHostOptions {
+  createTelegramChannel?: (hooks: ManagedTelegramChannelHooks) => RuntimeTelegramChannel;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<AgentLiteModule>;
   now?: () => number;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
+  resolveTelegramBotToken?: () => Promise<string>;
 }
 
 function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
       ...agent,
-      channel: { ...agent.channel },
+      channel: {
+        ...agent.channel,
+        target: agent.channel.target ? { ...agent.channel.target } : null,
+      },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({ ...message })),
       projectId: agent.projectId ?? null,
     })),
+    externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
     isStreaming: snapshot.isStreaming,
     runtimeInfo: { ...snapshot.runtimeInfo },
     selectedAgentId: snapshot.selectedAgentId,
@@ -172,6 +197,14 @@ function createRuntimeInfo(
   };
 }
 
+function fingerprintTelegramToken(token: string) {
+  if (!token) {
+    return null;
+  }
+
+  return createHash('sha256').update(token).digest('hex');
+}
+
 function createAgentId() {
   return `dune:agent:${randomUUID()}`;
 }
@@ -186,7 +219,29 @@ function createGroupFolder(name: string, agentId: string) {
   return `${slug}-${agentId.split(':').pop()?.slice(0, 8) ?? 'agent'}`;
 }
 
-function createChannelBinding(channelId: AgentChannelId): AgentChannelBinding {
+function mapTelegramChannelStatus(
+  externalChannels: ExternalChannelsState,
+): AgentChannelStatus {
+  switch (externalChannels.telegram.status) {
+    case 'connected':
+      return 'connected';
+    case 'connecting':
+      return 'connecting';
+    case 'error':
+      return 'error';
+    case 'disconnected':
+    case 'not-configured':
+      return 'disconnected';
+    default:
+      return 'disconnected';
+  }
+}
+
+function createChannelBinding(
+  channelId: AgentChannelId,
+  externalChannels: ExternalChannelsState,
+  target: AgentExternalTarget | null = null,
+): AgentChannelBinding {
   switch (channelId) {
     case 'discord':
       return {
@@ -194,7 +249,7 @@ function createChannelBinding(channelId: AgentChannelId): AgentChannelBinding {
         id: 'discord',
         kind: 'external',
         label: 'Discord',
-        status: 'connected',
+        status: 'coming-soon',
       };
     case 'slack':
       return {
@@ -202,7 +257,7 @@ function createChannelBinding(channelId: AgentChannelId): AgentChannelBinding {
         id: 'slack',
         kind: 'external',
         label: 'Slack',
-        status: 'connected',
+        status: 'coming-soon',
       };
     case 'telegram':
       return {
@@ -210,7 +265,8 @@ function createChannelBinding(channelId: AgentChannelId): AgentChannelBinding {
         id: 'telegram',
         kind: 'external',
         label: 'Telegram',
-        status: 'connected',
+        status: mapTelegramChannelStatus(externalChannels),
+        ...(target ? { target } : {}),
       };
     default:
       return {
@@ -228,45 +284,48 @@ function createDraftAgent(
   name: string,
   now: number,
   channelId: CreateAgentInput['channelId'],
+  externalChannels: ExternalChannelsState,
+  externalTarget: AgentExternalTarget | null,
   projectId: string | null,
 ): Agent {
-  const channel = createChannelBinding(channelId);
+  const channel = createChannelBinding(channelId, externalChannels, externalTarget);
   const isBuiltInChannel = channel.kind === 'built-in';
+  const attachedLabel = channel.target?.name ?? channel.label;
 
   return {
     channel,
-    contextCards: [
-      {
-        body: isBuiltInChannel
-          ? 'This agent now runs through AgentLite from the Dune runtime root under ~/.dune/agentlite.'
-          : `This agent mirrors ${channel.label} through the AgentLite runtime that Dune manages.`,
-        eyebrow: 'Runtime',
-        id: `context-${now}-1`,
-        title: isBuiltInChannel
-          ? 'AgentLite is driving this workspace'
-          : `${channel.label} is backed by AgentLite`,
-      },
-      {
-        body: 'The main process owns the runtime bridge and forwards live AgentLite snapshot updates back into the renderer.',
-        eyebrow: 'Bridge',
-        id: `context-${now}-2`,
-        title: 'Desktop-managed runtime',
-      },
-    ],
+    contextCards: [],
     id: agentId,
     messages: [] satisfies AgentMessage[],
     name,
     note: isBuiltInChannel
       ? 'This agent is running inside the real AgentLite foundation that Dune now hosts directly in the desktop runtime.'
-      : `This agent is bound to ${channel.label} and mirrors its transcript through the Dune host.`,
+      : `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
     preview: isBuiltInChannel
       ? 'Ready for a first instruction.'
-      : `Attached to ${channel.label}. Dune mirrors the transcript.`,
+      : `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
     projectId,
     status: 'draft',
     updatedAt: now,
     workspace: 'AgentLite agent',
   };
+}
+
+function resolveAgentGroupJid(agent: Agent) {
+  return agent.channel.target?.jid ?? agent.id;
+}
+
+function createMirroredMessageId(
+  role: AgentMessage['role'],
+  chatJid: string,
+  sourceId: string,
+) {
+  return `mirror-${role}-${chatJid}-${sourceId}`;
+}
+
+function parseMessageTimestamp(timestamp: string, fallback: number) {
+  const parsed = Date.parse(timestamp);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function createUserMessage(content: string, now: number): AgentMessage {
@@ -318,9 +377,17 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly resolveModelCredentials: () => Promise<Record<string, string>>;
 
+  private readonly resolveTelegramBotToken: () => Promise<string>;
+
   private startupModelCredentials: Record<string, string> = {};
 
   private snapshot: AgentServiceSnapshot;
+
+  private readonly telegramChannel: RuntimeTelegramChannel;
+
+  private shutdownPromise: Promise<void> | null = null;
+
+  private persistedTelegramTokenFingerprint: string | null = null;
 
   readonly service: AgentService;
 
@@ -337,21 +404,39 @@ export class AgentLiteHost implements AgentRuntime {
       (async () => import('@boxlite-ai/agentlite') as Promise<AgentLiteModule>);
     this.resolveModelCredentials =
       options.resolveModelCredentials ??
-      (async () => ({} satisfies Record<string, string>));
+      (() => Promise.resolve({} satisfies Record<string, string>));
+    this.resolveTelegramBotToken =
+      options.resolveTelegramBotToken ??
+      (() => Promise.resolve(''));
     this.snapshot = {
       agents: [],
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot),
       selectedAgentId: null,
     };
     this.duneChannel = new DuneChannel({
-      onOutboundMessage: async (jid, text) => {
+      onOutboundMessage: (jid, text) => {
         this.handleOutboundMessage(jid, text);
       },
     });
+    const createTelegramChannel =
+      options.createTelegramChannel ??
+      ((hooks: ManagedTelegramChannelHooks) => new ManagedTelegramChannel(hooks));
+    this.telegramChannel = createTelegramChannel({
+      onChatMetadata: (chatJid, timestamp, name, _channel, isGroup) => {
+        this.handleTelegramChatMetadata(chatJid, timestamp, name, isGroup);
+      },
+      onInboundMessage: (chatJid, message) => {
+        this.handleTelegramInboundMessage(chatJid, message);
+      },
+      onOutboundMessage: (chatJid, text) => {
+        this.handleTelegramOutboundMessage(chatJid, text);
+      },
+    });
     this.service = {
-      createAgent: async (input) => this.createAgent(input),
-      deleteAgent: async (agentId) => this.deleteAgent(agentId),
+      createAgent: (input) => Promise.resolve(this.createAgent(input)),
+      deleteAgent: (agentId) => Promise.resolve(this.deleteAgent(agentId)),
       getSnapshot: () => this.getSnapshot(),
       listAgents: () => this.getSnapshot().agents,
       selectAgent: (agentId) => {
@@ -381,13 +466,14 @@ export class AgentLiteHost implements AgentRuntime {
     this.startupModelCredentials = { ...credentials };
     const agentLite = new AgentLite({
       model: {
-        credentials: async () => ({ ...this.startupModelCredentials }),
+        credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
       },
       name: 'Dune',
       workdir: this.runtimeRoot,
     });
 
     await agentLite.registerChannel(this.duneChannel);
+    await agentLite.registerChannel(this.telegramChannel);
     agentLite.registerGroup(HIDDEN_MAIN_GROUP_ID, {
       folder: 'main',
       isMain: true,
@@ -395,8 +481,8 @@ export class AgentLiteHost implements AgentRuntime {
       requiresTrigger: false,
     });
 
-    for (const [agentId, record] of this.persistedAgents) {
-      agentLite.registerGroup(agentId, {
+    for (const record of this.persistedAgents.values()) {
+      agentLite.registerGroup(resolveAgentGroupJid(record.agent), {
         folder: record.groupFolder,
         name: record.agent.name,
         requiresTrigger: false,
@@ -413,19 +499,77 @@ export class AgentLiteHost implements AgentRuntime {
       }),
     };
     this.emit();
+    await this.reloadExternalChannels();
   }
 
-  async shutdown() {
-    this.clearPendingAssistantMessages();
-    await this.agentLite?.stop();
-    this.agentLite = null;
+  shutdown(): Promise<void> {
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
+    }
+
+    this.shutdownPromise = (async () => {
+      this.clearPendingAssistantMessages();
+
+      try {
+        await this.agentLite?.stop();
+      } finally {
+        this.agentLite = null;
+        await this.telegramChannel.reset();
+      }
+    })();
+
+    return this.shutdownPromise;
+  }
+
+  async reloadExternalChannels() {
+    const token = (await this.resolveTelegramBotToken()).trim();
+    const nextTokenFingerprint = fingerprintTelegramToken(token);
+    const tokenChanged = this.persistedTelegramTokenFingerprint !== nextTokenFingerprint;
+
+    this.persistedTelegramTokenFingerprint = nextTokenFingerprint;
+
+    const nextTelegramState = {
+      ...this.snapshot.externalChannels.telegram,
+      botUsername: null,
+      configured: Boolean(token),
+      discoveredChats: tokenChanged ? [] : this.snapshot.externalChannels.telegram.discoveredChats,
+      errorMessage: null,
+      status: token ? 'connecting' : 'not-configured',
+    } as ExternalChannelsState['telegram'];
+
+    this.applyTelegramState(nextTelegramState);
+
+    try {
+      await this.telegramChannel.reconfigure(token || null);
+      this.applyTelegramState({
+        ...this.snapshot.externalChannels.telegram,
+        botUsername: token ? this.telegramChannel.getBotUsername() : null,
+        configured: Boolean(token),
+        errorMessage: null,
+        status: token ? 'connected' : 'not-configured',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.applyTelegramState({
+        ...this.snapshot.externalChannels.telegram,
+        botUsername: null,
+        configured: Boolean(token),
+        errorMessage: errorMessage.startsWith('Telegram failed to connect')
+          ? errorMessage
+          : `Telegram failed to connect. ${String(error)}`,
+        status: token ? 'error' : 'not-configured',
+      });
+    }
   }
 
   reset() {
     this.clearPendingAssistantMessages();
     this.persistedAgents.clear();
+    const nextExternalChannels = cloneExternalChannelsState(this.snapshot.externalChannels);
+    nextExternalChannels.telegram.discoveredChats = [];
     this.snapshot = {
       agents: [],
+      externalChannels: nextExternalChannels,
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, {
         message: 'AgentLite runtime state was cleared in-process.',
@@ -437,11 +581,23 @@ export class AgentLiteHost implements AgentRuntime {
     this.emit();
   }
 
-  private async createAgent(input: CreateAgentInput) {
+  private createAgent(input: CreateAgentInput) {
     const trimmedName = input.name.trim();
 
     if (!trimmedName) {
       throw new Error('Agent name is required.');
+    }
+
+    if (input.channelId === 'telegram') {
+      if (!input.externalTarget || input.externalTarget.channelId !== 'telegram') {
+        throw new Error('Telegram chat selection is required.');
+      }
+
+      if (this.isTelegramChatBound(input.externalTarget.jid)) {
+        throw new Error('That Telegram chat is already attached to another agent.');
+      }
+    } else if (input.channelId !== 'dune-chat') {
+      throw new Error(`${input.channelId} is not available yet.`);
     }
 
     const now = this.now();
@@ -452,6 +608,8 @@ export class AgentLiteHost implements AgentRuntime {
       trimmedName,
       now,
       input.channelId,
+      this.snapshot.externalChannels,
+      input.externalTarget ?? null,
       input.projectId ?? null,
     );
 
@@ -467,7 +625,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.persistState();
     this.emit();
 
-    this.agentLite?.registerGroup(agentId, {
+    this.agentLite?.registerGroup(resolveAgentGroupJid(nextAgent), {
       folder: groupFolder,
       name: trimmedName,
       requiresTrigger: false,
@@ -476,7 +634,7 @@ export class AgentLiteHost implements AgentRuntime {
     return agentId;
   }
 
-  private async deleteAgent(agentId: string) {
+  private deleteAgent(agentId: string) {
     if (!this.persistedAgents.has(agentId)) {
       return;
     }
@@ -560,6 +718,176 @@ export class AgentLiteHost implements AgentRuntime {
     await this.duneChannel.pushInboundMessage(agentId, trimmedText);
   }
 
+  private isTelegramChatBound(chatJid: string) {
+    return this.snapshot.agents.some((agent) => agent.channel.target?.jid === chatJid);
+  }
+
+  private findAgentByTelegramChat(chatJid: string) {
+    return this.snapshot.agents.find((agent) => agent.channel.target?.jid === chatJid) ?? null;
+  }
+
+  private handleTelegramChatMetadata(
+    chatJid: string,
+    timestamp: string,
+    name?: string,
+    isGroup?: boolean,
+  ) {
+    if (!chatJid.startsWith('tg:')) {
+      return;
+    }
+
+    const fallbackNow = this.now();
+    const existingChat = this.snapshot.externalChannels.telegram.discoveredChats.find(
+      (chat) => chat.jid === chatJid,
+    ) ?? null;
+    const nextChat: DiscoveredExternalChat = {
+      channelId: 'telegram',
+      jid: chatJid,
+      kind: isGroup ? 'group' : 'dm',
+      lastSeenAt: parseMessageTimestamp(timestamp, fallbackNow),
+      name: name?.trim() || existingChat?.name || chatJid,
+    };
+    const previousChats = this.snapshot.externalChannels.telegram.discoveredChats;
+    const nextChats = [
+      nextChat,
+      ...previousChats.filter((chat) => chat.jid !== chatJid),
+    ]
+      .map((chat) =>
+        chat.jid === chatJid && existingChat
+          ? {
+              ...chat,
+              kind: nextChat.kind,
+              lastSeenAt: Math.max(chat.lastSeenAt, existingChat.lastSeenAt),
+              name: nextChat.name || existingChat.name,
+            }
+          : chat,
+      )
+      .sort((left, right) => right.lastSeenAt - left.lastSeenAt);
+
+    console.info('Recorded discovered Telegram chat.', {
+      chatJid,
+      kind: nextChat.kind,
+      name: nextChat.name,
+    });
+
+    this.applyTelegramState({
+      ...this.snapshot.externalChannels.telegram,
+      discoveredChats: nextChats,
+    });
+  }
+
+  private handleTelegramInboundMessage(chatJid: string, message: NewMessage) {
+    const agent = this.findAgentByTelegramChat(chatJid);
+
+    if (!agent) {
+      return;
+    }
+
+    const mirroredMessageId = createMirroredMessageId('user', chatJid, message.id);
+
+    if (agent.messages.some((item) => item.id === mirroredMessageId)) {
+      return;
+    }
+
+    const now = parseMessageTimestamp(message.timestamp, this.now());
+    const senderName = message.sender_name?.trim();
+    const content = agent.channel.target?.kind === 'group' && senderName
+      ? `${senderName}: ${message.content}`
+      : message.content;
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((item) =>
+        item.id === agent.id
+          ? {
+              ...item,
+              messages: [
+                ...item.messages,
+                {
+                  content,
+                  createdAt: now,
+                  id: mirroredMessageId,
+                  role: 'user',
+                  status: 'complete',
+                },
+              ],
+              preview: summarizePreview(content),
+              updatedAt: now,
+            }
+          : item,
+      ),
+    };
+    this.persistState();
+    this.emit();
+  }
+
+  private handleTelegramOutboundMessage(chatJid: string, text: string) {
+    const agent = this.findAgentByTelegramChat(chatJid);
+
+    if (!agent) {
+      return;
+    }
+
+    const now = this.now();
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((item) =>
+        item.id === agent.id
+          ? {
+              ...item,
+              messages: [
+                ...item.messages,
+                {
+                  content: text,
+                  createdAt: now,
+                  id: createMirroredMessageId(
+                    'assistant',
+                    chatJid,
+                    `${now}-${Math.random().toString(36).slice(2, 8)}`,
+                  ),
+                  role: 'assistant',
+                  status: 'complete',
+                },
+              ],
+              preview: summarizePreview(text),
+              status: 'ready',
+              updatedAt: now,
+            }
+          : item,
+      ),
+    };
+    this.persistState();
+    this.emit();
+  }
+
+  private applyTelegramState(nextTelegramState: ExternalChannelsState['telegram']) {
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.channel.id === 'telegram'
+          ? {
+              ...agent,
+              channel: createChannelBinding(
+                'telegram',
+                { telegram: nextTelegramState },
+                agent.channel.target ?? null,
+              ),
+            }
+          : agent,
+      ),
+      externalChannels: {
+        ...this.snapshot.externalChannels,
+        telegram: {
+          ...nextTelegramState,
+          discoveredChats: nextTelegramState.discoveredChats.map((chat) => ({ ...chat })),
+        },
+      },
+    };
+    this.persistState();
+    this.emit();
+  }
+
   private loadPersistedState() {
     if (!fs.existsSync(this.stateFilePath)) {
       return;
@@ -570,15 +898,22 @@ export class AgentLiteHost implements AgentRuntime {
       const parsedState = JSON.parse(fileContents) as PersistedRuntimeState;
       const agents = parsedState.agents ?? [];
 
+      this.persistedTelegramTokenFingerprint = parsedState.telegramTokenFingerprint ?? null;
+
       this.persistedAgents.clear();
 
       for (const record of agents) {
         this.persistedAgents.set(record.agent.id, record);
       }
 
+      const externalChannels = parsedState.externalChannels
+        ? cloneExternalChannelsState(parsedState.externalChannels)
+        : createDefaultExternalChannelsState();
+
       this.snapshot = {
         ...this.snapshot,
         agents: agents.map((record) => record.agent),
+        externalChannels,
         selectedAgentId: parsedState.selectedAgentId,
       };
     } catch (error) {
@@ -597,7 +932,9 @@ export class AgentLiteHost implements AgentRuntime {
 
     const persistedState: PersistedRuntimeState = {
       agents: [...this.persistedAgents.values()],
+      externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),
       selectedAgentId: this.snapshot.selectedAgentId,
+      telegramTokenFingerprint: this.persistedTelegramTokenFingerprint,
     };
 
     fs.writeFileSync(this.stateFilePath, JSON.stringify(persistedState, null, 2));

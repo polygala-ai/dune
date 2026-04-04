@@ -57,8 +57,34 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 beforeEach(() => {
   window.duneDesktop = {
+    applyNetworkSettings: vi.fn(async () => undefined),
+    copyText: vi.fn(async () => undefined),
+    getRuntimeSnapshot: vi.fn(async () => ({
+      agents: [],
+      externalChannels: {
+        telegram: {
+        botUsername: null,
+        configured: false,
+        discoveredChats: [],
+        errorMessage: null,
+        status: 'not-configured' as const,
+      },
+    },
+    isStreaming: false,
+    runtimeInfo: {
+      mode: 'real' as const,
+      status: 'ready' as const,
+    },
+      selectedAgentId: null,
+    })),
+    openExternal: vi.fn(async () => undefined),
     platform: 'darwin',
+    reloadExternalChannels: vi.fn(async () => undefined),
     restartApp: vi.fn(async () => undefined),
+    storageDelete: vi.fn(async () => undefined),
+    storageGet: vi.fn(async () => null),
+    storageKeys: vi.fn(async () => []),
+    storageSet: vi.fn(async () => undefined),
   };
   document.documentElement.dataset.theme = 'light';
 });

@@ -7,10 +7,14 @@ import type { DesktopBridge } from '../../shared/electron/desktop-bridge';
 import { ipcChannels } from '../../shared/electron/ipc-channels';
 
 const bridge: DesktopBridge = {
+  applyNetworkSettings: () => ipcRenderer.invoke(ipcChannels.applyNetworkSettings),
+  copyText: (text) => ipcRenderer.invoke(ipcChannels.copyText, text),
   platform: process.platform,
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
   deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
+  openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),
+  reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),

@@ -36,7 +36,7 @@ test.describe('Settings', () => {
       await expect(page.getByRole('heading', { name: 'Visual tone' })).toBeVisible();
 
       await clickSettingsNav(page, 'Channels');
-      await expect(page.getByRole('heading', { name: 'External channel catalog' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
 
       await clickSettingsNav(page, 'Models');
       await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();

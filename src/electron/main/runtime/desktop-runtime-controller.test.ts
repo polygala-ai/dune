@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
+import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 
 describe('DesktopRuntimeController', () => {
@@ -35,6 +36,7 @@ describe('DesktopRuntimeController', () => {
 
     expect(controller.getSnapshot()).toEqual({
       agents: [],
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
         message:
@@ -47,5 +49,37 @@ describe('DesktopRuntimeController', () => {
     });
 
     await controller.shutdown();
+  });
+
+  it('runs shutdown at most once even when called repeatedly', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
+    tempDirs.push(homeDir);
+    let resolveShutdown!: () => void;
+    const shutdown = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveShutdown = resolve;
+        }),
+    );
+    const controller = new DesktopRuntimeController({
+      createRealRuntime: () => ({
+        ...createMockAgentRuntime(),
+        shutdown,
+        start: async () => undefined,
+      }),
+      homeDir,
+    });
+
+    await controller.start();
+
+    const firstShutdown = controller.shutdown();
+    const secondShutdown = controller.shutdown();
+
+    expect(shutdown).toHaveBeenCalledTimes(1);
+    expect(firstShutdown).toBe(secondShutdown);
+
+    resolveShutdown();
+    await expect(firstShutdown).resolves.toBeUndefined();
+    await expect(secondShutdown).resolves.toBeUndefined();
   });
 });
