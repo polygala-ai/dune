@@ -125,6 +125,7 @@ function createInitialRuntimeSnapshot() {
 void app.whenReady().then(async () => {
   const userDataDir = app.getPath('userData');
   const stores = {
+    agents: new JsonFileStorage(userDataDir, 'agents'),
     secrets: new EncryptedFileStorage(userDataDir, 'secrets'),
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
@@ -170,7 +171,7 @@ void app.whenReady().then(async () => {
       const homeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
 
       runtimeController = new DesktopRuntimeController({
-        agentStore: new JsonFileStorage(userDataDir, 'agents'),
+        agentStore: stores.agents,
         ...(homeDir ? { homeDir } : {}),
         resolveModelCredentials: () => resolveDefaultModelCredentials({
           secretsStore: stores.secrets,
