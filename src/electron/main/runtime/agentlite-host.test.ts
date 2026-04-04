@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AgentLiteHost,
   resolveAgentLiteRuntimeRoot,
+  type AgentStore,
 } from '@/electron/runtime-core/agentlite-host';
 import {
   ManagedTelegramChannel,
@@ -18,29 +19,15 @@ function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-agentlite-home-'));
 }
 
-function readPersistedRuntimeState(homeDir: string) {
-  return JSON.parse(
-    fs.readFileSync(
-      path.join(resolveAgentLiteRuntimeRoot(homeDir), 'data', 'dune-runtime-state.json'),
-      'utf-8',
-    ),
-  ) as {
-    externalChannels?: {
-      telegram?: {
-        botUsername?: string | null;
-        configured?: boolean;
-        discoveredChats?: Array<{
-          channelId: string;
-          jid: string;
-          kind: string;
-          lastSeenAt: number;
-          name: string;
-        }>;
-        errorMessage?: string | null;
-        status?: string;
-      };
-    };
-    telegramTokenFingerprint?: string | null;
+function createMemoryStore(): AgentStore {
+  const data = new Map<string, unknown>();
+  return {
+    async get<T>(key: string) {
+      return (data.get(key) as T) ?? null;
+    },
+    async set<T>(key: string, value: T) {
+      data.set(key, value);
+    },
   };
 }
 
@@ -154,6 +141,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
       resolveModelCredentials: async () => credentials,
@@ -204,6 +192,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
       resolveModelCredentials: async () => ({
@@ -230,6 +219,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
       resolveModelCredentials: async () => ({}),
@@ -253,6 +243,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       createTelegramChannel: telegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -327,6 +318,7 @@ describe('AgentLiteHost', () => {
   it('surfaces Telegram connection errors and disconnects cleanly when the token is removed', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
+    const store = createMemoryStore();
     let token = 'bad-token';
     const telegramHarness = createTelegramChannelHarness({
       reconfigure: async (nextToken) => {
@@ -339,6 +331,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: store,
       createTelegramChannel: telegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -368,7 +361,7 @@ describe('AgentLiteHost', () => {
       errorMessage: null,
       status: 'not-configured',
     });
-    expect(readPersistedRuntimeState(homeDir).telegramTokenFingerprint).toBeNull();
+    expect(await store.get('telegramTokenFingerprint')).toBeNull();
   });
 
   it('surfaces Telegram connect timeouts without leaving startup hung', async () => {
@@ -385,6 +378,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       createTelegramChannel: telegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -404,6 +398,7 @@ describe('AgentLiteHost', () => {
 
   it('preserves discovered Telegram chats across restart when the token fingerprint is unchanged', async () => {
     const homeDir = createTempHome();
+    const store = createMemoryStore();
     const firstHarness = createAgentLiteModuleHarness();
     const firstTelegramHarness = createTelegramChannelHarness({
       botUsername: 'agentlite_test_bot',
@@ -417,6 +412,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const firstHost = new AgentLiteHost({
+      agentStore: store,
       createTelegramChannel: firstTelegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: firstHarness.loadAgentLiteModule,
@@ -442,6 +438,7 @@ describe('AgentLiteHost', () => {
     await firstHost.shutdown();
 
     const restartedHost = new AgentLiteHost({
+      agentStore: store,
       createTelegramChannel: secondTelegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: secondHarness.loadAgentLiteModule,
@@ -465,11 +462,12 @@ describe('AgentLiteHost', () => {
       ],
       status: 'connected',
     });
-    expect(readPersistedRuntimeState(homeDir).telegramTokenFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(await store.get('telegramTokenFingerprint')).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it('clears discovered Telegram chats across restart when the token fingerprint changes', async () => {
     const homeDir = createTempHome();
+    const store = createMemoryStore();
     const firstHarness = createAgentLiteModuleHarness();
     const firstTelegramHarness = createTelegramChannelHarness({
       botUsername: 'first_bot',
@@ -482,6 +480,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const firstHost = new AgentLiteHost({
+      agentStore: store,
       createTelegramChannel: firstTelegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: firstHarness.loadAgentLiteModule,
@@ -501,6 +500,7 @@ describe('AgentLiteHost', () => {
     await firstHost.shutdown();
 
     const restartedHost = new AgentLiteHost({
+      agentStore: store,
       createTelegramChannel: secondTelegramHarness.createTelegramChannel,
       homeDir,
       loadAgentLiteModule: secondHarness.loadAgentLiteModule,
@@ -517,7 +517,8 @@ describe('AgentLiteHost', () => {
       errorMessage: null,
       status: 'connected',
     });
-    expect(readPersistedRuntimeState(homeDir).externalChannels?.telegram?.discoveredChats).toEqual([]);
+    const externalChannels = await store.get<{ telegram?: { discoveredChats?: unknown[] } }>('externalChannels');
+    expect(externalChannels?.telegram?.discoveredChats).toEqual([]);
   });
 
   it('shuts down without reconfiguring Telegram and clears the wrapper after AgentLite stops', async () => {
@@ -548,6 +549,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
       createTelegramChannel: (hooks) => {
         const channel = new ManagedTelegramChannel(hooks, {
           createChannel: () => ({

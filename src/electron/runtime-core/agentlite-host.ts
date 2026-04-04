@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -29,7 +28,6 @@ import {
 } from './managed-telegram-channel';
 
 const HIDDEN_MAIN_GROUP_ID = 'dune:main';
-const DUNE_RUNTIME_STATE_FILENAME = 'dune-runtime-state.json';
 const STREAMING_IDLE_WINDOW_MS = 320;
 const STREAMING_SAFETY_TIMEOUT_MS = 30_000;
 
@@ -130,11 +128,9 @@ interface PersistedAgentRecord {
   groupFolder: string;
 }
 
-interface PersistedRuntimeState {
-  agents: PersistedAgentRecord[];
-  externalChannels?: ExternalChannelsState;
-  selectedAgentId: string | null;
-  telegramTokenFingerprint?: string | null;
+export interface AgentStore {
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
 }
 
 interface PendingAssistantMessage {
@@ -144,6 +140,7 @@ interface PendingAssistantMessage {
 }
 
 export interface AgentLiteHostOptions {
+  agentStore: AgentStore;
   createTelegramChannel?: (hooks: ManagedTelegramChannelHooks) => RuntimeTelegramChannel;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<AgentLiteModule>;
@@ -348,10 +345,6 @@ function createAssistantMessage(now: number): AgentMessage {
   };
 }
 
-function ensureDirectory(dirPath: string) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
-
 export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
   return path.join(homeDir, '.dune', 'agentlite');
 }
@@ -367,9 +360,9 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
 
-  private readonly runtimeRoot: string;
+  private readonly agentStore: AgentStore;
 
-  private readonly stateFilePath: string;
+  private readonly runtimeRoot: string;
 
   private agentLite: AgentLiteInstance | null = null;
 
@@ -391,13 +384,9 @@ export class AgentLiteHost implements AgentRuntime {
 
   readonly service: AgentService;
 
-  constructor(options: AgentLiteHostOptions = {}) {
+  constructor(options: AgentLiteHostOptions) {
+    this.agentStore = options.agentStore;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
-    this.stateFilePath = path.join(
-      this.runtimeRoot,
-      'data',
-      DUNE_RUNTIME_STATE_FILENAME,
-    );
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
@@ -459,7 +448,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   async start() {
-    this.loadPersistedState();
+    await this.loadPersistedState();
 
     const { AgentLite } = await this.loadAgentLiteModule();
     const credentials = await this.resolveModelCredentials();
@@ -888,17 +877,14 @@ export class AgentLiteHost implements AgentRuntime {
     this.emit();
   }
 
-  private loadPersistedState() {
-    if (!fs.existsSync(this.stateFilePath)) {
-      return;
-    }
-
+  private async loadPersistedState() {
     try {
-      const fileContents = fs.readFileSync(this.stateFilePath, 'utf-8');
-      const parsedState = JSON.parse(fileContents) as PersistedRuntimeState;
-      const agents = parsedState.agents ?? [];
+      const agents = await this.agentStore.get<PersistedAgentRecord[]>('agents') ?? [];
+      const externalChannels = await this.agentStore.get<ExternalChannelsState>('externalChannels');
+      const selectedAgentId = await this.agentStore.get<string | null>('selectedAgentId');
+      const telegramTokenFingerprint = await this.agentStore.get<string | null>('telegramTokenFingerprint');
 
-      this.persistedTelegramTokenFingerprint = parsedState.telegramTokenFingerprint ?? null;
+      this.persistedTelegramTokenFingerprint = telegramTokenFingerprint ?? null;
 
       this.persistedAgents.clear();
 
@@ -906,15 +892,13 @@ export class AgentLiteHost implements AgentRuntime {
         this.persistedAgents.set(record.agent.id, record);
       }
 
-      const externalChannels = parsedState.externalChannels
-        ? cloneExternalChannelsState(parsedState.externalChannels)
-        : createDefaultExternalChannelsState();
-
       this.snapshot = {
         ...this.snapshot,
         agents: agents.map((record) => record.agent),
-        externalChannels,
-        selectedAgentId: parsedState.selectedAgentId,
+        externalChannels: externalChannels
+          ? cloneExternalChannelsState(externalChannels)
+          : createDefaultExternalChannelsState(),
+        selectedAgentId: selectedAgentId ?? null,
       };
     } catch (error) {
       this.snapshot = {
@@ -928,16 +912,10 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private persistState() {
-    ensureDirectory(path.dirname(this.stateFilePath));
-
-    const persistedState: PersistedRuntimeState = {
-      agents: [...this.persistedAgents.values()],
-      externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),
-      selectedAgentId: this.snapshot.selectedAgentId,
-      telegramTokenFingerprint: this.persistedTelegramTokenFingerprint,
-    };
-
-    fs.writeFileSync(this.stateFilePath, JSON.stringify(persistedState, null, 2));
+    void this.agentStore.set('agents', [...this.persistedAgents.values()]);
+    void this.agentStore.set('externalChannels', cloneExternalChannelsState(this.snapshot.externalChannels));
+    void this.agentStore.set('selectedAgentId', this.snapshot.selectedAgentId);
+    void this.agentStore.set('telegramTokenFingerprint', this.persistedTelegramTokenFingerprint);
   }
 
   private clearPendingAssistantMessage(agentId: string) {

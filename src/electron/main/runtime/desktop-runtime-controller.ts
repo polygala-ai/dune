@@ -39,7 +39,7 @@ export class DesktopRuntimeController {
 
   private shutdownPromise: Promise<void> | null = null;
 
-  constructor(options: DesktopRuntimeControllerOptions = {}) {
+  constructor(options: DesktopRuntimeControllerOptions) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.runtimeOptions = options;
     this.createRealRuntime =
