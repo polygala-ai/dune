@@ -12,8 +12,8 @@ importers:
   .:
     dependencies:
       '@boxlite-ai/agentlite':
-        specifier: github:boxlite-ai/agentlite#4cf9416a1d6ee7bebc7ba32ecaac82a1b3292896
-        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/4cf9416a1d6ee7bebc7ba32ecaac82a1b3292896(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
+        specifier: github:boxlite-ai/agentlite#7f9057c328ab7b7424d9106c0156b5a1ce1b98a2
+        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/7f9057c328ab7b7424d9106c0156b5a1ce1b98a2(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -295,8 +295,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/4cf9416a1d6ee7bebc7ba32ecaac82a1b3292896':
-    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/4cf9416a1d6ee7bebc7ba32ecaac82a1b3292896}
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/7f9057c328ab7b7424d9106c0156b5a1ce1b98a2':
+    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/7f9057c328ab7b7424d9106c0156b5a1ce1b98a2}
     version: 1.2.25
     engines: {node: '>=20'}
     hasBin: true
@@ -4750,7 +4750,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/4cf9416a1d6ee7bebc7ba32ecaac82a1b3292896(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/7f9057c328ab7b7424d9106c0156b5a1ce1b98a2(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
     dependencies:
       '@boxlite-ai/boxlite': 0.4.3(playwright-core@1.58.2)
       better-sqlite3: 12.8.0
