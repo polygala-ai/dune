@@ -2,6 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type {
+  Channel,
+  ChannelHandler,
+  ChannelOpts,
+  GroupOptions,
+  RegisteredGroup,
+} from '@boxlite-ai/agentlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,11 +16,9 @@ import {
   resolveAgentLiteRuntimeRoot,
   type AgentStore,
 } from '@/electron/runtime-core/agentlite-host';
-import {
-  ManagedTelegramChannel,
-  type ManagedTelegramChannelHooks,
-  type RuntimeTelegramChannel,
-} from '@/electron/runtime-core/managed-telegram-channel';
+
+type AgentLiteModule = typeof import('@boxlite-ai/agentlite');
+type AgentLiteOptions = ConstructorParameters<AgentLiteModule['AgentLite']>[0];
 
 function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-agentlite-home-'));
@@ -31,40 +36,85 @@ function createMemoryStore(): AgentStore {
   };
 }
 
+function createRegisteredGroup(options: GroupOptions): RegisteredGroup {
+  const folder =
+    options.folder ??
+    options.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  return {
+    added_at: new Date('2026-04-04T00:00:00.000Z').toISOString(),
+    folder,
+    name: options.name,
+    trigger: options.trigger ?? '@Dune',
+    ...(options.containerConfig ? { containerConfig: options.containerConfig } : {}),
+    ...(options.isMain !== undefined ? { isMain: options.isMain } : {}),
+    ...(options.requiresTrigger !== undefined
+      ? { requiresTrigger: options.requiresTrigger }
+      : {}),
+  };
+}
+
 function createAgentLiteModuleHarness() {
-  const registerGroup = vi.fn();
-  const registerChannel = vi.fn().mockResolvedValue(undefined);
-  const start = vi.fn().mockResolvedValue(undefined);
-  const stop = vi.fn().mockResolvedValue(undefined);
-  let capturedOptions: {
-    model?: {
-      credentials?: () => Promise<Record<string, string>>;
+  const channels = new Map<string, Channel>();
+  const registeredGroups: Record<string, RegisteredGroup> = {};
+  const registerGroup = vi.fn((jid: string, options: GroupOptions) => {
+    registeredGroups[jid] = createRegisteredGroup(options);
+  });
+  const registerChannelFactory = vi.fn(async (name: string, factory: (opts: ChannelOpts) => Channel | null) => {
+    const builtin: ChannelHandler = {
+      onChatMetadata: vi.fn(),
+      onMessage: vi.fn(),
+      registeredGroups: () => registeredGroups,
     };
-    name?: string;
-    workdir?: string;
-  } | null = null;
+    const handler = capturedOptions?.channelHandler
+      ? capturedOptions.channelHandler(builtin)
+      : builtin;
+    const channel = factory(handler);
+
+    if (!channel) {
+      return false;
+    }
+
+    channels.set(name, channel);
+    await channel.connect();
+    return true;
+  });
+  const start = vi.fn().mockResolvedValue(undefined);
+  const stop = vi.fn(async () => {
+    for (const channel of channels.values()) {
+      await channel.disconnect();
+    }
+  });
+  let capturedOptions: AgentLiteOptions | null = null;
 
   return {
     capturedOptions: () => capturedOptions,
-    loadAgentLiteModule: async () => ({
-      AgentLite: class {
-        constructor(options?: {
-          llm?: {
-            credentials?: () => Promise<Record<string, string>>;
-          };
-          name?: string;
-          workdir?: string;
-        }) {
-          capturedOptions = options ?? null;
-        }
+    channel: (name: string) => {
+      const channel = channels.get(name);
 
-        registerChannel = registerChannel;
-        registerGroup = registerGroup;
-        start = start;
-        stop = stop;
-      },
-    }),
-    registerChannel,
+      if (!channel) {
+        throw new Error(`Channel "${name}" was not registered.`);
+      }
+
+      return channel;
+    },
+    loadAgentLiteModule: (async () =>
+      ({
+        AgentLite: class {
+          constructor(options?: AgentLiteOptions) {
+            capturedOptions = options ?? null;
+          }
+
+          registerChannelFactory = registerChannelFactory;
+          registerGroup = registerGroup;
+          start = start;
+          stop = stop;
+        },
+      }) as unknown as AgentLiteModule),
+    registerChannelFactory,
     registerGroup,
     start,
     stop,
@@ -74,49 +124,63 @@ function createAgentLiteModuleHarness() {
 function createTelegramChannelHarness(
   options: {
     botUsername?: string | null;
-    reconfigure?: (token: string | null) => Promise<void>;
+    connect?: (token: string | null) => Promise<void> | void;
+    disconnect?: () => Promise<void> | void;
+    isConnected?: () => boolean;
+    sendMessage?: (jid: string, text: string) => Promise<void> | void;
   } = {},
 ) {
   let connected = false;
+  let currentToken: string | null = null;
+  let channelOptions: ChannelOpts | null = null;
   const connect = vi.fn(async () => {
+    if (options.connect) {
+      await options.connect(currentToken);
+      return;
+    }
+
     connected = true;
   });
   const disconnect = vi.fn(async () => {
+    if (options.disconnect) {
+      await options.disconnect();
+      return;
+    }
+
     connected = false;
   });
-  const isConnected = vi.fn(() => connected);
-  const reconfigure = vi.fn(options.reconfigure ?? (async () => undefined));
-  const sendMessage = vi.fn();
+  const sendMessage = vi.fn(async (jid: string, text: string) => {
+    await options.sendMessage?.(jid, text);
+  });
   const channel = {
     connect,
     disconnect,
     getBotUsername: vi.fn(() => options.botUsername ?? null),
-    isConnected,
+    isConnected: vi.fn(() => (options.isConnected ? options.isConnected() : connected)),
     name: 'telegram',
     ownsJid: (jid: string) => jid.startsWith('tg:'),
-    reconfigure,
-    reset: vi.fn(),
     sendMessage,
-    setTyping: vi.fn(),
-  };
-  let hooks: ManagedTelegramChannelHooks | null = null;
+    setTyping: vi.fn(async () => undefined),
+  } satisfies Channel & { getBotUsername: () => string | null };
 
   return {
     channel,
-    connect,
-    createTelegramChannel: (nextHooks: ManagedTelegramChannelHooks) => {
-      hooks = nextHooks;
-      return channel;
-    },
-    hooks: () => {
-      if (!hooks) {
-        throw new Error('Telegram hooks were not captured.');
+    channelOptions: () => {
+      if (!channelOptions) {
+        throw new Error('Telegram channel options were not captured.');
       }
 
-      return hooks;
+      return channelOptions;
     },
-    reconfigure,
-    reset: channel.reset,
+    connect,
+    createTelegramChannel: async (token: string, nextChannelOptions: ChannelOpts) => {
+      currentToken = token;
+      channelOptions = nextChannelOptions;
+      return channel;
+    },
+    disconnect,
+    lastToken: () => currentToken,
+    sendMessage,
   };
 }
 
@@ -125,6 +189,7 @@ describe('AgentLiteHost', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
 
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { force: true, recursive: true });
@@ -169,7 +234,11 @@ describe('AgentLiteHost', () => {
       rootPath: runtimeRoot,
       status: 'ready',
     });
-    expect(harness.registerChannel).toHaveBeenCalledTimes(2);
+    expect(harness.start).toHaveBeenCalledTimes(1);
+    expect(harness.registerChannelFactory.mock.calls.map(([name]) => name)).toEqual([
+      'dune',
+      'telegram',
+    ]);
     expect(harness.registerGroup).toHaveBeenCalledWith(
       'dune:main',
       expect.objectContaining({
@@ -253,7 +322,7 @@ describe('AgentLiteHost', () => {
 
     await host.start();
 
-    expect(telegramHarness.reconfigure).toHaveBeenCalledWith('telegram-bot-token');
+    expect(telegramHarness.lastToken()).toBe('telegram-bot-token');
     expect(host.getSnapshot().externalChannels.telegram).toMatchObject({
       botUsername: 'agentlite_test_bot',
       configured: true,
@@ -262,7 +331,7 @@ describe('AgentLiteHost', () => {
     });
 
     const timestamp = new Date('2026-04-04T01:00:00.000Z').toISOString();
-    telegramHarness.hooks().onChatMetadata('tg:123', timestamp, 'Product QA', 'telegram', true);
+    telegramHarness.channelOptions().onChatMetadata('tg:123', timestamp, 'Product QA', 'telegram', true);
 
     expect(host.getSnapshot().externalChannels.telegram.discoveredChats).toEqual([
       {
@@ -285,7 +354,7 @@ describe('AgentLiteHost', () => {
       name: 'Release triage',
     });
 
-    telegramHarness.hooks().onInboundMessage('tg:123', {
+    telegramHarness.channelOptions().onMessage('tg:123', {
       chat_jid: 'tg:123',
       content: 'Build is red',
       id: 'message-1',
@@ -294,7 +363,7 @@ describe('AgentLiteHost', () => {
       sender_name: 'Alice',
       timestamp,
     });
-    telegramHarness.hooks().onOutboundMessage('tg:123', 'Investigating now.');
+    await harness.channel('telegram').sendMessage('tg:123', 'Investigating now.');
 
     const snapshot = host.getSnapshot();
     const telegramAgent = snapshot.agents.find((agent) => agent.id === agentId);
@@ -321,7 +390,7 @@ describe('AgentLiteHost', () => {
     const store = createMemoryStore();
     let token = 'bad-token';
     const telegramHarness = createTelegramChannelHarness({
-      reconfigure: async (nextToken) => {
+      connect: async (nextToken) => {
         if (nextToken === 'bad-token') {
           throw new Error('Telegram rejected the token');
         }
@@ -353,7 +422,7 @@ describe('AgentLiteHost', () => {
     token = '';
     await host.reloadExternalChannels();
 
-    expect(telegramHarness.reconfigure).toHaveBeenLastCalledWith(null);
+    expect(telegramHarness.disconnect).toHaveBeenCalledTimes(1);
     expect(host.getSnapshot().externalChannels.telegram).toEqual({
       botUsername: null,
       configured: false,
@@ -368,12 +437,9 @@ describe('AgentLiteHost', () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
     const telegramHarness = createTelegramChannelHarness({
-      reconfigure: async () => {
-        throw new Error(
-          'Telegram failed to connect within 15s. Check the Network settings or proxy configuration.',
-        );
-      },
+      connect: async () => new Promise<void>(() => undefined),
     });
+    vi.useFakeTimers();
 
     tempDirs.push(homeDir);
 
@@ -386,7 +452,9 @@ describe('AgentLiteHost', () => {
       resolveTelegramBotToken: async () => 'telegram-bot-token',
     });
 
-    await host.start();
+    const startPromise = host.start();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await startPromise;
 
     expect(host.getSnapshot().externalChannels.telegram).toMatchObject({
       configured: true,
@@ -423,7 +491,7 @@ describe('AgentLiteHost', () => {
     await firstHost.start();
 
     const timestamp = new Date('2026-04-04T01:00:00.000Z').toISOString();
-    firstTelegramHarness.hooks().onChatMetadata('tg:123', timestamp, 'HashG', 'telegram', false);
+    firstTelegramHarness.channelOptions().onChatMetadata('tg:123', timestamp, 'HashG', 'telegram', false);
 
     expect(firstHost.getSnapshot().externalChannels.telegram.discoveredChats).toEqual([
       {
@@ -490,7 +558,7 @@ describe('AgentLiteHost', () => {
 
     await firstHost.start();
 
-    firstTelegramHarness.hooks().onChatMetadata(
+    firstTelegramHarness.channelOptions().onChatMetadata(
       'tg:123',
       new Date('2026-04-04T01:00:00.000Z').toISOString(),
       'HashG',
@@ -521,66 +589,41 @@ describe('AgentLiteHost', () => {
     expect(externalChannels?.telegram?.discoveredChats).toEqual([]);
   });
 
-  it('shuts down without reconfiguring Telegram and clears the wrapper after AgentLite stops', async () => {
+  it('shuts down cleanly and clears the Telegram proxy after AgentLite stops', async () => {
     const homeDir = createTempHome();
     let connected = false;
-    const connect = vi.fn(async () => {
-      connected = true;
-    });
-    const disconnect = vi.fn(async () => {
-      connected = false;
-      throw new Error('the worker has exited');
-    });
-    let runtimeChannel!: RuntimeTelegramChannel;
-    const stop = vi.fn(async () => {
-      await runtimeChannel?.disconnect();
-    });
-    const loadAgentLiteModule = async () => ({
-      AgentLite: class {
-        constructor() {}
-
-        registerChannel = vi.fn().mockResolvedValue(undefined);
-        registerGroup = vi.fn();
-        start = vi.fn().mockResolvedValue(undefined);
-        stop = stop;
+    const telegramHarness = createTelegramChannelHarness({
+      botUsername: 'agentlite_test_bot',
+      connect: async () => {
+        connected = true;
       },
+      disconnect: async () => {
+        connected = false;
+        throw new Error('the worker has exited');
+      },
+      isConnected: () => connected,
     });
+    const harness = createAgentLiteModuleHarness();
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
       agentStore: createMemoryStore(),
-      createTelegramChannel: (hooks) => {
-        const channel = new ManagedTelegramChannel(hooks, {
-          createChannel: () => ({
-            _setOpts: vi.fn(),
-            connect,
-            disconnect,
-            getBotUsername: () => 'agentlite_test_bot',
-            isConnected: () => connected,
-            sendMessage: vi.fn(),
-          }),
-        });
-        runtimeChannel = channel;
-        return channel;
-      },
+      createTelegramChannel: telegramHarness.createTelegramChannel,
       homeDir,
-      loadAgentLiteModule,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
       resolveModelCredentials: async () => ({}),
       resolveTelegramBotToken: async () => 'telegram-bot-token',
     });
-    const reconfigureSpy = vi.spyOn(ManagedTelegramChannel.prototype, 'reconfigure');
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await host.start();
     await expect(host.shutdown()).resolves.toBeUndefined();
 
-    expect(stop).toHaveBeenCalledTimes(1);
-    expect(disconnect).toHaveBeenCalledTimes(1);
-    expect(connect).toHaveBeenCalledTimes(1);
-    expect(reconfigureSpy).toHaveBeenCalledTimes(1);
-    expect(reconfigureSpy).toHaveBeenCalledWith('telegram-bot-token');
+    expect(harness.stop).toHaveBeenCalledTimes(1);
+    expect(telegramHarness.disconnect).toHaveBeenCalledTimes(1);
+    expect(telegramHarness.connect).toHaveBeenCalledTimes(1);
     expect(consoleWarn).toHaveBeenCalledTimes(1);
-    expect(runtimeChannel.isConnected()).toBe(false);
+    expect(harness.channel('telegram').isConnected()).toBe(false);
   });
 });

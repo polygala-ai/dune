@@ -4,8 +4,8 @@ This repo ships as an Electron desktop app. The macOS release flow uses Electron
 
 ## Commands
 
-- `npm run package:mac` builds a packaged `.app` bundle for macOS.
-- `npm run make:mac` creates the distributable macOS artifacts, including the DMG maker output.
+- `pnpm package:mac` builds a packaged `.app` bundle for macOS.
+- `pnpm make:mac` creates the distributable macOS artifacts, including the DMG maker output.
 
 ## Signing And Notarization
 

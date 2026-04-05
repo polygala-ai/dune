@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { TelegramChannelOpts } from '@boxlite-ai/agentlite/channels/telegram';
+import type {
+  Channel,
+  ChannelHandler,
+  ChannelOpts,
+  GroupOptions,
+} from '@boxlite-ai/agentlite';
 
 import type {
   Agent,
@@ -21,11 +26,7 @@ import {
   createDefaultExternalChannelsState,
 } from '../../renderer/features/agents/model/channels';
 import { DuneChannel } from './dune-channel';
-import {
-  ManagedTelegramChannel,
-  type ManagedTelegramChannelHooks,
-  type RuntimeTelegramChannel,
-} from './managed-telegram-channel';
+import { SwappableChannelProxy } from './swappable-channel-proxy';
 
 const HIDDEN_MAIN_GROUP_ID = 'dune:main';
 const STREAMING_IDLE_WINDOW_MS = 320;
@@ -58,71 +59,6 @@ export interface AgentRuntime {
   subscribe: (listener: AgentServiceListener) => () => void;
 }
 
-export interface AgentLiteChannel {
-  _setOpts?: ((callbacks: DuneChannelCallbacks) => void) | ((callbacks: TelegramChannelOpts) => void);
-  connect: () => Promise<void> | void;
-  disconnect: () => Promise<void> | void;
-  isConnected: () => boolean;
-  name: string;
-  ownsJid: (jid: string) => boolean;
-  sendMessage: (jid: string, text: string) => Promise<void> | void;
-  setTyping?: (jid: string, isTyping: boolean) => Promise<void> | void;
-}
-
-export interface AgentLiteGroupRegistration {
-  folder?: string;
-  isMain?: boolean;
-  name: string;
-  requiresTrigger?: boolean;
-  trigger?: string;
-}
-
-export interface AgentLiteInstance {
-  registerChannel: (channel: AgentLiteChannel) => Promise<void>;
-  registerGroup: (jid: string, options: AgentLiteGroupRegistration) => void;
-  start: () => Promise<void>;
-  stop: () => Promise<void>;
-}
-
-export interface AgentLiteModule {
-  AgentLite: new (options?: AgentLiteInstanceOptions) => AgentLiteInstance;
-}
-
-export interface AgentLiteInstanceOptions {
-  model?: {
-    credentials?: () => Promise<Record<string, string>>;
-  };
-  name?: string;
-  workdir?: string;
-}
-
-export interface RegisteredGroup {
-  name?: string;
-}
-
-export interface NewMessage {
-  chat_jid: string;
-  content: string;
-  id: string;
-  is_bot_message?: boolean;
-  is_from_me: boolean;
-  sender: string;
-  sender_name?: string;
-  timestamp: string;
-}
-
-export interface DuneChannelCallbacks {
-  onChatMetadata: (
-    chatJid: string,
-    timestamp: string,
-    name?: string,
-    channel?: string,
-    isGroup?: boolean,
-  ) => void;
-  onMessage: (chatJid: string, message: NewMessage) => void;
-  registeredGroups: () => Record<string, RegisteredGroup>;
-}
-
 interface PersistedAgentRecord {
   agent: AgentServiceSnapshot['agents'][number];
   groupFolder: string;
@@ -141,13 +77,24 @@ interface PendingAssistantMessage {
 
 export interface AgentLiteHostOptions {
   agentStore: AgentStore;
-  createTelegramChannel?: (hooks: ManagedTelegramChannelHooks) => RuntimeTelegramChannel;
+  createTelegramChannel?: (
+    token: string,
+    channelOptions: ChannelOpts,
+  ) => Channel | Promise<Channel>;
   homeDir?: string;
-  loadAgentLiteModule?: () => Promise<AgentLiteModule>;
+  loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
   resolveTelegramBotToken?: () => Promise<string>;
 }
+
+type ChannelMessage = Parameters<ChannelHandler['onMessage']>[1];
+type TelegramChannelModule = typeof import('@boxlite-ai/agentlite/channels/telegram');
+
+const importTelegramChannelModule = new Function(
+  'specifier',
+  'return import(specifier)',
+) as (specifier: string) => Promise<TelegramChannelModule>;
 
 function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
@@ -345,12 +292,46 @@ function createAssistantMessage(now: number): AgentMessage {
   };
 }
 
+async function createRuntimeTelegramChannel(token: string, channelOptions: ChannelOpts) {
+  const { TelegramChannel } = await importTelegramChannelModule(
+    '@boxlite-ai/agentlite/channels/telegram',
+  );
+
+  return new TelegramChannel(token, channelOptions);
+}
+
+function readTelegramBotUsername(channel: Channel | null) {
+  if (!channel) {
+    return null;
+  }
+
+  const explicitUsername = (
+    channel as Channel & { getBotUsername?: () => string | null }
+  ).getBotUsername?.();
+
+  if (explicitUsername) {
+    return explicitUsername.replace(/^@+/, '').trim() || null;
+  }
+
+  const maybeBot = (
+    channel as Channel & {
+      bot?: {
+        botInfo?: { username?: string };
+        me?: { username?: string };
+      };
+    }
+  ).bot;
+  const username = maybeBot?.botInfo?.username ?? maybeBot?.me?.username;
+
+  return username ? username.replace(/^@+/, '').trim() || null : null;
+}
+
 export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
   return path.join(homeDir, '.dune', 'agentlite');
 }
 
 export class AgentLiteHost implements AgentRuntime {
-  private readonly duneChannel: DuneChannel;
+  private duneChannel: DuneChannel | null = null;
 
   private readonly listeners = new Set<AgentServiceListener>();
 
@@ -364,19 +345,23 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly runtimeRoot: string;
 
-  private agentLite: AgentLiteInstance | null = null;
+  private agentLite: InstanceType<(typeof import('@boxlite-ai/agentlite'))['AgentLite']> | null = null;
 
-  private readonly loadAgentLiteModule: () => Promise<AgentLiteModule>;
+  private readonly loadAgentLiteModule: () => Promise<typeof import('@boxlite-ai/agentlite')>;
 
   private readonly resolveModelCredentials: () => Promise<Record<string, string>>;
 
   private readonly resolveTelegramBotToken: () => Promise<string>;
 
+  private readonly createTelegramChannel:
+    | ((token: string, channelOptions: ChannelOpts) => Channel | Promise<Channel>)
+    | undefined;
+
   private startupModelCredentials: Record<string, string> = {};
 
   private snapshot: AgentServiceSnapshot;
 
-  private readonly telegramChannel: RuntimeTelegramChannel;
+  private telegramChannel: SwappableChannelProxy<string> | null = null;
 
   private shutdownPromise: Promise<void> | null = null;
 
@@ -390,13 +375,14 @@ export class AgentLiteHost implements AgentRuntime {
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
-      (async () => import('@boxlite-ai/agentlite') as Promise<AgentLiteModule>);
+      (() => import('@boxlite-ai/agentlite'));
     this.resolveModelCredentials =
       options.resolveModelCredentials ??
       (() => Promise.resolve({} satisfies Record<string, string>));
     this.resolveTelegramBotToken =
       options.resolveTelegramBotToken ??
       (() => Promise.resolve(''));
+    this.createTelegramChannel = options.createTelegramChannel;
     this.snapshot = {
       agents: [],
       externalChannels: createDefaultExternalChannelsState(),
@@ -404,25 +390,6 @@ export class AgentLiteHost implements AgentRuntime {
       runtimeInfo: createRuntimeInfo(this.runtimeRoot),
       selectedAgentId: null,
     };
-    this.duneChannel = new DuneChannel({
-      onOutboundMessage: (jid, text) => {
-        this.handleOutboundMessage(jid, text);
-      },
-    });
-    const createTelegramChannel =
-      options.createTelegramChannel ??
-      ((hooks: ManagedTelegramChannelHooks) => new ManagedTelegramChannel(hooks));
-    this.telegramChannel = createTelegramChannel({
-      onChatMetadata: (chatJid, timestamp, name, _channel, isGroup) => {
-        this.handleTelegramChatMetadata(chatJid, timestamp, name, isGroup);
-      },
-      onInboundMessage: (chatJid, message) => {
-        this.handleTelegramInboundMessage(chatJid, message);
-      },
-      onOutboundMessage: (chatJid, text) => {
-        this.handleTelegramOutboundMessage(chatJid, text);
-      },
-    });
     this.service = {
       createAgent: (input) => Promise.resolve(this.createAgent(input)),
       deleteAgent: (agentId) => Promise.resolve(this.deleteAgent(agentId)),
@@ -447,39 +414,86 @@ export class AgentLiteHost implements AgentRuntime {
     };
   }
 
+  private createChannelHandler() {
+    return (builtin: ChannelHandler): ChannelHandler => ({
+      ...builtin,
+      onChatMetadata: (chatJid, timestamp, name, channel, isGroup) => {
+        builtin.onChatMetadata(chatJid, timestamp, name, channel, isGroup);
+
+        if (chatJid.startsWith('tg:')) {
+          this.handleTelegramChatMetadata(chatJid, timestamp, name, isGroup);
+        }
+      },
+      onMessage: (chatJid, message) => {
+        builtin.onMessage(chatJid, message);
+
+        if (chatJid.startsWith('tg:')) {
+          this.handleTelegramInboundMessage(chatJid, message);
+        }
+      },
+    });
+  }
+
   async start() {
     await this.loadPersistedState();
 
-    const { AgentLite } = await this.loadAgentLiteModule();
+    const agentLiteModule = await this.loadAgentLiteModule();
     const credentials = await this.resolveModelCredentials();
     this.startupModelCredentials = { ...credentials };
-    const agentLite = new AgentLite({
+    const agentLite = new agentLiteModule.AgentLite({
       model: {
         credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
       },
+      channelHandler: this.createChannelHandler(),
       name: 'Dune',
       workdir: this.runtimeRoot,
     });
 
-    await agentLite.registerChannel(this.duneChannel);
-    await agentLite.registerChannel(this.telegramChannel);
+    await agentLite.start();
+    this.agentLite = agentLite;
+
     agentLite.registerGroup(HIDDEN_MAIN_GROUP_ID, {
       folder: 'main',
       isMain: true,
       name: 'Dune Control',
       requiresTrigger: false,
-    });
+    } satisfies GroupOptions);
 
     for (const record of this.persistedAgents.values()) {
       agentLite.registerGroup(resolveAgentGroupJid(record.agent), {
         folder: record.groupFolder,
         name: record.agent.name,
         requiresTrigger: false,
-      });
+      } satisfies GroupOptions);
     }
 
-    await agentLite.start();
-    this.agentLite = agentLite;
+    await agentLite.registerChannelFactory('dune', (channelOptions) => {
+      const channel = new DuneChannel({
+        channelOptions,
+        onOutboundMessage: (jid, text) => {
+          this.handleOutboundMessage(jid, text);
+        },
+      });
+      this.duneChannel = channel;
+      return channel;
+    });
+    await agentLite.registerChannelFactory('telegram', (channelOptions) => {
+      const channel = new SwappableChannelProxy<string>({
+        channelOptions,
+        createChannel: this.createTelegramChannel ?? createRuntimeTelegramChannel,
+        name: 'telegram',
+        onOutboundMessage: (chatJid, text) => {
+          this.handleTelegramOutboundMessage(chatJid, text);
+        },
+        ownsJid: (jid) => jid.startsWith('tg:'),
+        readIdentity: readTelegramBotUsername,
+        timeoutMessage:
+          'Telegram failed to connect within 15s. Check the Network settings or proxy configuration.',
+      });
+      this.telegramChannel = channel;
+      return channel;
+    });
+
     this.snapshot = {
       ...this.snapshot,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, {
@@ -503,7 +517,9 @@ export class AgentLiteHost implements AgentRuntime {
         await this.agentLite?.stop();
       } finally {
         this.agentLite = null;
-        await this.telegramChannel.reset();
+        this.duneChannel = null;
+        this.telegramChannel?.reset();
+        this.telegramChannel = null;
       }
     })();
 
@@ -511,6 +527,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   async reloadExternalChannels() {
+    const telegramChannel = this.telegramChannel;
     const token = (await this.resolveTelegramBotToken()).trim();
     const nextTokenFingerprint = fingerprintTelegramToken(token);
     const tokenChanged = this.persistedTelegramTokenFingerprint !== nextTokenFingerprint;
@@ -529,10 +546,10 @@ export class AgentLiteHost implements AgentRuntime {
     this.applyTelegramState(nextTelegramState);
 
     try {
-      await this.telegramChannel.reconfigure(token || null);
+      await telegramChannel?.configure(token || null);
       this.applyTelegramState({
         ...this.snapshot.externalChannels.telegram,
-        botUsername: token ? this.telegramChannel.getBotUsername() : null,
+        botUsername: token ? telegramChannel?.getIdentity() ?? null : null,
         configured: Boolean(token),
         errorMessage: null,
         status: token ? 'connected' : 'not-configured',
@@ -704,7 +721,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.persistState();
     this.emit();
 
-    await this.duneChannel.pushInboundMessage(agentId, trimmedText);
+    await this.duneChannel?.pushInboundMessage(agentId, trimmedText);
   }
 
   private isTelegramChatBound(chatJid: string) {
@@ -765,7 +782,7 @@ export class AgentLiteHost implements AgentRuntime {
     });
   }
 
-  private handleTelegramInboundMessage(chatJid: string, message: NewMessage) {
+  private handleTelegramInboundMessage(chatJid: string, message: ChannelMessage) {
     const agent = this.findAgentByTelegramChat(chatJid);
 
     if (!agent) {

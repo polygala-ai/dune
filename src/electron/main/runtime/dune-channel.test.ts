@@ -7,16 +7,20 @@ describe('DuneChannel', () => {
     const onOutboundMessage = vi.fn().mockResolvedValue(undefined);
     const onChatMetadata = vi.fn();
     const onMessage = vi.fn();
-    const duneChannel = new DuneChannel({ onOutboundMessage });
-
-    duneChannel._setOpts({
-      onChatMetadata,
-      onMessage,
-      registeredGroups: () => ({
-        'dune:agent:test': {
-          name: 'Release coordinator',
-        },
-      }),
+    const duneChannel = new DuneChannel({
+      channelOptions: {
+        onChatMetadata,
+        onMessage,
+        registeredGroups: () => ({
+          'dune:agent:test': {
+            added_at: new Date('2026-04-04T00:00:00.000Z').toISOString(),
+            folder: 'release-coordinator',
+            name: 'Release coordinator',
+            trigger: '@Dune',
+          },
+        }),
+      },
+      onOutboundMessage,
     });
 
     await duneChannel.sendMessage('dune:agent:test', 'dune credentials ok');

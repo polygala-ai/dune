@@ -7,6 +7,8 @@ Minimalist Electron chat prototype inspired by Codex.
 - Node.js
 - pnpm
 
+This repo is pnpm-only. Do not use `npm install` or commit a `package-lock.json`.
+
 ## Getting started
 
 ```bash

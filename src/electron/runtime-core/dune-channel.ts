@@ -1,13 +1,11 @@
-import type {
-  DuneChannelCallbacks,
-  RegisteredGroup,
-} from './agentlite-host';
+import type { Channel, ChannelOpts } from '@boxlite-ai/agentlite';
 
 interface DuneChannelOptions {
+  channelOptions: ChannelOpts;
   onOutboundMessage: (jid: string, text: string) => Promise<void> | void;
 }
 
-export class DuneChannel {
+export class DuneChannel implements Channel {
   name = 'dune';
 
   private connected = false;
@@ -16,20 +14,13 @@ export class DuneChannel {
 
   private outboundSequence = 0;
 
+  private readonly channelOptions: ChannelOpts;
+
   private readonly onOutboundMessage: DuneChannelOptions['onOutboundMessage'];
 
-  private callbacks: DuneChannelCallbacks = {
-    onChatMetadata: () => {},
-    onMessage: () => {},
-    registeredGroups: () => ({} satisfies Record<string, RegisteredGroup>),
-  };
-
-  constructor({ onOutboundMessage }: DuneChannelOptions) {
+  constructor({ channelOptions, onOutboundMessage }: DuneChannelOptions) {
+    this.channelOptions = channelOptions;
     this.onOutboundMessage = onOutboundMessage;
-  }
-
-  _setOpts(callbacks: DuneChannelCallbacks) {
-    this.callbacks = callbacks;
   }
 
   async connect() {
@@ -50,9 +41,9 @@ export class DuneChannel {
 
   async sendMessage(jid: string, text: string) {
     const timestamp = new Date().toISOString();
-    const group = this.callbacks.registeredGroups()[jid];
+    const group = this.channelOptions.registeredGroups()[jid];
 
-    this.callbacks.onChatMetadata(
+    this.channelOptions.onChatMetadata(
       jid,
       timestamp,
       group?.name ?? jid,
@@ -60,7 +51,7 @@ export class DuneChannel {
       true,
     );
 
-    this.callbacks.onMessage(jid, {
+    this.channelOptions.onMessage(jid, {
       chat_jid: jid,
       content: text,
       id: `dune-bot-${++this.outboundSequence}`,
@@ -76,9 +67,9 @@ export class DuneChannel {
 
   async pushInboundMessage(jid: string, text: string, senderName: string = 'You') {
     const timestamp = new Date().toISOString();
-    const group = this.callbacks.registeredGroups()[jid];
+    const group = this.channelOptions.registeredGroups()[jid];
 
-    this.callbacks.onChatMetadata(
+    this.channelOptions.onChatMetadata(
       jid,
       timestamp,
       group?.name ?? jid,
@@ -86,7 +77,7 @@ export class DuneChannel {
       true,
     );
 
-    this.callbacks.onMessage(jid, {
+    this.channelOptions.onMessage(jid, {
       content: text,
       chat_jid: jid,
       id: `dune-${++this.inboundSequence}`,
