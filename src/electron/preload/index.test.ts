@@ -67,27 +67,50 @@ describe('preload bridge', () => {
 
     await desktopBridge?.getRuntimeSnapshot?.();
     await desktopBridge?.applyNetworkSettings?.();
+    await desktopBridge?.cancelTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.createAgent?.({
       channelId: 'dune-chat',
       name: 'Navigator',
+      projectId: 'project-1',
     });
+    await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
     await desktopBridge?.reloadExternalChannels?.();
     await desktopBridge?.restartApp?.();
+    await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
+    await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
 
     const unsubscribe = desktopBridge?.subscribe?.(() => {});
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.cancelTelegramSetupSession,
+      'telegram-session-1',
+    );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.createAgent, {
       channelId: 'dune-chat',
       name: 'Navigator',
+      projectId: 'project-1',
     });
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.ensureProjectMainAgent,
+      'project-1',
+      'Alpha',
+    );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.copyText, '@agentlite_test_bot');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.openExternal, 'https://t.me/BotFather');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.reloadExternalChannels);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.restartApp);
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.getTelegramSetupSession,
+      'telegram-session-1',
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.startTelegramSetupSession,
+      { token: 'bot-token' },
+    );
     expect(on).toHaveBeenCalledWith(
       ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
@@ -132,15 +155,19 @@ describe('preload bridge', () => {
 
     const expectedMethods = [
       'applyNetworkSettings',
+      'cancelTelegramSetupSession',
       'createAgent',
       'copyText',
+      'ensureProjectMainAgent',
       'getRuntimeSnapshot',
+      'getTelegramSetupSession',
       'openExternal',
       'reloadExternalChannels',
       'resetRuntime',
       'restartApp',
       'selectAgent',
       'sendAgentMessage',
+      'startTelegramSetupSession',
       'storageDelete',
       'storageGet',
       'storageKeys',

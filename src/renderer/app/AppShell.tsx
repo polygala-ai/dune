@@ -1,10 +1,20 @@
 import {
+  type CSSProperties,
+  useEffect,
   useRef,
   useState,
 } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Menu,
+  PanelRight,
+  SquarePen,
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
+import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import { useAgentSubmit } from '@/renderer/app/hooks/use-agent-submit';
 import { useAgentShellController } from '@/renderer/app/hooks/use-agent-shell-controller';
 import { useComposerFocus } from '@/renderer/app/hooks/use-composer-focus';
@@ -14,6 +24,7 @@ import { useGlobalShortcuts } from '@/renderer/app/hooks/use-global-shortcuts';
 import { useResponsiveShell } from '@/renderer/app/hooks/use-responsive-shell';
 import { useThemeSync } from '@/renderer/app/hooks/use-theme-sync';
 import { useTranscriptScroll } from '@/renderer/app/hooks/use-transcript-scroll';
+import { useWindowControlsOverlay } from '@/renderer/app/hooks/use-window-controls-overlay';
 import { useWorkflowPersistence } from '@/renderer/app/hooks/use-workflow-persistence';
 import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
 import { CommandMenu } from '@/renderer/app/shell/CommandMenu';
@@ -33,7 +44,20 @@ import { WorkflowWorkspace } from '@/renderer/app/workspaces/WorkflowWorkspace';
 import { PluginsWorkspace } from '@/renderer/app/workspaces/PluginsWorkspace';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
+import { Button } from '@/renderer/shared/ui/button';
 import { TooltipProvider } from '@/renderer/shared/ui/tooltip';
+import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/components/WorkflowProjectActionsMenu';
+import {
+  MAC_TITLEBAR_OVERLAY_HEIGHT,
+  MAC_TITLEBAR_SIDEBAR_TOGGLE_GAP,
+  MAC_TITLEBAR_SIDEBAR_TOGGLE_SIZE,
+} from '@/shared/window/titlebar';
+
+type WindowShellStyle = CSSProperties & {
+  '--app-drag-strip-height'?: string;
+  '--app-shell-titlebar-toggle-left'?: string;
+  '--app-shell-titlebar-toggle-top'?: string;
+};
 
 export default function AppShell() {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -51,12 +75,16 @@ export default function AppShell() {
     runtimeInfo,
   } = useAgentSession();
   const {
-    activityEntries,
     filteredItemSummaries,
     projects,
+    selectedProject,
     selectedProjectId,
+    selectedProjectScreen,
+    selectedProjectView,
   } = useWorkflowSession();
   const {
+    canNavigateBack,
+    canNavigateForward,
     isCommandOpen,
     isContextPanelOpen,
     route,
@@ -68,16 +96,15 @@ export default function AppShell() {
   } = useSettingsState();
   const {
     agents,
-    selectProject,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
-      selectProject: state.selectProject,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
+  const titlebarAreaRect = useWindowControlsOverlay(isMac);
   const { isCompactShell, usesInlineContext, usesOverlayContext } =
-    useResponsiveShell(showContextPanel);
+    useResponsiveShell(showContextPanel, isMac && !!titlebarAreaRect);
   const {
     contextPanelStyle,
     isResizing: isContextPanelResizing,
@@ -95,6 +122,20 @@ export default function AppShell() {
 
   useThemeSync(themePreference);
   useWorkflowPersistence();
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      projects.map((project) =>
+        agentRuntime.service.ensureProjectMainAgent(project.id, project.name),
+      ),
+    ).catch((error) => {
+      console.error('Failed to reconcile project main agents.', error);
+    });
+  }, [projects]);
 
   useTranscriptScroll({
     agent: activeAgent,
@@ -126,8 +167,7 @@ export default function AppShell() {
       onOpenSettings: controller.handleOpenSettings,
       onSelectProject: (projectId: string) => {
         controller.handleSidebarDrawerOpenChange(false);
-        selectProject(projectId);
-        commands.openWorkflow();
+        commands.openWorkflow(projectId);
       },
       projects,
       selectedProjectId,
@@ -148,6 +188,40 @@ export default function AppShell() {
         ...sidebarStyle,
         ...contextPanelStyle,
       };
+  const showNativeTitlebarSidebarToggle = isMac && isCompactShell && !!titlebarAreaRect;
+  const showNativeTitlebarInspectorToggle =
+    showNativeTitlebarSidebarToggle && route === 'agent' && !!activeAgent;
+  const showNativeTitlebarAgentTitle =
+    showNativeTitlebarSidebarToggle &&
+    route === 'agent' &&
+    !!activeAgent;
+  const showNativeTitlebarWorkflowTitle =
+    showNativeTitlebarSidebarToggle &&
+    route === 'workflow' &&
+    selectedProjectScreen === 'main' &&
+    !!selectedProject;
+  const showNativeTitlebarProjectActions =
+    showNativeTitlebarSidebarToggle &&
+    route === 'workflow' &&
+    selectedProjectScreen === 'main' &&
+    !!selectedProject;
+  const showNativeTitlebarProjectCreateAction =
+    showNativeTitlebarSidebarToggle &&
+    route === 'workflow' &&
+    selectedProjectScreen === 'main' &&
+    !!selectedProject &&
+    (selectedProjectView === 'board' || selectedProjectView === 'agents');
+  const showCompactSidebarToggle = !showNativeTitlebarSidebarToggle;
+  const windowShellStyle: WindowShellStyle | undefined = titlebarAreaRect
+    ? {
+        '--app-drag-strip-height': `${Math.max(
+          MAC_TITLEBAR_OVERLAY_HEIGHT,
+          titlebarAreaRect.y + titlebarAreaRect.height,
+        )}px`,
+        '--app-shell-titlebar-toggle-left': `${titlebarAreaRect.x + MAC_TITLEBAR_SIDEBAR_TOGGLE_GAP}px`,
+        '--app-shell-titlebar-toggle-top': `${titlebarAreaRect.y + ((titlebarAreaRect.height - MAC_TITLEBAR_SIDEBAR_TOGGLE_SIZE) / 2)}px`,
+      }
+    : undefined;
 
   useGlobalShortcuts({
     isCommandOpen,
@@ -174,8 +248,146 @@ export default function AppShell() {
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="window-shell window-shell-grid text-app-text shell-reveal">
-        <div className="window-drag-strip" data-testid="window-drag-region" />
+      <div
+        className="window-shell window-shell-grid text-app-text shell-reveal"
+        data-native-titlebar-agent-title={showNativeTitlebarAgentTitle ? 'true' : undefined}
+        data-native-titlebar-overlay={showNativeTitlebarSidebarToggle ? 'true' : undefined}
+        data-native-titlebar-workflow-title={showNativeTitlebarWorkflowTitle ? 'true' : undefined}
+        style={windowShellStyle}
+      >
+        <div className="titlebar-row">
+          {showNativeTitlebarSidebarToggle ? (
+            <div
+              className="titlebar-sidebar-toggle-slot app-no-drag"
+              data-testid="titlebar-sidebar-toggle-slot"
+            >
+              <Button
+                aria-expanded={controller.isSidebarDrawerOpen}
+                aria-label={controller.isSidebarDrawerOpen ? 'Close sidebar' : 'Open sidebar'}
+                className="app-no-drag shrink-0"
+                data-testid="titlebar-sidebar-toggle"
+                onClick={controller.handleToggleSidebar}
+                size="icon"
+                type="button"
+                variant="quiet"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
+
+          {showNativeTitlebarSidebarToggle ? (
+            <div
+              className="titlebar-navigation-slot app-no-drag"
+              data-testid="titlebar-navigation-slot"
+            >
+              <Button
+                aria-label="Go back"
+                className="app-no-drag shrink-0"
+                data-testid="titlebar-nav-back"
+                disabled={!canNavigateBack}
+                onClick={commands.goBack}
+                size="icon"
+                type="button"
+                variant="quiet"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                aria-label="Go forward"
+                className="app-no-drag shrink-0"
+                data-testid="titlebar-nav-forward"
+                disabled={!canNavigateForward}
+                onClick={commands.goForward}
+                size="icon"
+                type="button"
+                variant="quiet"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
+
+          {showNativeTitlebarAgentTitle ? (
+            <div
+              aria-hidden="true"
+              className="titlebar-workflow-title"
+              data-testid="titlebar-agent-title"
+            >
+              <h2 className="titlebar-workflow-title-copy truncate">
+                {activeAgent.name}
+              </h2>
+            </div>
+          ) : null}
+
+          {showNativeTitlebarWorkflowTitle ? (
+            <div
+              aria-hidden="true"
+              className="titlebar-workflow-title"
+              data-testid="titlebar-workflow-title"
+            >
+              <h2 className="titlebar-workflow-title-copy truncate">
+                {selectedProject.name}
+              </h2>
+            </div>
+          ) : null}
+
+          <div className="window-drag-strip" data-testid="window-drag-region" />
+
+          {showNativeTitlebarProjectCreateAction ? (
+            <div
+              className="titlebar-create-action-slot app-no-drag"
+              data-testid="titlebar-project-create-slot"
+            >
+              <Button
+                aria-label={selectedProjectView === 'agents' ? 'New agent' : 'New work item'}
+                className="app-no-drag shrink-0"
+                data-testid="titlebar-project-create-button"
+                onClick={
+                  selectedProjectView === 'agents'
+                    ? controller.handleOpenCreateAgent
+                    : () => setCreateWorkItemOpen(true)
+                }
+                size="icon"
+                type="button"
+                variant="quiet"
+              >
+                <SquarePen className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
+
+          {showNativeTitlebarInspectorToggle || showNativeTitlebarProjectActions ? (
+            <div
+              className="titlebar-inspector-toggle-slot app-no-drag"
+              data-testid={showNativeTitlebarInspectorToggle ? 'titlebar-inspector-toggle-slot' : 'titlebar-project-actions-slot'}
+            >
+              {showNativeTitlebarInspectorToggle ? (
+                <Button
+                  aria-label={isContextPanelOpen ? 'Hide inspector' : 'Show inspector'}
+                  className="app-no-drag shrink-0"
+                  data-testid="titlebar-inspector-toggle"
+                  onClick={controller.handleToggleContextPanel}
+                  size="icon"
+                  type="button"
+                  variant="quiet"
+                >
+                  <PanelRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <WorkflowProjectActionsMenu
+                  className="app-no-drag shrink-0"
+                  presentation="drawer"
+                />
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div
+          aria-hidden="true"
+          className="titlebar-row-spacer"
+        />
 
         <div
           className={cn(
@@ -216,6 +428,8 @@ export default function AppShell() {
                 onToggleInspector={controller.handleToggleContextPanel}
                 onToggleSidebar={controller.handleToggleSidebar}
                 runtimeInfo={runtimeInfo}
+                showCompactInspectorToggle={!showNativeTitlebarInspectorToggle}
+                showCompactSidebarToggle={showCompactSidebarToggle}
                 transcriptRef={transcriptRef}
               />
             ) : route === 'workflow' ? (
@@ -228,12 +442,16 @@ export default function AppShell() {
                 onCreateWorkItemOpenChange={setCreateWorkItemOpen}
                 onOpenCreateAgent={controller.handleOpenCreateAgent}
                 onToggleSidebar={controller.handleToggleSidebar}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+                showTitlebarProjectCreateAction={showNativeTitlebarProjectCreateAction}
+                showTitlebarProjectActions={showNativeTitlebarProjectActions}
               />
             ) : route === 'plugins' ? (
               <PluginsWorkspace
                 isCompactShell={isCompactShell}
                 isSidebarOpen={controller.isSidebarDrawerOpen}
                 onToggleSidebar={controller.handleToggleSidebar}
+                showCompactSidebarToggle={showCompactSidebarToggle}
               />
             ) : (
               <SettingsWorkspace
@@ -246,6 +464,7 @@ export default function AppShell() {
                 onToggleSidebar={controller.handleToggleSidebar}
                 runtimeInfo={settingsRuntimeInfo}
                 settingsRoute={settingsRoute}
+                showCompactSidebarToggle={showCompactSidebarToggle}
                 themePreference={themePreference}
               />
             )}
@@ -294,8 +513,7 @@ export default function AppShell() {
           onSelectAgent={controller.handleSelectAgent}
           onSelectItem={commands.openItem}
           onSelectProject={(projectId) => {
-            selectProject(projectId);
-            commands.openWorkflow();
+            commands.openWorkflow(projectId);
           }}
           onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
@@ -308,7 +526,6 @@ export default function AppShell() {
           externalChannels={externalChannels}
           onCreateAgent={controller.handleCreateAgent}
           onOpenChange={controller.handleCreateAgentDialogOpenChange}
-          onOpenChannelsSettings={controller.handleOpenChannelsSettings}
           open={controller.isCreateAgentOpen}
           projects={projects}
         />

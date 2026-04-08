@@ -45,10 +45,13 @@ export const useAppStore = create<AppStore>((set, get, store) => {
       isStreaming: initialState.isStreaming,
       runtimeInfo: initialState.runtimeInfo,
       selectedAgentId: initialState.selectedAgentId,
+      telegramSetupSessions: initialState.telegramSetupSessions,
     })(set, get, store),
     ...createShellSlice({
       isCommandOpen: initialState.isCommandOpen,
       isContextPanelOpen: initialState.isContextPanelOpen,
+      navigationBackStack: initialState.navigationBackStack,
+      navigationForwardStack: initialState.navigationForwardStack,
       route: initialState.route,
     })(set, get, store),
     ...createSettingsSlice({

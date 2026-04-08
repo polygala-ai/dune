@@ -175,7 +175,7 @@ function Column({
 
   return (
     <section
-      className="flex min-h-0 min-w-[260px] max-w-[300px] flex-1 flex-col rounded-[24px] border border-app-border bg-app-card/60 p-3"
+      className="flex min-h-0 min-w-[220px] flex-[1_1_0] flex-col rounded-[24px] border border-app-border bg-app-card/60 p-3"
       data-testid={`workflow-column-${status}`}
     >
       <div className="flex items-center justify-between gap-3 px-2 pb-3">

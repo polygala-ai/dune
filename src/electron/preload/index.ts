@@ -8,11 +8,17 @@ import { ipcChannels } from '../../shared/electron/ipc-channels';
 
 const bridge: DesktopBridge = {
   applyNetworkSettings: () => ipcRenderer.invoke(ipcChannels.applyNetworkSettings),
+  cancelTelegramSetupSession: (sessionId) =>
+    ipcRenderer.invoke(ipcChannels.cancelTelegramSetupSession, sessionId),
   copyText: (text) => ipcRenderer.invoke(ipcChannels.copyText, text),
   platform: process.platform,
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
   deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
+  ensureProjectMainAgent: (projectId, projectName) =>
+    ipcRenderer.invoke(ipcChannels.ensureProjectMainAgent, projectId, projectName),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
+  getTelegramSetupSession: (sessionId) =>
+    ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
   openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
@@ -20,6 +26,8 @@ const bridge: DesktopBridge = {
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   sendAgentMessage: (agentId, text) =>
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
+  startTelegramSetupSession: (input) =>
+    ipcRenderer.invoke(ipcChannels.startTelegramSetupSession, input),
   storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
   storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),

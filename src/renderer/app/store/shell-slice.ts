@@ -8,6 +8,8 @@ export function createInitialShellState(): ShellState {
   return {
     isCommandOpen: false,
     isContextPanelOpen: false,
+    navigationBackStack: [],
+    navigationForwardStack: [],
     route: 'workflow',
   };
 }

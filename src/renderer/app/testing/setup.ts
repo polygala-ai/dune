@@ -58,29 +58,26 @@ Object.defineProperty(window, 'ResizeObserver', {
 beforeEach(() => {
   window.duneDesktop = {
     applyNetworkSettings: vi.fn(async () => undefined),
+    cancelTelegramSetupSession: vi.fn(async () => undefined),
     copyText: vi.fn(async () => undefined),
+    ensureProjectMainAgent: vi.fn(async () => 'agent-project-main'),
     getRuntimeSnapshot: vi.fn(async () => ({
       agents: [],
-      externalChannels: {
-        telegram: {
-        botUsername: null,
-        configured: false,
-        discoveredChats: [],
-        errorMessage: null,
-        status: 'not-configured' as const,
+      externalChannels: {},
+      isStreaming: false,
+      runtimeInfo: {
+        mode: 'real' as const,
+        status: 'ready' as const,
       },
-    },
-    isStreaming: false,
-    runtimeInfo: {
-      mode: 'real' as const,
-      status: 'ready' as const,
-    },
       selectedAgentId: null,
+      telegramSetupSessions: [],
     })),
+    getTelegramSetupSession: vi.fn(async () => null),
     openExternal: vi.fn(async () => undefined),
     platform: 'darwin',
     reloadExternalChannels: vi.fn(async () => undefined),
     restartApp: vi.fn(async () => undefined),
+    startTelegramSetupSession: vi.fn(async () => 'telegram-session-test'),
     storageDelete: vi.fn(async () => undefined),
     storageGet: vi.fn(async () => null),
     storageKeys: vi.fn(async () => []),

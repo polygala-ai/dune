@@ -8,7 +8,7 @@ describe('DuneChannel', () => {
     const onChatMetadata = vi.fn();
     const onMessage = vi.fn();
     const duneChannel = new DuneChannel({
-      channelOptions: {
+      config: {
         onChatMetadata,
         onMessage,
         registeredGroups: () => ({
@@ -37,7 +37,6 @@ describe('DuneChannel', () => {
       expect.objectContaining({
         chat_jid: 'dune:agent:test',
         content: 'dune credentials ok',
-        id: 'dune-bot-1',
         is_bot_message: true,
         is_from_me: true,
         sender: 'dune-assistant',

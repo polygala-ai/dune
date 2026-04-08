@@ -6,6 +6,7 @@ import type {
   AgentRuntimeInfo,
   AgentSummary,
   PresentedAgent,
+  TelegramSetupSession,
 } from '@/renderer/features/agents/types';
 import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
 import type {
@@ -25,6 +26,15 @@ import type {
 
 export type AppRoute = 'agent' | 'plugins' | 'settings' | 'workflow';
 
+export interface NavigationSnapshot {
+  route: AppRoute;
+  selectedAgentId: string | null;
+  selectedProjectId: string | null;
+  selectedProjectScreen: WorkflowProjectScreen;
+  selectedProjectView: WorkflowProjectView;
+  settingsRoute: SettingsRoute;
+}
+
 export interface AgentState {
   agents: Agent[];
   draft: string;
@@ -32,6 +42,7 @@ export interface AgentState {
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
+  telegramSetupSessions: TelegramSetupSession[];
 }
 
 export interface AgentActions {
@@ -108,6 +119,8 @@ export type WorkflowSlice = WorkflowState & WorkflowActions;
 export interface ShellState {
   isCommandOpen: boolean;
   isContextPanelOpen: boolean;
+  navigationBackStack: NavigationSnapshot[];
+  navigationForwardStack: NavigationSnapshot[];
   route: AppRoute;
 }
 
@@ -136,6 +149,7 @@ export interface AgentSessionState {
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
   selectedAgentId: string | null;
+  telegramSetupSessions: TelegramSetupSession[];
 }
 
 export interface WorkflowSessionState {

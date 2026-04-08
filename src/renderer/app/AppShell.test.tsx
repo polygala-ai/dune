@@ -25,6 +25,52 @@ import {
 import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
+interface TitlebarAreaRectInput {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+const DEFAULT_TITLEBAR_AREA_RECT: TitlebarAreaRectInput = {
+  height: 46,
+  width: 882,
+  x: 78,
+  y: 0,
+};
+
+class WindowControlsOverlayMock extends EventTarget implements WindowControlsOverlay {
+  visible = true;
+  private rect: TitlebarAreaRectInput;
+
+  constructor(rect: TitlebarAreaRectInput = DEFAULT_TITLEBAR_AREA_RECT) {
+    super();
+    this.rect = rect;
+  }
+
+  getTitlebarAreaRect() {
+    return new DOMRect(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
+  }
+
+  setRect(rect: TitlebarAreaRectInput) {
+    this.rect = rect;
+    this.dispatchEvent(new Event('geometrychange'));
+  }
+}
+
+function setWindowControlsOverlayMock(overlay?: WindowControlsOverlay) {
+  Object.defineProperty(window.navigator, 'windowControlsOverlay', {
+    configurable: true,
+    value: overlay,
+  });
+}
+
+function installWindowControlsOverlayMock(rect?: TitlebarAreaRectInput) {
+  const overlay = new WindowControlsOverlayMock(rect);
+  setWindowControlsOverlayMock(overlay);
+  return overlay;
+}
+
 function setWindowWidth(width: number) {
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
@@ -94,6 +140,7 @@ describe('AppShell', () => {
     resetAppStore();
     window.localStorage.removeItem(CONTEXT_PANEL_WIDTH_STORAGE_KEY);
     window.localStorage.removeItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    setWindowControlsOverlayMock(undefined);
     setWindowWidth(1440);
   });
 
@@ -121,14 +168,13 @@ describe('AppShell', () => {
     fireEvent.keyDown(window, { key: ',', metaKey: true });
     expect(await screen.findByTestId('settings-view')).toBeInTheDocument();
     expect(screen.getByTestId('settings-nav')).toHaveAttribute('data-platform-inset', 'mac');
-    expect(screen.getByRole('button', { name: /Channels/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Channels/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Workspace/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Channels/i }));
+    await user.click(screen.getByRole('button', { name: /Models/i }));
     expect(
-      screen.getByRole('heading', { name: 'Channels' }),
+      screen.getByRole('heading', { name: 'Providers' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Configure$/i })).toHaveLength(2);
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     const commandDialog = screen.getByRole('dialog');
@@ -141,7 +187,7 @@ describe('AppShell', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('opens channels settings directly from the create-agent channel selector', async () => {
+  it('shows inline Telegram setup directly from the create-agent channel selector', async () => {
     const user = userEvent.setup();
 
     render(<AppShell />);
@@ -154,18 +200,50 @@ describe('AppShell', () => {
 
     expect(
       within(channelPopover).getByRole('button', { name: /Select Telegram/i }),
-    ).toBeDisabled();
+    ).toBeEnabled();
 
     await user.click(
-      within(channelPopover).getByRole('button', { name: /Open Channels settings/i }),
+      within(channelPopover).getByRole('button', { name: /Select Telegram/i }),
     );
 
+    expect(await screen.findByLabelText('Bot token')).toBeInTheDocument();
+    expect(screen.getByTestId('telegram-settings-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-view')).not.toBeInTheDocument();
+  });
+
+  it('reconciles one built-in main agent per project in the workflow shell', async () => {
+    render(<AppShell />);
+
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
     await waitFor(() => {
-      expect(screen.queryByLabelText('Agent name')).not.toBeInTheDocument();
-      expect(screen.getByTestId('settings-view')).toBeInTheDocument();
-      expect(
-        screen.getByRole('heading', { name: 'Channels' }),
-      ).toBeInTheDocument();
+      const state = useAppStore.getState();
+      const selectedProjectId = state.selectedProjectId;
+      const projectMainAgents = state.agents.filter((agent) =>
+        agent.projectId === selectedProjectId && agent.role === 'project-main',
+      );
+
+      expect(projectMainAgents).toHaveLength(1);
+      expect(projectMainAgents[0]?.name).toBe('Research Platform main');
+    });
+
+    act(() => {
+      useAppStore.getState().createProject({
+        description: 'Support the follow-up shell pass.',
+        name: 'Studio Ops',
+      });
+    });
+
+    await waitFor(() => {
+      const state = useAppStore.getState();
+      const studioProject = state.projects.find((project) => project.name === 'Studio Ops');
+      const projectMainAgents = state.agents.filter((agent) =>
+        agent.projectId === studioProject?.id && agent.role === 'project-main',
+      );
+
+      expect(studioProject).toBeTruthy();
+      expect(projectMainAgents).toHaveLength(1);
+      expect(projectMainAgents[0]?.name).toBe('Studio Ops main');
     });
   });
 
@@ -202,6 +280,274 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-view')).toBeInTheDocument();
     });
+  });
+
+  it('mounts the compact macOS sidebar toggle in the titlebar overlay beside native controls', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('titlebar-workflow-title')).toHaveTextContent('Research Platform');
+    expect(
+      within(screen.getByTestId('titlebar-sidebar-toggle-slot')).getByRole('button', {
+        name: /open sidebar/i,
+      }),
+    ).toHaveAttribute('data-testid', 'titlebar-sidebar-toggle');
+    expect(
+      within(screen.getByTestId('window-drag-region')).queryByRole('button', {
+        name: /open sidebar/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('titlebar-sidebar-toggle'));
+
+    expect(await screen.findByRole('dialog', { name: 'App sidebar' })).toBeInTheDocument();
+  });
+
+  it('reuses the titlebar trailing slot for workflow project actions on compact macOS', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const titlebarSlot = screen.getByTestId('titlebar-project-actions-slot');
+    const actionsButton = within(titlebarSlot).getByTestId('project-actions-button');
+
+    expect(actionsButton).toBeInTheDocument();
+    expect(screen.queryByTestId('titlebar-inspector-toggle-slot')).not.toBeInTheDocument();
+
+    await user.click(actionsButton);
+
+    expect(await screen.findByTestId('project-actions-overlay')).toBeInTheDocument();
+    expect(screen.getByTestId('project-actions-panel')).toBeInTheDocument();
+    expect(await screen.findByTestId('configure-project-button')).toBeInTheDocument();
+    expect(screen.getByTestId('delete-project-menu-button')).toBeInTheDocument();
+  });
+
+  it('uses compact macOS titlebar back and forward buttons to navigate workflow pages', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const navSlot = screen.getByTestId('titlebar-navigation-slot');
+    const backButton = within(navSlot).getByRole('button', { name: /^Go back$/i });
+    const forwardButton = within(navSlot).getByRole('button', { name: /^Go forward$/i });
+
+    expect(backButton).toBeDisabled();
+    expect(forwardButton).toBeDisabled();
+
+    await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
+
+    expect(screen.getByRole('tab', { name: /^Agents$/i })).toHaveAttribute('aria-selected', 'true');
+    expect(backButton).toBeEnabled();
+    expect(forwardButton).toBeDisabled();
+
+    await user.click(backButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^Board$/i })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    expect(forwardButton).toBeEnabled();
+
+    await user.click(forwardButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^Agents$/i })).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  it('keeps the compact macOS titlebar layout after widening the window when native overlay metrics are available', async () => {
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    expect(screen.getByTestId('titlebar-sidebar-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
+
+    setWindowWidth(1500);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('titlebar-sidebar-toggle')).toBeInTheDocument();
+      expect(screen.getByTestId('titlebar-navigation-slot')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-sidebar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
+    });
+  });
+
+  it('moves the compact macOS workflow create action into the titlebar on board view', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const titlebarCreateSlot = screen.getByTestId('titlebar-project-create-slot');
+    const createButton = within(titlebarCreateSlot).getByRole('button', { name: /^New work item$/i });
+
+    expect(createButton).toBeInTheDocument();
+    expect(screen.queryByText('New work item')).not.toBeInTheDocument();
+
+    await user.click(createButton);
+
+    expect(
+      within(await screen.findByRole('dialog')).getByRole('heading', { name: 'Create work item' }),
+    ).toBeInTheDocument();
+  });
+
+  it('switches the compact macOS titlebar create action to new agent on the agents tab', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
+
+    const titlebarCreateSlot = await screen.findByTestId('titlebar-project-create-slot');
+    const createButton = within(titlebarCreateSlot).getByRole('button', { name: /^New agent$/i });
+
+    expect(createButton).toBeInTheDocument();
+    expect(screen.queryByText('New agent')).not.toBeInTheDocument();
+
+    await user.click(createButton);
+
+    expect(
+      within(await screen.findByRole('dialog')).getByRole('heading', { name: 'Name the agent' }),
+    ).toBeInTheDocument();
+  });
+
+  it('updates macOS titlebar toggle placement when native overlay metrics change', async () => {
+    const overlay = installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const shell = screen
+      .getByTestId('titlebar-sidebar-toggle-slot')
+      .closest('.window-shell');
+
+    if (!(shell instanceof HTMLElement)) {
+      throw new Error('Expected titlebar shell wrapper.');
+    }
+
+    await waitFor(() => {
+      expect(shell.style.getPropertyValue('--app-shell-titlebar-toggle-left')).toBe('90px');
+      expect(shell.style.getPropertyValue('--app-shell-titlebar-toggle-top')).toBe('5px');
+      expect(shell.style.getPropertyValue('--app-drag-strip-height')).toBe('46px');
+    });
+
+    act(() => {
+      overlay.setRect({
+        height: 48,
+        width: 860,
+        x: 96,
+        y: 2,
+      });
+    });
+
+    await waitFor(() => {
+      expect(shell.style.getPropertyValue('--app-shell-titlebar-toggle-left')).toBe('108px');
+      expect(shell.style.getPropertyValue('--app-shell-titlebar-toggle-top')).toBe('8px');
+      expect(shell.style.getPropertyValue('--app-drag-strip-height')).toBe('50px');
+    });
+  });
+
+  it('mounts the compact macOS inspector toggle in the titlebar without shifting its toolbar-side inset', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    await act(async () => {
+      await agentRuntime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+        projectId: useAppStore.getState().selectedProjectId,
+      });
+    });
+
+    await user.click(await screen.findByRole('tab', { name: /^Agents$/i }));
+    const openAgentButtons = await screen.findAllByRole('button', { name: /^Open agent$/i });
+    const firstOpenAgentButton = openAgentButtons[0];
+
+    if (!firstOpenAgentButton) {
+      throw new Error('Expected at least one open agent button.');
+    }
+
+    await user.click(firstOpenAgentButton);
+
+    expect(await screen.findByLabelText('Agent composer')).toBeInTheDocument();
+    expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('titlebar-agent-title')).toHaveTextContent('Navigator');
+    expect(screen.getByTestId('titlebar-inspector-toggle-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('titlebar-inspector-toggle')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('titlebar-inspector-toggle'));
+
+    await waitFor(() => {
+      expect(getContextPanelDialog()).toBeInTheDocument();
+      expect(screen.getByTestId('context-panel-overlay')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('context-panel-overlay'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
+    });
+  });
+
+  it('falls back to the compact toolbar on macOS when native overlay metrics are unavailable', async () => {
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const toolbar = screen.getByTestId('compact-shell-toolbar');
+
+    expect(
+      within(toolbar).getByRole('button', { name: /open sidebar/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('titlebar-sidebar-toggle-slot')).not.toBeInTheDocument();
+  });
+
+  it('keeps the compact sidebar toggle in the toolbar on non-macOS', async () => {
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: 'win32',
+    };
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const toolbar = screen.getByTestId('compact-shell-toolbar');
+
+    expect(
+      within(toolbar).getByRole('button', { name: /open sidebar/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('titlebar-sidebar-toggle-slot')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('window-drag-region')).queryByRole('button', {
+        name: /open sidebar/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('creates agents and moves through them with arrow-key navigation', async () => {
@@ -261,7 +607,14 @@ describe('AppShell', () => {
     });
 
     await user.click(await screen.findByRole('tab', { name: /^Agents$/i }));
-    await user.click(await screen.findByRole('button', { name: /^Open agent$/i }));
+    const openAgentButtons = await screen.findAllByRole('button', { name: /^Open agent$/i });
+    const firstOpenAgentButton = openAgentButtons[0];
+
+    if (!firstOpenAgentButton) {
+      throw new Error('Expected at least one open agent button.');
+    }
+
+    await user.click(firstOpenAgentButton);
 
     const composer = screen.getByLabelText('Agent composer');
 
@@ -342,7 +695,14 @@ describe('AppShell', () => {
     });
 
     await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
-    await user.click(await screen.findByRole('button', { name: /^Open agent$/i }));
+    const openAgentButtons = await screen.findAllByRole('button', { name: /^Open agent$/i });
+    const firstOpenAgentButton = openAgentButtons[0];
+
+    if (!firstOpenAgentButton) {
+      throw new Error('Expected at least one open agent button.');
+    }
+
+    await user.click(firstOpenAgentButton);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'QA triage' })).toBeInTheDocument();

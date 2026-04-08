@@ -5,7 +5,9 @@ import type {
   AgentChannelStatus,
   AgentExternalTarget,
   ExternalChannelsState,
+  TelegramAgentRuntimeState,
   TelegramConnectionStatus,
+  TelegramSetupSession,
 } from '@/renderer/features/agents/types';
 
 export interface AgentChannelOption {
@@ -56,26 +58,49 @@ export const createAgentChannelOptions = [
 ];
 
 export function createDefaultExternalChannelsState(): ExternalChannelsState {
-  return {
-    telegram: {
-      botUsername: null,
-      configured: false,
-      discoveredChats: [],
-      errorMessage: null,
-      status: 'not-configured',
-    },
-  };
+  return {};
 }
 
 export function cloneExternalChannelsState(
   state: ExternalChannelsState,
 ): ExternalChannelsState {
+  return { ...state };
+}
+
+export function createDefaultTelegramAgentRuntimeState(
+  overrides: Partial<TelegramAgentRuntimeState> = {},
+): TelegramAgentRuntimeState {
   return {
-    telegram: {
-      ...state.telegram,
-      botUsername: state.telegram.botUsername ?? null,
-      discoveredChats: state.telegram.discoveredChats.map((chat) => ({ ...chat })),
-    },
+    botUsername: null,
+    boundChat: null,
+    errorMessage: null,
+    pairCode: null,
+    pairExpiresAt: null,
+    pairingStatus: 'idle',
+    status: 'disconnected',
+    ...overrides,
+  };
+}
+
+export function cloneTelegramAgentRuntimeState(
+  state: TelegramAgentRuntimeState | null | undefined,
+): TelegramAgentRuntimeState | null {
+  if (!state) {
+    return null;
+  }
+
+  return {
+    ...state,
+    boundChat: state.boundChat ? { ...state.boundChat } : null,
+  };
+}
+
+export function cloneTelegramSetupSession(
+  session: TelegramSetupSession,
+): TelegramSetupSession {
+  return {
+    ...session,
+    matchedChat: session.matchedChat ? { ...session.matchedChat } : null,
   };
 }
 
@@ -121,7 +146,7 @@ function mapTelegramChannelStatus(
 export function createChannelBinding(
   channelId: AgentChannelId,
   options: {
-    externalChannels?: ExternalChannelsState;
+    telegram?: TelegramAgentRuntimeState | null;
     target?: AgentExternalTarget | null;
   } = {},
 ): AgentChannelBinding {
@@ -137,9 +162,7 @@ export function createChannelBinding(
       channel.id === 'dune-chat'
         ? 'ready'
         : channel.id === 'telegram'
-          ? mapTelegramChannelStatus(
-            options.externalChannels?.telegram.status ?? 'not-configured',
-          )
+          ? mapTelegramChannelStatus(options.telegram?.status ?? 'disconnected')
           : 'coming-soon',
     ...(target ? { target } : {}),
   };

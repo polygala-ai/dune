@@ -19,10 +19,11 @@ export function useAgentSubmit({ focusComposer }: UseAgentSubmitOptions) {
       return;
     }
 
-    setDraft('');
-
     try {
       await agentRuntime.service.sendMessage(selectedAgentId, value);
+      setDraft('');
+    } catch (error) {
+      console.error(`Failed to send message to agent "${selectedAgentId}".`, error);
     } finally {
       focusComposer();
     }

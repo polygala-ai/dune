@@ -38,9 +38,11 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
       (element as HTMLButtonElement).click();
     });
     await expect(page.getByTestId('channel-select-popover')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Select Telegram/i })).toBeDisabled();
-    await page.getByRole('button', { name: /Open Channels settings/i }).click();
-    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Select Telegram/i })).toBeEnabled();
+    await page.getByRole('button', { name: /Select Telegram/i }).click();
+    await expect(page.getByRole('heading', { name: 'Telegram setup' })).toBeVisible();
+    await expect(page.getByLabel('Bot token')).toBeVisible();
+    await page.getByRole('button', { name: /^Cancel$/i }).click();
 
     await dispatchPrimaryShortcut(page, 'n');
     await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
@@ -122,8 +124,8 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
 
     await dispatchPrimaryShortcut(page, ',');
     await expect(page.getByTestId('settings-view')).toBeVisible();
-    await page.getByRole('button', { name: /Channels/i }).click();
-    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible();
+    await page.getByRole('button', { name: /Models/i }).click();
+    await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
     await dispatchPrimaryShortcut(page, 'k');
     await expect(
       page.getByPlaceholder('Jump to a project, work item, agent, or action…'),

@@ -3,12 +3,20 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/renderer/features/agents/model/agent-service';
-import { cloneExternalChannelsState, createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
+import {
+  cloneExternalChannelsState,
+  cloneTelegramAgentRuntimeState,
+  cloneTelegramSetupSession,
+  createDefaultExternalChannelsState,
+} from '@/renderer/features/agents/model/channels';
 import {
   createMockAgentRuntime,
   type AgentRuntime,
 } from '@/renderer/features/agents/services/mock-agent-service';
-import type { CreateAgentInput } from '@/renderer/features/agents/types';
+import type {
+  CreateAgentInput,
+  StartTelegramSetupSessionInput,
+} from '@/renderer/features/agents/types';
 
 function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   return {
@@ -21,22 +29,29 @@ function createInitialBridgeSnapshot(): AgentServiceSnapshot {
       status: 'starting',
     },
     selectedAgentId: null,
+    telegramSetupSessions: [],
   };
 }
 
 function isPlaceholderBridgeSnapshot(snapshot: AgentServiceSnapshot) {
   return snapshot.runtimeInfo.status === 'starting'
     && snapshot.runtimeInfo.mode === 'mock-fallback'
-    && snapshot.externalChannels.telegram.status === 'not-configured'
-    && snapshot.externalChannels.telegram.discoveredChats.length === 0
-    && !snapshot.externalChannels.telegram.configured
     && snapshot.agents.length === 0;
 }
 
 type ConnectedBridge = DesktopBridge & Required<
   Pick<
     DesktopBridge,
-    'createAgent' | 'deleteAgent' | 'getRuntimeSnapshot' | 'selectAgent' | 'sendAgentMessage' | 'subscribe'
+    | 'createAgent'
+    | 'cancelTelegramSetupSession'
+    | 'deleteAgent'
+    | 'ensureProjectMainAgent'
+    | 'getRuntimeSnapshot'
+    | 'getTelegramSetupSession'
+    | 'selectAgent'
+    | 'sendAgentMessage'
+    | 'startTelegramSetupSession'
+    | 'subscribe'
   >
 >;
 
@@ -45,10 +60,14 @@ function hasRuntimeBridge(
 ): bridge is ConnectedBridge {
     return Boolean(
       bridge?.createAgent &&
+      bridge.cancelTelegramSetupSession &&
       bridge.deleteAgent &&
+      bridge.ensureProjectMainAgent &&
       bridge.getRuntimeSnapshot &&
+      bridge.getTelegramSetupSession &&
       bridge.selectAgent &&
       bridge.sendAgentMessage &&
+      bridge.startTelegramSetupSession &&
       bridge.subscribe,
   );
 }
@@ -71,11 +90,20 @@ class BridgeAgentRuntime implements AgentRuntime {
   };
 
   readonly service = {
+    cancelTelegramSetupSession: async (sessionId: string) => {
+      await this.bridge.cancelTelegramSetupSession(sessionId);
+    },
     createAgent: async (input: CreateAgentInput) => {
       return this.bridge.createAgent(input);
     },
     deleteAgent: async (agentId: string) => {
       await this.bridge.deleteAgent(agentId);
+    },
+    ensureProjectMainAgent: async (projectId: string, projectName: string) => {
+      return this.bridge.ensureProjectMainAgent(projectId, projectName);
+    },
+    getTelegramSetupSession: async (sessionId: string) => {
+      return this.bridge.getTelegramSetupSession(sessionId);
     },
     getSnapshot: () => this.getSnapshot(),
     listAgents: () => this.getSnapshot().agents,
@@ -84,6 +112,9 @@ class BridgeAgentRuntime implements AgentRuntime {
     },
     sendMessage: async (agentId: string, text: string) => {
       await this.bridge.sendAgentMessage(agentId, text);
+    },
+    startTelegramSetupSession: async (input: StartTelegramSetupSessionInput) => {
+      return this.bridge.startTelegramSetupSession(input);
     },
     subscribe: (listener: AgentServiceListener) => this.subscribe(listener),
   };
@@ -116,9 +147,11 @@ class BridgeAgentRuntime implements AgentRuntime {
         },
         contextCards: agent.contextCards.map((card) => ({ ...card })),
         messages: agent.messages.map((message) => ({ ...message })),
+        telegram: cloneTelegramAgentRuntimeState(agent.telegram),
       })),
       externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),
       runtimeInfo: { ...this.snapshot.runtimeInfo },
+      telegramSetupSessions: this.snapshot.telegramSetupSessions.map(cloneTelegramSetupSession),
     };
   }
 
@@ -162,8 +195,7 @@ class BridgeAgentRuntime implements AgentRuntime {
       console.debug('Reconciled stale desktop runtime snapshot.', {
         reason,
         runtimeStatus: nextSnapshot.runtimeInfo.status,
-        telegramConfigured: nextSnapshot.externalChannels.telegram.configured,
-        telegramDiscoveredChats: nextSnapshot.externalChannels.telegram.discoveredChats.length,
+        telegramSetupSessions: nextSnapshot.telegramSetupSessions.length,
       });
     }
 
@@ -210,8 +242,7 @@ export async function syncAgentRuntimeSnapshot(reason = 'manual') {
       console.debug('Pulled a live desktop runtime snapshot without a syncable bridge runtime.', {
         reason,
         runtimeStatus: liveSnapshot.runtimeInfo.status,
-        telegramConfigured: liveSnapshot.externalChannels.telegram.configured,
-        telegramDiscoveredChats: liveSnapshot.externalChannels.telegram.discoveredChats.length,
+        telegramSetupSessions: liveSnapshot.telegramSetupSessions.length,
       });
     }
 

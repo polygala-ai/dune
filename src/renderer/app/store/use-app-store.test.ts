@@ -41,6 +41,7 @@ describe('app store agent runtime sync', () => {
         status: 'ready',
       },
       selectedAgentId: null,
+      telegramSetupSessions: [],
     });
   });
 });

@@ -1,14 +1,33 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
+import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
 import type {
-  Agent,
   CreateAgentInput,
-  ExternalChannelsState,
+  TelegramSetupSession,
 } from '@/renderer/features/agents/types';
+import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
+
+function createSnapshot(
+  overrides: Partial<AgentServiceSnapshot> = {},
+): AgentServiceSnapshot {
+  return {
+    agents: [],
+    externalChannels: createDefaultExternalChannelsState(),
+    isStreaming: false,
+    runtimeInfo: {
+      message: 'Ready',
+      mode: 'real',
+      status: 'ready',
+    },
+    selectedAgentId: null,
+    telegramSetupSessions: [],
+    ...overrides,
+  };
+}
 
 describe('CreateAgentDialog', () => {
   const projects = [
@@ -22,27 +41,31 @@ describe('CreateAgentDialog', () => {
     },
   ];
 
+  beforeEach(() => {
+    resetAppStore();
+  });
+
+  afterEach(() => {
+    resetAppStore();
+  });
+
   function renderDialog(options: {
-    existingAgents?: Agent[];
-    externalChannels?: ExternalChannelsState;
     onCreateAgent?: (input: CreateAgentInput) => Promise<void>;
-    onOpenChannelsSettings?: () => void;
   } = {}) {
     render(
       <CreateAgentDialog
         defaultProjectId="project-1"
-        existingAgents={options.existingAgents ?? []}
-        externalChannels={options.externalChannels ?? createDefaultExternalChannelsState()}
+        existingAgents={[]}
+        externalChannels={createDefaultExternalChannelsState()}
         onCreateAgent={options.onCreateAgent ?? vi.fn().mockResolvedValue(undefined)}
         onOpenChange={vi.fn()}
-        onOpenChannelsSettings={options.onOpenChannelsSettings ?? vi.fn()}
         open
         projects={projects}
       />,
     );
   }
 
-  it('shows a compact channel trigger and renders disabled external channels in the popover', async () => {
+  it('shows a compact channel trigger and keeps Telegram selectable in the popover', async () => {
     const user = userEvent.setup();
 
     renderDialog();
@@ -57,27 +80,16 @@ describe('CreateAgentDialog', () => {
     const popover = await screen.findByTestId('channel-select-popover');
 
     expect(within(popover).getByRole('button', { name: /Select Dune chat/i })).toBeEnabled();
-    expect(within(popover).getByRole('button', { name: /Select Telegram/i })).toBeDisabled();
+    expect(within(popover).getByRole('button', { name: /Select Telegram/i })).toBeEnabled();
     expect(within(popover).getByRole('button', { name: /Select Slack/i })).toBeDisabled();
     expect(within(popover).getByRole('button', { name: /Select Discord/i })).toBeDisabled();
   });
 
-  it('preserves the default channel and submits structured agent input', async () => {
+  it('preserves the default channel and submits structured dune-chat agent input', async () => {
     const user = userEvent.setup();
     const onCreateAgent = vi.fn().mockResolvedValue(undefined);
 
     renderDialog({ onCreateAgent });
-
-    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
-    await user.click(
-      within(await screen.findByTestId('channel-select-popover')).getByRole('button', {
-        name: /Select Dune chat/i,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('channel-select-popover')).not.toBeInTheDocument();
-    });
 
     await user.type(screen.getByLabelText('Agent name'), 'Navigator');
     await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
@@ -91,112 +103,114 @@ describe('CreateAgentDialog', () => {
     });
   });
 
-  it('routes to channels settings from the popover shortcut', async () => {
+  it('shows the inline Telegram wizard and keeps create disabled until a setup session is matched', async () => {
     const user = userEvent.setup();
-    const onOpenChannelsSettings = vi.fn();
 
-    renderDialog({ onOpenChannelsSettings });
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      getRuntimeSnapshot: vi.fn(async () => createSnapshot({
+        telegramSetupSessions: useAppStore.getState().telegramSetupSessions,
+      })),
+      platform: 'darwin',
+      startTelegramSetupSession: vi.fn(async () => {
+        const session: TelegramSetupSession = {
+          agentId: null,
+          botUsername: 'agentlite_test_bot',
+          errorMessage: null,
+          id: 'telegram-session-1',
+          matchedChat: null,
+          pairCode: 'PAIR42',
+          pairExpiresAt: Date.now() + 10 * 60 * 1000,
+          pairingStatus: 'listening',
+          status: 'connected',
+        };
 
-    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
-    await user.click(screen.getByRole('button', { name: /Open Channels settings/i }));
+        useAppStore.getState().setAgentsSnapshot(createSnapshot({
+          telegramSetupSessions: [session],
+        }));
 
-    expect(onOpenChannelsSettings).toHaveBeenCalledTimes(1);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('channel-select-popover')).not.toBeInTheDocument();
-    });
-  });
-
-  it('uses the centered shared dialog surface motion', () => {
-    renderDialog();
-
-    const dialog = screen.getByRole('dialog', { name: 'Name the agent' });
-
-    expect(dialog).toHaveClass(
-      'dialog-surface-motion',
-      'left-1/2',
-      'top-1/2',
-      '-translate-x-1/2',
-      '-translate-y-1/2',
-    );
-    expect(dialog).not.toHaveClass('shell-reveal');
-  });
-
-  it('enables Telegram selection when configured and submits the discovered chat target', async () => {
-    const user = userEvent.setup();
-    const onCreateAgent = vi.fn().mockResolvedValue(undefined);
-    const externalChannels: ExternalChannelsState = {
-      telegram: {
-        botUsername: 'agentlite_test_bot',
-        configured: true,
-        discoveredChats: [
-          {
-            channelId: 'telegram',
-            jid: 'tg:123',
-            kind: 'group',
-            lastSeenAt: 1,
-            name: 'Product QA',
-          },
-        ],
-        errorMessage: null,
-        status: 'connected',
-      },
+        return session.id;
+      }),
     };
 
-    renderDialog({
-      externalChannels,
-      onCreateAgent,
-    });
+    renderDialog();
 
     await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
     await user.click(await screen.findByRole('button', { name: /Select Telegram/i }));
+    await user.type(screen.getByLabelText('Agent name'), 'Release triage');
 
-    expect(screen.getByTestId('telegram-chat-select')).toBeInTheDocument();
-    await user.selectOptions(screen.getByTestId('telegram-chat-select'), 'tg:123');
+    expect(await screen.findByRole('heading', { name: /Telegram setup/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Create agent$/i })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /I already have a token/i }));
+    await user.type(screen.getByLabelText('Bot token'), '123456:test-token');
+    await user.click(screen.getByRole('button', { name: /Save token/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('telegram-wizard-step-pairing')).toBeInTheDocument();
+    });
+    expect(screen.getByText('/pair PAIR42')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Create agent$/i })).toBeDisabled();
+  });
+
+  it('submits the matched Telegram setup session after pairing succeeds', async () => {
+    const user = userEvent.setup();
+    const onCreateAgent = vi.fn().mockResolvedValue(undefined);
+
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      getRuntimeSnapshot: vi.fn(async () => createSnapshot({
+        telegramSetupSessions: useAppStore.getState().telegramSetupSessions,
+      })),
+      platform: 'darwin',
+      startTelegramSetupSession: vi.fn(async () => {
+        const session: TelegramSetupSession = {
+          agentId: null,
+          botUsername: 'agentlite_test_bot',
+          errorMessage: null,
+          id: 'telegram-session-1',
+          matchedChat: {
+            channelId: 'telegram',
+            jid: 'tg:123',
+            kind: 'group',
+            name: 'Product QA',
+          },
+          pairCode: null,
+          pairExpiresAt: null,
+          pairingStatus: 'matched',
+          status: 'connected',
+        };
+
+        useAppStore.getState().setAgentsSnapshot(createSnapshot({
+          telegramSetupSessions: [session],
+        }));
+
+        return session.id;
+      }),
+    };
+
+    renderDialog({ onCreateAgent });
+
+    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
+    await user.click(await screen.findByRole('button', { name: /Select Telegram/i }));
+    await user.click(screen.getByRole('button', { name: /I already have a token/i }));
+    await user.type(screen.getByLabelText('Bot token'), '123456:test-token');
+    await user.click(screen.getByRole('button', { name: /Save token/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Telegram pairing matched Product QA.')).toBeInTheDocument();
+    });
+
     await user.type(screen.getByLabelText('Agent name'), 'Release triage');
     await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
 
     await waitFor(() => {
       expect(onCreateAgent).toHaveBeenCalledWith({
         channelId: 'telegram',
-        externalTarget: {
-          channelId: 'telegram',
-          jid: 'tg:123',
-          kind: 'group',
-          name: 'Product QA',
-        },
         name: 'Release triage',
         projectId: 'project-1',
+        telegramSetupSessionId: 'telegram-session-1',
       });
     });
-  });
-
-  it('shows actionable Telegram empty-state guidance and opens the connected bot', async () => {
-    const user = userEvent.setup();
-    const externalChannels: ExternalChannelsState = {
-      telegram: {
-        botUsername: 'agentlite_test_bot',
-        configured: true,
-        discoveredChats: [],
-        errorMessage: null,
-        status: 'connected',
-      },
-    };
-
-    renderDialog({ externalChannels });
-
-    await user.click(screen.getByRole('button', { name: /Channel: Dune chat/i }));
-    await user.click(await screen.findByRole('button', { name: /Select Telegram/i }));
-
-    expect(
-      screen.getByText(
-        'DM @agentlite_test_bot once, or add it to a group and mention it once there. This list updates automatically when the bot receives the message.',
-      ),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^Open bot$/i }));
-
-    expect(window.duneDesktop?.openExternal).toHaveBeenCalledWith('https://t.me/agentlite_test_bot');
-    expect(screen.getByRole('button', { name: /Open Channels settings/i })).toBeInTheDocument();
   });
 });

@@ -1,25 +1,19 @@
-import type { Channel, ChannelOpts } from '@boxlite-ai/agentlite';
+import type { ChannelDriver, ChannelDriverConfig } from '@boxlite-ai/agentlite';
 
 interface DuneChannelOptions {
-  channelOptions: ChannelOpts;
+  config: ChannelDriverConfig;
   onOutboundMessage: (jid: string, text: string) => Promise<void> | void;
 }
 
-export class DuneChannel implements Channel {
-  name = 'dune';
-
+export class DuneChannel implements ChannelDriver {
   private connected = false;
 
-  private inboundSequence = 0;
-
-  private outboundSequence = 0;
-
-  private readonly channelOptions: ChannelOpts;
+  private readonly config: ChannelDriverConfig;
 
   private readonly onOutboundMessage: DuneChannelOptions['onOutboundMessage'];
 
-  constructor({ channelOptions, onOutboundMessage }: DuneChannelOptions) {
-    this.channelOptions = channelOptions;
+  constructor({ config, onOutboundMessage }: DuneChannelOptions) {
+    this.config = config;
     this.onOutboundMessage = onOutboundMessage;
   }
 
@@ -36,25 +30,24 @@ export class DuneChannel implements Channel {
   }
 
   ownsJid(jid: string) {
-    return jid === 'dune:main' || jid.startsWith('dune:agent:');
+    return jid.startsWith('dune:agent:');
   }
 
   async sendMessage(jid: string, text: string) {
     const timestamp = new Date().toISOString();
-    const group = this.channelOptions.registeredGroups()[jid];
+    const group = this.config.registeredGroups()[jid];
 
-    this.channelOptions.onChatMetadata(
+    this.config.onChatMetadata(
       jid,
       timestamp,
-      group?.name ?? jid,
-      this.name,
+      (group as Record<string, unknown> | undefined)?.name as string ?? jid,
+      'dune',
       true,
     );
 
-    this.channelOptions.onMessage(jid, {
+    this.config.onMessage(jid, {
       chat_jid: jid,
       content: text,
-      id: `dune-bot-${++this.outboundSequence}`,
       is_bot_message: true,
       is_from_me: true,
       sender: 'dune-assistant',
@@ -67,20 +60,19 @@ export class DuneChannel implements Channel {
 
   async pushInboundMessage(jid: string, text: string, senderName: string = 'You') {
     const timestamp = new Date().toISOString();
-    const group = this.channelOptions.registeredGroups()[jid];
+    const group = this.config.registeredGroups()[jid];
 
-    this.channelOptions.onChatMetadata(
+    this.config.onChatMetadata(
       jid,
       timestamp,
-      group?.name ?? jid,
-      this.name,
+      (group as Record<string, unknown> | undefined)?.name as string ?? jid,
+      'dune',
       true,
     );
 
-    this.channelOptions.onMessage(jid, {
-      content: text,
+    this.config.onMessage(jid, {
       chat_jid: jid,
-      id: `dune-${++this.inboundSequence}`,
+      content: text,
       is_from_me: false,
       sender: 'dune-user',
       sender_name: senderName,

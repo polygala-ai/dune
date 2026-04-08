@@ -23,6 +23,8 @@ interface AgentWorkspaceProps {
   onToggleInspector: () => void;
   onToggleSidebar: () => void;
   runtimeInfo: AgentRuntimeInfo;
+  showCompactInspectorToggle: boolean;
+  showCompactSidebarToggle: boolean;
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -40,6 +42,8 @@ export function AgentWorkspace({
   onToggleInspector,
   onToggleSidebar,
   runtimeInfo,
+  showCompactInspectorToggle,
+  showCompactSidebarToggle,
   transcriptRef,
 }: AgentWorkspaceProps) {
   return (
@@ -48,7 +52,8 @@ export function AgentWorkspace({
         <CompactShellToolbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={onToggleSidebar}
-          {...(agent
+          showSidebarToggle={showCompactSidebarToggle}
+          {...(agent && showCompactInspectorToggle
             ? {
                 inspectorToggle: {
                   isOpen: isContextPanelOpen,

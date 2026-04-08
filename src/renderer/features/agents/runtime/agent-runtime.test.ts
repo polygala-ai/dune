@@ -80,62 +80,58 @@ describe('agent runtime', () => {
         status: 'ready',
       },
       selectedAgentId: null,
+      telegramSetupSessions: [],
     });
   });
 
   it('reconciles a stale desktop snapshot with the live runtime state', async () => {
     const liveSnapshot: AgentServiceSnapshot = {
       agents: [],
-      externalChannels: {
-        telegram: {
-          botUsername: 'agentlite_test_bot',
-          configured: true,
-          discoveredChats: [
-            {
-              channelId: 'telegram',
-              jid: 'tg:123',
-              kind: 'dm',
-              lastSeenAt: 1,
-              name: 'HashG',
-            },
-          ],
-          errorMessage: null,
-          status: 'connected',
-        },
-      },
+      externalChannels: {},
       isStreaming: false,
       runtimeInfo: {
         mode: 'real',
         status: 'ready',
       },
       selectedAgentId: null,
+      telegramSetupSessions: [
+        {
+          agentId: null,
+          botUsername: 'agentlite_test_bot',
+          errorMessage: null,
+          id: 'telegram-session-1',
+          matchedChat: null,
+          pairCode: 'PAIR42',
+          pairExpiresAt: 1,
+          pairingStatus: 'listening',
+          status: 'connected',
+        },
+      ],
     };
 
     const runtime = createAgentRuntime({
+      cancelTelegramSetupSession: vi.fn(async () => undefined),
       createAgent: vi.fn(async () => 'agent-1'),
       deleteAgent: vi.fn(async () => undefined),
+      ensureProjectMainAgent: vi.fn(async () => 'agent-project-main'),
       getRuntimeSnapshot: vi.fn(async () => liveSnapshot),
+      getTelegramSetupSession: vi.fn(async () => liveSnapshot.telegramSetupSessions[0] ?? null),
       platform: 'darwin',
       selectAgent: vi.fn(async () => undefined),
       sendAgentMessage: vi.fn(async () => undefined),
+      startTelegramSetupSession: vi.fn(async () => 'telegram-session-1'),
       subscribe: vi.fn(() => () => undefined),
     });
 
     await vi.waitFor(() => {
-      expect(runtime.getSnapshot().externalChannels.telegram).toMatchObject({
-        botUsername: 'agentlite_test_bot',
-        configured: true,
-        discoveredChats: [
-          {
-            channelId: 'telegram',
-            jid: 'tg:123',
-            kind: 'dm',
-            lastSeenAt: 1,
-            name: 'HashG',
-          },
-        ],
-        status: 'connected',
-      });
+      expect(runtime.getSnapshot().telegramSetupSessions).toEqual([
+        expect.objectContaining({
+          botUsername: 'agentlite_test_bot',
+          id: 'telegram-session-1',
+          pairingStatus: 'listening',
+          status: 'connected',
+        }),
+      ]);
     });
   });
 });

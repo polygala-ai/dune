@@ -103,15 +103,7 @@ const createWindow = () => {
 function createInitialRuntimeSnapshot() {
   return {
     agents: [],
-    externalChannels: {
-      telegram: {
-        botUsername: null,
-        configured: false,
-        discoveredChats: [],
-        errorMessage: null,
-        status: 'not-configured' as const,
-      },
-    },
+    externalChannels: {},
     isStreaming: false,
     runtimeInfo: {
       message: 'Starting Dune runtime.',
@@ -119,6 +111,7 @@ function createInitialRuntimeSnapshot() {
       status: 'starting' as const,
     },
     selectedAgentId: null,
+    telegramSetupSessions: [],
   };
 }
 
@@ -160,14 +153,13 @@ void app.whenReady().then(async () => {
     ]).then(async ([
       runtimeControllerModule,
       modelProvidersModule,
-      telegramChannelModule,
+      _telegramChannelModule,
     ]) => {
       const { DesktopRuntimeController } = runtimeControllerModule;
       const {
         migrateModelProviders,
         resolveDefaultModelCredentials,
       } = modelProvidersModule;
-      const { readTelegramBotToken } = telegramChannelModule;
       const homeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
 
       runtimeController = new DesktopRuntimeController({
@@ -177,7 +169,7 @@ void app.whenReady().then(async () => {
           secretsStore: stores.secrets,
           settingsStore: stores.settings,
         }),
-        resolveTelegramBotToken: () => readTelegramBotToken(stores.secrets),
+        telegramSecretsStore: stores.secrets,
       });
 
       runtimeController.subscribe((snapshot) => {
@@ -225,14 +217,26 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.copyText, (_event, text: string) => {
     clipboard.writeText(text);
   });
+  ipcMain.handle(ipcChannels.cancelTelegramSetupSession, async (_event, sessionId) => {
+    await ensureRuntime();
+    return requireRuntimeController().cancelTelegramSetupSession(sessionId);
+  });
   ipcMain.handle(ipcChannels.openExternal, (_event, url: string) => shell.openExternal(url));
   ipcMain.handle(ipcChannels.reloadExternalChannels, async () => {
     await ensureRuntime();
     return requireRuntimeController().reloadExternalChannels();
   });
+  ipcMain.handle(ipcChannels.getTelegramSetupSession, async (_event, sessionId) => {
+    await ensureRuntime();
+    return requireRuntimeController().getTelegramSetupSession(sessionId);
+  });
   ipcMain.handle(ipcChannels.createAgent, async (_event, input) => {
     await ensureRuntime();
     return requireRuntimeController().createAgent(input);
+  });
+  ipcMain.handle(ipcChannels.ensureProjectMainAgent, async (_event, projectId, projectName) => {
+    await ensureRuntime();
+    return requireRuntimeController().ensureProjectMainAgent(projectId, projectName);
   });
   ipcMain.handle(ipcChannels.deleteAgent, async (_event, agentId) => {
     await ensureRuntime();
@@ -245,6 +249,10 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.sendAgentMessage, async (_event, agentId, text) => {
     await ensureRuntime();
     return requireRuntimeController().sendAgentMessage(agentId, text);
+  });
+  ipcMain.handle(ipcChannels.startTelegramSetupSession, async (_event, input) => {
+    await ensureRuntime();
+    return requireRuntimeController().startTelegramSetupSession(input);
   });
   ipcMain.handle(ipcChannels.resetRuntime, async () => {
     await ensureRuntime();
