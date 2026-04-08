@@ -21,6 +21,7 @@ interface SettingsWorkspaceProps {
   onToggleSidebar: () => void;
   runtimeInfo: AgentRuntimeInfo;
   settingsRoute: SettingsRoute;
+  showCompactSidebarToggle: boolean;
   themePreference: ThemePreference;
 }
 
@@ -34,6 +35,7 @@ export function SettingsWorkspace({
   onToggleSidebar,
   runtimeInfo,
   settingsRoute,
+  showCompactSidebarToggle,
   themePreference,
 }: SettingsWorkspaceProps) {
   return (
@@ -42,6 +44,7 @@ export function SettingsWorkspace({
         <CompactShellToolbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={onToggleSidebar}
+          showSidebarToggle={showCompactSidebarToggle}
         />
       ) : null}
 

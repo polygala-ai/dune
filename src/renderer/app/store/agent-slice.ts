@@ -13,6 +13,7 @@ export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentSt
     isStreaming: snapshot.isStreaming,
     runtimeInfo: snapshot.runtimeInfo,
     selectedAgentId: snapshot.selectedAgentId,
+    telegramSetupSessions: snapshot.telegramSetupSessions,
   };
 }
 
@@ -25,6 +26,7 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
       isStreaming,
       runtimeInfo,
       selectedAgentId,
+      telegramSetupSessions,
     }) => {
       set({
         agents,
@@ -32,6 +34,7 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
         isStreaming,
         runtimeInfo,
         selectedAgentId,
+        telegramSetupSessions,
       });
     },
     setDraft: (draft) => {

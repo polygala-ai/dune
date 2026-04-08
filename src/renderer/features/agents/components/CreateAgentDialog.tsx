@@ -1,12 +1,11 @@
 import {
   type KeyboardEvent,
-  FormEvent,
+  type FormEvent,
   useEffect,
   useRef,
   useState,
 } from 'react';
 import {
-  ArrowUpRight,
   Check,
   ChevronDown,
 } from 'lucide-react';
@@ -19,9 +18,10 @@ import {
 import type {
   Agent,
   CreateAgentInput,
-  DiscoveredExternalChat,
   ExternalChannelsState,
+  TelegramSetupSession,
 } from '@/renderer/features/agents/types';
+import { TelegramChannelSetupCard } from '@/renderer/features/agents/components/TelegramChannelSetupCard';
 import type { WorkflowProject } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -37,7 +37,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/renderer/shared/ui/popover';
-import { Separator } from '@/renderer/shared/ui/separator';
 
 interface CreateAgentDialogProps {
   defaultProjectId: string | null;
@@ -45,72 +44,42 @@ interface CreateAgentDialogProps {
   externalChannels: ExternalChannelsState;
   onCreateAgent: (input: CreateAgentInput) => Promise<void>;
   onOpenChange: (open: boolean) => void;
-  onOpenChannelsSettings: () => void;
   open: boolean;
   projects: WorkflowProject[];
 }
 
 function getChannelBadgeLabel(
   channelId: CreateAgentInput['channelId'],
-  externalChannels: ExternalChannelsState,
 ) {
   if (channelId === builtInChannelOption.id) {
     return 'Default';
   }
 
   if (channelId === 'telegram') {
-    return externalChannels.telegram.configured ? 'External' : 'Setup';
+    return 'Setup';
   }
 
   return 'Soon';
 }
 
-function isChannelDisabled(
-  channelId: CreateAgentInput['channelId'],
-  externalChannels: ExternalChannelsState,
-) {
+function isChannelDisabled(channelId: CreateAgentInput['channelId']) {
   if (channelId === builtInChannelOption.id) {
     return false;
   }
 
   if (channelId === 'telegram') {
-    return !externalChannels.telegram.configured;
+    return false;
   }
 
   return true;
 }
 
-function getBoundTelegramChatIds(existingAgents: Agent[]) {
-  return new Set(
-    existingAgents
-      .filter((agent) => agent.channel.id === 'telegram')
-      .map((agent) => agent.channel.target?.jid)
-      .filter((jid): jid is string => Boolean(jid)),
-  );
-}
-
-function findDiscoveredChat(
-  chats: DiscoveredExternalChat[],
-  jid: string,
-) {
-  return chats.find((chat) => chat.jid === jid) ?? null;
-}
-
-function formatTelegramBotHandle(botUsername: string | null) {
-  return botUsername ? `@${botUsername}` : null;
-}
-
-function buildTelegramBotUrl(botUsername: string | null) {
-  return botUsername ? `https://t.me/${botUsername}` : null;
-}
-
 export function CreateAgentDialog({
   defaultProjectId,
-  existingAgents,
-  externalChannels,
+  existingAgents: _existingAgents,
+  externalChannels: _externalChannels,
   onCreateAgent,
   onOpenChange,
-  onOpenChannelsSettings,
   open,
   projects,
 }: CreateAgentDialogProps) {
@@ -118,40 +87,24 @@ export function CreateAgentDialog({
   const channelListRef = useRef<HTMLDivElement | null>(null);
   const [isChannelPickerOpen, setChannelPickerOpen] = useState(false);
   const [projectId, setProjectId] = useState(defaultProjectId ?? projects[0]?.id ?? '');
-  const [selectedExternalTargetJid, setSelectedExternalTargetJid] = useState('');
   const [value, setValue] = useState('');
   const [selectedChannelId, setSelectedChannelId] = useState<CreateAgentInput['channelId']>(
     builtInChannelOption.id,
   );
+  const [telegramSetupSession, setTelegramSetupSession] = useState<TelegramSetupSession | null>(null);
   const selectedChannel = getChannelOption(selectedChannelId);
-  const boundTelegramChatIds = getBoundTelegramChatIds(existingAgents);
-  const discoveredTelegramChats = externalChannels.telegram.discoveredChats;
-  const telegramBotHandle = formatTelegramBotHandle(externalChannels.telegram.botUsername);
-  const telegramBotUrl = buildTelegramBotUrl(externalChannels.telegram.botUsername);
-  const selectedTelegramChat = findDiscoveredChat(
-    discoveredTelegramChats,
-    selectedExternalTargetJid,
-  );
-  const hasTelegramSelection =
-    selectedChannelId !== 'telegram' ||
-    (selectedTelegramChat !== null && !boundTelegramChatIds.has(selectedTelegramChat.jid));
+  const matchedTelegramChat = telegramSetupSession?.matchedChat ?? null;
+  const hasTelegramSelection = selectedChannelId !== 'telegram' || matchedTelegramChat !== null;
 
   useEffect(() => {
     if (!open) {
       setValue('');
       setProjectId(defaultProjectId ?? projects[0]?.id ?? '');
-      setSelectedExternalTargetJid('');
       setSelectedChannelId(builtInChannelOption.id);
       setChannelPickerOpen(false);
+      setTelegramSetupSession(null);
     }
   }, [defaultProjectId, open, projects]);
-
-  useEffect(() => {
-    if (selectedChannelId === 'telegram' && !externalChannels.telegram.configured) {
-      setSelectedChannelId(builtInChannelOption.id);
-      setSelectedExternalTargetJid('');
-    }
-  }, [externalChannels.telegram.configured, selectedChannelId]);
 
   const focusChannelAction = (direction: 'first' | 'last' | -1 | 1) => {
     const actions = Array.from(
@@ -204,7 +157,7 @@ export function CreateAgentDialog({
     }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedValue = value.trim();
 
@@ -212,35 +165,18 @@ export function CreateAgentDialog({
       return;
     }
 
-    await onCreateAgent({
+    void onCreateAgent({
       channelId: selectedChannelId,
-      ...(selectedChannelId === 'telegram' && selectedTelegramChat
+      ...(selectedChannelId === 'telegram' && telegramSetupSession
         ? {
-            externalTarget: {
-              channelId: 'telegram',
-              jid: selectedTelegramChat.jid,
-              kind: selectedTelegramChat.kind,
-              name: selectedTelegramChat.name,
-            },
+            telegramSetupSessionId: telegramSetupSession.id,
           }
         : {}),
       name: trimmedValue,
       projectId: projectId || null,
+    }).then(() => {
+      setValue('');
     });
-    setValue('');
-  };
-
-  const handleOpenTelegramBot = () => {
-    if (!telegramBotUrl) {
-      return;
-    }
-
-    if (typeof window.duneDesktop?.openExternal === 'function') {
-      void window.duneDesktop.openExternal(telegramBotUrl);
-      return;
-    }
-
-    window.open(telegramBotUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -254,8 +190,8 @@ export function CreateAgentDialog({
       >
         <DialogTitle>Name the agent</DialogTitle>
         <DialogDescription className="mt-2 leading-6">
-          Create a project-owned agent workspace and choose whether it should live in
-          Dune chat or mirror an attached Telegram conversation.
+          Create a project-owned agent workspace and choose which channel it should
+          live in. External channel setup now happens here with the agent.
         </DialogDescription>
 
         <form className="mt-6 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -303,7 +239,7 @@ export function CreateAgentDialog({
                   Channel
                 </div>
                 <p className="text-xs leading-5 text-app-muted">
-                  Choose the default channel for this agent.
+                  Choose where this agent lives. Telegram setup stays attached to this flow.
                 </p>
               </div>
 
@@ -324,7 +260,7 @@ export function CreateAgentDialog({
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="pill-key">
-                        {getChannelBadgeLabel(selectedChannel.id, externalChannels)}
+                        {getChannelBadgeLabel(selectedChannel.id)}
                       </span>
                       <ChevronDown
                         className={cn(
@@ -352,7 +288,7 @@ export function CreateAgentDialog({
                   <div className="space-y-1">
                     {createAgentChannelOptions.map((channel) => {
                       const isSelected = channel.id === selectedChannelId;
-                      const isDisabled = isChannelDisabled(channel.id, externalChannels);
+                      const isDisabled = isChannelDisabled(channel.id);
 
                       return (
                         <button
@@ -371,9 +307,6 @@ export function CreateAgentDialog({
                           key={channel.id}
                           onClick={() => {
                             setSelectedChannelId(channel.id);
-                            if (channel.id !== 'telegram') {
-                              setSelectedExternalTargetJid('');
-                            }
                             setChannelPickerOpen(false);
                           }}
                           type="button"
@@ -391,106 +324,30 @@ export function CreateAgentDialog({
                               <Check className="h-4 w-4 text-app-accent" />
                             ) : null}
                             <span className="pill-key">
-                              {getChannelBadgeLabel(channel.id, externalChannels)}
+                              {getChannelBadgeLabel(channel.id)}
                             </span>
                           </div>
                         </button>
                       );
                     })}
                   </div>
-
-                  <Separator className="my-2" />
-
-                  <button
-                    className="flex w-full items-center justify-between rounded-[16px] px-3 py-3 text-left text-sm text-app-text transition-colors hover:bg-app-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-accent/25"
-                    data-channel-action="true"
-                    onClick={() => {
-                      setChannelPickerOpen(false);
-                      onOpenChannelsSettings();
-                    }}
-                    type="button"
-                  >
-                    <div>
-                      <div className="font-medium text-app-text">Open Channels settings</div>
-                      <p className="mt-1 text-xs leading-5 text-app-muted">
-                        Configure external channels from Settings later.
-                      </p>
-                    </div>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-app-muted" />
-                  </button>
                 </PopoverContent>
               </Popover>
             </div>
 
             {selectedChannelId === 'telegram' ? (
-              <div className="space-y-2 rounded-[18px] border border-app-border bg-app-card/50 p-4">
-                <label
-                  className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
-                  htmlFor="create-agent-telegram-chat"
-                >
-                  Telegram chat
-                </label>
-                <select
-                  className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
-                  data-testid="telegram-chat-select"
-                  id="create-agent-telegram-chat"
-                  onChange={(event) => setSelectedExternalTargetJid(event.target.value)}
-                  value={selectedExternalTargetJid}
-                >
-                  <option value="">
-                    {discoveredTelegramChats.length > 0
-                      ? 'Select a discovered Telegram chat'
-                      : 'No Telegram chats discovered yet'}
-                  </option>
-                  {discoveredTelegramChats.map((chat) => {
-                    const isInUse = boundTelegramChatIds.has(chat.jid);
-
-                    return (
-                      <option disabled={isInUse} key={chat.jid} value={chat.jid}>
-                        {chat.name} · {chat.kind === 'group' ? 'Group' : 'DM'}
-                        {isInUse ? ' · In use' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-xs leading-5 text-app-muted">
-                  {discoveredTelegramChats.length > 0
-                    ? 'The agent will mirror this Telegram conversation into Dune. Replies stay in Telegram.'
-                    : telegramBotHandle
-                      ? `DM ${telegramBotHandle} once, or add it to a group and mention it once there. This list updates automatically when the bot receives the message.`
-                      : 'DM the Telegram bot once, or add it to a group and mention it once there. This list updates automatically when the bot receives the message.'}
-                </p>
-                {discoveredTelegramChats.length === 0 ? (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    {telegramBotHandle ? (
-                      <Button
-                        onClick={handleOpenTelegramBot}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Open bot
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                    <Button
-                      onClick={onOpenChannelsSettings}
-                      size="sm"
-                      type="button"
-                      variant="quiet"
-                    >
-                      Open Channels settings
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
+              <TelegramChannelSetupCard
+                onSessionChange={setTelegramSetupSession}
+              />
             ) : null}
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-app-border pt-4">
             <p className="text-[12px] leading-5 text-app-muted">
               {selectedChannelId === 'telegram'
-                ? 'Telegram agents mirror chat history here and stay read-only in Dune.'
+                ? matchedTelegramChat
+                  ? `Telegram pairing matched ${matchedTelegramChat.name}.`
+                  : 'Generate a pair code and claim one Telegram chat before creating this agent.'
                 : 'Dune chat stays fully writable inside the app.'}
             </p>
             <div className="flex items-center gap-2">

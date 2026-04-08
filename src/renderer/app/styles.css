@@ -6,11 +6,29 @@
 
 :root {
   color-scheme: light;
-  --app-drag-strip-height: 2.9rem;
+  --app-drag-strip-height: 46px;
   --app-shell-context-width: 300px;
   --app-shell-overlay-context-width: 300px;
   --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
   --app-shell-sidebar-width: 232px;
+  --app-shell-titlebar-gap: 12px;
+  --app-shell-titlebar-toggle-size: 36px;
+  --app-shell-titlebar-traffic-light-cluster-width: 56px;
+  --app-shell-titlebar-traffic-light-size: 12px;
+  --app-shell-titlebar-traffic-light-x: 18px;
+  --app-shell-titlebar-traffic-light-y: 16px;
+  --app-shell-titlebar-toggle-left: calc(
+    var(--app-shell-titlebar-traffic-light-x) +
+    var(--app-shell-titlebar-traffic-light-cluster-width) +
+    var(--app-shell-titlebar-gap)
+  );
+  --app-shell-titlebar-toggle-top: calc(
+    var(--app-shell-titlebar-traffic-light-y) +
+    (
+      var(--app-shell-titlebar-traffic-light-size) -
+      var(--app-shell-titlebar-toggle-size)
+    ) / 2
+  );
   --app-shell-window-gap-x: 18px;
   --app-shell-window-gap-y: 16px;
   --app-bg: #f3eee7;
@@ -33,11 +51,29 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --app-drag-strip-height: 2.9rem;
+  --app-drag-strip-height: 46px;
   --app-shell-context-width: 300px;
   --app-shell-overlay-context-width: 300px;
   --app-shell-overlay-top-offset: calc(16px + 18px + var(--app-drag-strip-height));
   --app-shell-sidebar-width: 232px;
+  --app-shell-titlebar-gap: 12px;
+  --app-shell-titlebar-toggle-size: 36px;
+  --app-shell-titlebar-traffic-light-cluster-width: 56px;
+  --app-shell-titlebar-traffic-light-size: 12px;
+  --app-shell-titlebar-traffic-light-x: 18px;
+  --app-shell-titlebar-traffic-light-y: 16px;
+  --app-shell-titlebar-toggle-left: calc(
+    var(--app-shell-titlebar-traffic-light-x) +
+    var(--app-shell-titlebar-traffic-light-cluster-width) +
+    var(--app-shell-titlebar-gap)
+  );
+  --app-shell-titlebar-toggle-top: calc(
+    var(--app-shell-titlebar-traffic-light-y) +
+    (
+      var(--app-shell-titlebar-traffic-light-size) -
+      var(--app-shell-titlebar-toggle-size)
+    ) / 2
+  );
   --app-shell-window-gap-x: 18px;
   --app-shell-window-gap-y: 16px;
   --app-bg: #171410;
@@ -166,9 +202,134 @@ textarea {
   height: 100%;
 }
 
+.titlebar-row {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: stretch;
+  height: var(--app-drag-strip-height);
+}
+
+.titlebar-row-spacer {
+  height: var(--app-drag-strip-height);
+}
+
 .window-drag-strip {
   -webkit-app-region: drag;
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.titlebar-sidebar-toggle-slot {
+  display: flex;
+  flex: 0 0 calc(
+    var(--app-shell-titlebar-toggle-left) +
+    var(--app-shell-titlebar-toggle-size)
+  );
+  height: 100%;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-left: var(--app-shell-titlebar-toggle-left);
+  padding-top: var(--app-shell-titlebar-toggle-top);
+}
+
+.titlebar-navigation-slot {
+  display: flex;
+  flex: 0 0 calc(
+    (2 * var(--app-shell-titlebar-toggle-size)) +
+    0rem
+  );
+  height: 100%;
+  align-items: flex-start;
+  gap: 0rem;
+  padding-top: var(--app-shell-titlebar-toggle-top);
+}
+
+.titlebar-workflow-title {
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
   height: var(--app-drag-strip-height);
+  align-items: flex-start;
+  padding-top: calc(var(--app-shell-titlebar-toggle-top) + 8px);
+  padding-left: calc(
+    var(--app-shell-titlebar-toggle-left) +
+    (3 * var(--app-shell-titlebar-toggle-size)) +
+    0.5rem
+  );
+}
+
+.titlebar-workflow-title-copy {
+  max-width: calc(100vw - (2 * var(--app-shell-window-gap-x)) - 16rem);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: var(--app-text);
+}
+
+.titlebar-inspector-toggle-slot {
+  display: flex;
+  flex: 0 0 calc(
+    var(--app-shell-window-gap-x) +
+    1rem +
+    var(--app-shell-titlebar-toggle-size)
+  );
+  height: 100%;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: calc(var(--app-shell-window-gap-x) + 1rem);
+  padding-top: var(--app-shell-titlebar-toggle-top);
+}
+
+.titlebar-create-action-slot {
+  display: flex;
+  flex: 0 0 calc(
+    var(--app-shell-titlebar-toggle-size) +
+    0.5rem
+  );
+  height: 100%;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: 0.5rem;
+  padding-top: var(--app-shell-titlebar-toggle-top);
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .agent-panel-scroll {
+  padding-top: 0.75rem;
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .workflow-page-shell {
+  padding-top: 0;
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .agent-panel-header {
+  margin-top: -0.5rem;
+}
+
+.window-shell[data-native-titlebar-agent-title='true'] .agent-panel-header {
+  display: none;
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .workflow-project-header-row {
+  margin-top: -0.5rem;
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .workflow-project-title {
+  margin-top: 0;
+}
+
+.window-shell[data-native-titlebar-workflow-title='true'] .workflow-project-title {
+  display: none;
+}
+
+.window-shell[data-native-titlebar-overlay='true'] .workflow-project-header-copy {
+  padding-left: 0.5rem;
 }
 
 .app-drag-region {

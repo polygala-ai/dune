@@ -10,14 +10,12 @@ import type {
   CreateAgentInput,
   PresentedAgent,
 } from '@/renderer/features/agents/types';
-import type { SettingsRoute } from '@/renderer/features/settings/types';
 
 export interface AgentShellControllerCommands {
   createAgent: (input: CreateAgentInput) => Promise<string>;
   openAgent: (agentId: string) => void;
   openSettings: () => void;
   setCommandOpen: (isOpen: boolean) => void;
-  setSettingsRoute: (route: SettingsRoute) => void;
   toggleInspector: (force?: boolean) => void;
 }
 
@@ -79,15 +77,6 @@ export function useAgentShellController({
     });
   });
 
-  const handleOpenChannelsSettings = useEffectEvent(() => {
-    setCreateAgentOpen(false);
-    startTransition(() => {
-      setSidebarDrawerOpen(false);
-      commands.openSettings();
-      commands.setSettingsRoute('channels');
-    });
-  });
-
   const handleOpenCommand = useEffectEvent(() => {
     commands.setCommandOpen(true);
   });
@@ -120,7 +109,6 @@ export function useAgentShellController({
     handleCreateAgentDialogOpenChange,
     handleOpenCommand,
     handleOpenCreateAgent,
-    handleOpenChannelsSettings,
     handleOpenSettings,
     handleSelectAgent,
     handleSidebarDrawerOpenChange,

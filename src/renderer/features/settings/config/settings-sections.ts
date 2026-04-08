@@ -1,7 +1,6 @@
 import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
-import { ChannelsSettings } from '@/renderer/features/settings/components/ChannelsSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
@@ -35,12 +34,6 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Appearance',
     description: 'Theme and visual tone',
     Component: AppearanceSettings,
-  },
-  {
-    id: 'channels',
-    title: 'Channels',
-    description: 'Telegram and agent channels',
-    Component: ChannelsSettings,
   },
   {
     id: 'network',

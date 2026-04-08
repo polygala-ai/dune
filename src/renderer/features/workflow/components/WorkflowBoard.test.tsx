@@ -24,6 +24,26 @@ const baseItem = (
 });
 
 describe('WorkflowBoard', () => {
+  it('lets board columns expand to use wider shells while preserving horizontal overflow on smaller widths', () => {
+    render(
+      <WorkflowBoard
+        items={[
+          baseItem('inbox-1', 'Inbox item', 'inbox'),
+          baseItem('ready-1', 'Ready item', 'ready'),
+          baseItem('active-1', 'Active item', 'active'),
+          baseItem('review-1', 'Review item', 'review'),
+          baseItem('done-1', 'Done item', 'done'),
+        ]}
+        onMoveItem={vi.fn()}
+        onSelectItem={vi.fn()}
+        selectedItemId={null}
+      />,
+    );
+
+    expect(screen.getByTestId('workflow-column-inbox')).toHaveClass('min-w-[220px]', 'flex-[1_1_0]');
+    expect(screen.getByTestId('workflow-column-done')).toHaveClass('min-w-[220px]', 'flex-[1_1_0]');
+  });
+
   it('keeps tall columns independently scrollable without clipping lower cards', () => {
     render(
       <WorkflowBoard

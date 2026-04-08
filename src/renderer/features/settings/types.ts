@@ -1,4 +1,4 @@
-export type SettingsRoute = 'appearance' | 'channels' | 'network' | 'models' | 'shortcuts';
+export type SettingsRoute = 'appearance' | 'network' | 'models' | 'shortcuts';
 export type ThemePreference = 'dark' | 'light' | 'system';
 export type {
   ModelAuthType,

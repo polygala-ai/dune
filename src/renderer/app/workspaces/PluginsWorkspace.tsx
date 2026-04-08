@@ -6,12 +6,14 @@ interface PluginsWorkspaceProps {
   isCompactShell: boolean;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
+  showCompactSidebarToggle: boolean;
 }
 
 export function PluginsWorkspace({
   isCompactShell,
   isSidebarOpen,
   onToggleSidebar,
+  showCompactSidebarToggle,
 }: PluginsWorkspaceProps) {
   return (
     <>
@@ -19,6 +21,7 @@ export function PluginsWorkspace({
         <CompactShellToolbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={onToggleSidebar}
+          showSidebarToggle={showCompactSidebarToggle}
         />
       ) : null}
 

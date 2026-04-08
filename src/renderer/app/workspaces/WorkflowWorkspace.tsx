@@ -1,22 +1,17 @@
-import {
-  MoreHorizontal,
-  Plus,
-} from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
-import {
-  useShellState,
-  useWorkflowSession,
-} from '@/renderer/app/store/selectors';
+import { useWorkflowSession } from '@/renderer/app/store/selectors';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { CreateProjectDialog } from '@/renderer/features/workflow/components/CreateProjectDialog';
 import { CreateWorkItemDialog } from '@/renderer/features/workflow/components/CreateWorkItemDialog';
 import { WorkflowBoard } from '@/renderer/features/workflow/components/WorkflowBoard';
 import { WorkflowItemInspector } from '@/renderer/features/workflow/components/WorkflowItemInspector';
 import { WorkflowProjectActivity } from '@/renderer/features/workflow/components/WorkflowProjectActivity';
+import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/components/WorkflowProjectActionsMenu';
 import { WorkflowProjectAgents } from '@/renderer/features/workflow/components/WorkflowProjectAgents';
 import { WorkflowProjectSettings } from '@/renderer/features/workflow/components/WorkflowProjectSettings';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
@@ -27,11 +22,6 @@ import {
   DialogTitle,
 } from '@/renderer/shared/ui/dialog';
 import { Button } from '@/renderer/shared/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/renderer/shared/ui/popover';
 
 const projectHeaderTabs = [
   { label: 'Activity', value: 'activity' },
@@ -48,6 +38,9 @@ interface WorkflowWorkspaceProps {
   onCreateWorkItemOpenChange: (open: boolean) => void;
   onOpenCreateAgent: () => void;
   onToggleSidebar: () => void;
+  showCompactSidebarToggle: boolean;
+  showTitlebarProjectCreateAction: boolean;
+  showTitlebarProjectActions: boolean;
 }
 
 export function WorkflowWorkspace({
@@ -59,10 +52,11 @@ export function WorkflowWorkspace({
   onCreateWorkItemOpenChange,
   onOpenCreateAgent,
   onToggleSidebar,
+  showCompactSidebarToggle,
+  showTitlebarProjectCreateAction,
+  showTitlebarProjectActions,
 }: WorkflowWorkspaceProps) {
   const commands = useAppCommands();
-  const { route } = useShellState();
-  const [isProjectMenuOpen, setProjectMenuOpen] = useState(false);
   const [isDeleteProjectOpen, setDeleteProjectOpen] = useState(false);
   const {
     addTask,
@@ -73,9 +67,7 @@ export function WorkflowWorkspace({
     createProject,
     deleteProject,
     moveItem,
-    openProjectSettings,
     selectItem,
-    selectProjectView,
     updateProject,
     updateItem,
     updateTask,
@@ -89,9 +81,7 @@ export function WorkflowWorkspace({
       createProject: state.createProject,
       deleteProject: state.deleteProject,
       moveItem: state.moveItem,
-      openProjectSettings: state.openProjectSettings,
       selectItem: state.selectItem,
-      selectProjectView: state.selectProjectView,
       updateProject: state.updateProject,
       updateItem: state.updateItem,
       updateTask: state.updateTask,
@@ -156,26 +146,14 @@ export function WorkflowWorkspace({
     });
   };
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProjectFromSettings = async () => {
     if (!selectedProject) {
       return;
     }
 
-    const projectAgentIds = projectAgents.map((agent) => agent.id);
-    const selectedAgentId = useAppStore.getState().selectedAgentId;
-
-    if (
-      route === 'agent' &&
-      selectedAgentId &&
-      projectAgentIds.includes(selectedAgentId)
-    ) {
-      commands.openWorkflow();
-    }
-
-    await Promise.all(projectAgentIds.map((agentId) => agentRuntime.service.deleteAgent(agentId)));
+    await Promise.all(projectAgents.map((agent) => agentRuntime.service.deleteAgent(agent.id)));
     deleteProject(selectedProject.id);
     setDeleteProjectOpen(false);
-    setProjectMenuOpen(false);
   };
 
   const boardView = (
@@ -214,7 +192,9 @@ export function WorkflowWorkspace({
                 addWorkProduct(itemId, input);
               }}
               onAssignPrimaryAgent={assignPrimaryAgent}
-              onCreateAgent={handleCreateAgentForItem}
+              onCreateAgent={(itemId) => {
+                void handleCreateAgentForItem(itemId);
+              }}
               onOpenAgent={(agentId) => commands.openAgent(agentId)}
               onUpdateItem={updateItem}
               onUpdateItemStatus={(itemId, status) =>
@@ -243,7 +223,9 @@ export function WorkflowWorkspace({
         addWorkProduct(itemId, input);
       }}
       onAssignPrimaryAgent={assignPrimaryAgent}
-      onCreateAgent={handleCreateAgentForItem}
+      onCreateAgent={(itemId) => {
+        void handleCreateAgentForItem(itemId);
+      }}
       onOpenAgent={(agentId) => commands.openAgent(agentId)}
       onUpdateItem={updateItem}
       onUpdateItemStatus={(itemId, status) =>
@@ -257,53 +239,6 @@ export function WorkflowWorkspace({
       }))}
     />
   );
-
-  const projectActionMenu = selectedProject ? (
-    <Popover onOpenChange={setProjectMenuOpen} open={isProjectMenuOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-label="Project actions"
-          data-testid="project-actions-button"
-          size="icon"
-          type="button"
-          variant="quiet"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="end"
-        className="w-[220px] p-2"
-        sideOffset={10}
-      >
-        <div className="space-y-1">
-          <button
-            className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-sm font-medium text-app-text transition-colors hover:bg-app-card"
-            data-testid="configure-project-button"
-            onClick={() => {
-              setProjectMenuOpen(false);
-              openProjectSettings();
-            }}
-            type="button"
-          >
-            Configure project
-          </button>
-          <button
-            className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
-            data-testid="delete-project-menu-button"
-            onClick={() => {
-              setProjectMenuOpen(false);
-              setDeleteProjectOpen(true);
-            }}
-            type="button"
-          >
-            Delete project
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  ) : null;
 
   const emptyState = (
     <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-6 pt-5">
@@ -330,13 +265,14 @@ export function WorkflowWorkspace({
         <CompactShellToolbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={onToggleSidebar}
+          showSidebarToggle={showCompactSidebarToggle}
         />
       ) : null}
 
       {projects.length === 0 || !selectedProject
         ? emptyState
         : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-5">
+          <div className="workflow-page-shell flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-5">
             {isSettingsScreen ? (
               <div
                 className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1"
@@ -347,6 +283,10 @@ export function WorkflowWorkspace({
                   onDelete={() => setDeleteProjectOpen(true)}
                   onSave={(input) => {
                     updateProject(selectedProject.id, input);
+                    void agentRuntime.service.ensureProjectMainAgent(
+                      selectedProject.id,
+                      input.name ?? selectedProject.name,
+                    );
                     closeProjectSettings();
                   }}
                   project={selectedProject}
@@ -354,10 +294,9 @@ export function WorkflowWorkspace({
               </div>
             ) : (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-app-border pb-5">
-                  <div className="min-w-0">
-                    <div className="surface-eyebrow">Project</div>
-                    <h2 className="surface-title">
+                <div className="workflow-project-header-row flex flex-wrap items-center justify-between gap-4 border-b border-app-border pb-5">
+                  <div className="workflow-project-header-copy min-w-0">
+                    <h2 className="workflow-project-title surface-title">
                       {selectedProject.name}
                     </h2>
 
@@ -374,7 +313,19 @@ export function WorkflowWorkspace({
                             aria-selected={isActive}
                             className={isActive ? 'pill-key bg-app-accent-soft text-app-text' : 'pill-key'}
                             key={tab.value}
-                            onClick={() => selectProjectView(tab.value)}
+                            onClick={() => {
+                              if (tab.value === 'activity') {
+                                commands.openProjectActivity();
+                                return;
+                              }
+
+                              if (tab.value === 'agents') {
+                                commands.openAgents();
+                                return;
+                              }
+
+                              commands.openWorkflow();
+                            }}
                             role="tab"
                             type="button"
                           >
@@ -386,7 +337,7 @@ export function WorkflowWorkspace({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {isBoardView ? (
+                    {isBoardView && !showTitlebarProjectCreateAction ? (
                       <Button
                         onClick={() => onCreateWorkItemOpenChange(true)}
                         type="button"
@@ -395,7 +346,7 @@ export function WorkflowWorkspace({
                         New work item
                       </Button>
                     ) : null}
-                    {isAgentsView ? (
+                    {isAgentsView && !showTitlebarProjectCreateAction ? (
                       <Button
                         onClick={onOpenCreateAgent}
                         type="button"
@@ -404,7 +355,7 @@ export function WorkflowWorkspace({
                         New agent
                       </Button>
                     ) : null}
-                    {projectActionMenu}
+                    {!showTitlebarProjectActions ? <WorkflowProjectActionsMenu /> : null}
                   </div>
                 </div>
 
@@ -427,16 +378,14 @@ export function WorkflowWorkspace({
                       agents={projectAgents}
                       onOpenAgent={commands.openAgent}
                       onOpenItem={(itemId) => {
-                        selectItem(itemId);
-                        selectProjectView('board');
+                        commands.openItem(itemId);
                       }}
                     />
                   ) : (
                     <WorkflowProjectActivity
                       entries={activityEntries}
                       onOpenItem={(itemId) => {
-                        selectItem(itemId);
-                        selectProjectView('board');
+                        commands.openItem(itemId);
                       }}
                     />
                   )}
@@ -490,7 +439,7 @@ export function WorkflowWorkspace({
               className="bg-red-700 text-white hover:bg-red-800"
               data-testid="confirm-delete-project-button"
               onClick={() => {
-                void handleDeleteProject();
+                void handleDeleteProjectFromSettings();
               }}
               type="button"
             >
@@ -502,7 +451,12 @@ export function WorkflowWorkspace({
 
       <CreateProjectDialog
         onCreateProject={(input) => {
-          createProject(input);
+          const projectId = createProject(input);
+
+          if (projectId) {
+            void agentRuntime.service.ensureProjectMainAgent(projectId, input.name);
+          }
+
           onCreateProjectOpenChange(false);
         }}
         onOpenChange={onCreateProjectOpenChange}

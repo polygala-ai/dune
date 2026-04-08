@@ -47,6 +47,7 @@ describe('DesktopRuntimeController', () => {
         status: 'ready',
       },
       selectedAgentId: null,
+      telegramSetupSessions: [],
     });
 
     await controller.shutdown();

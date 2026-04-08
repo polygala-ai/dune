@@ -23,6 +23,7 @@ export function useAgentSession() {
     isStreaming,
     runtimeInfo,
     selectedAgentId,
+    telegramSetupSessions,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
@@ -31,6 +32,7 @@ export function useAgentSession() {
       isStreaming: state.isStreaming,
       runtimeInfo: state.runtimeInfo,
       selectedAgentId: state.selectedAgentId,
+      telegramSetupSessions: state.telegramSetupSessions,
     })),
   );
 
@@ -53,12 +55,15 @@ export function useAgentSession() {
     isStreaming,
     runtimeInfo,
     selectedAgentId,
+    telegramSetupSessions,
   };
 }
 
 export function useShellState() {
   return useAppStore(
     useShallow((state) => ({
+      canNavigateBack: state.navigationBackStack.length > 0,
+      canNavigateForward: state.navigationForwardStack.length > 0,
       isCommandOpen: state.isCommandOpen,
       isContextPanelOpen: state.isContextPanelOpen,
       route: state.route,
@@ -118,8 +123,11 @@ export function useWorkflowSession() {
   });
   const projectItemsByAgent = new Map(
     projectItems
-      .filter((item) => item.primaryAgentId)
-      .map((item) => [item.primaryAgentId!, item] as const),
+      .flatMap((item) =>
+        item.primaryAgentId
+          ? [[item.primaryAgentId, item] as const]
+          : [],
+      ),
   );
   const sortedProjectItemsByUpdated = [...projectItems].sort((left, right) => right.updatedAt - left.updatedAt);
 

@@ -3,7 +3,10 @@ import type {
   AgentServiceSnapshot,
 } from '@/renderer/features/agents/model/agent-service';
 import { createMockAgentRuntime, type AgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
-import type { CreateAgentInput } from '@/renderer/features/agents/types';
+import type {
+  CreateAgentInput,
+  StartTelegramSetupSessionInput,
+} from '@/renderer/features/agents/types';
 import {
   AgentLiteHost,
   resolveAgentLiteRuntimeRoot,
@@ -86,8 +89,20 @@ export class DesktopRuntimeController {
     return this.activeRuntime.service.createAgent(input);
   }
 
+  async cancelTelegramSetupSession(sessionId: string) {
+    await this.activeRuntime.service.cancelTelegramSetupSession(sessionId);
+  }
+
   async deleteAgent(agentId: string) {
     await this.activeRuntime.service.deleteAgent(agentId);
+  }
+
+  async ensureProjectMainAgent(projectId: string, projectName: string) {
+    return this.activeRuntime.service.ensureProjectMainAgent(projectId, projectName);
+  }
+
+  async getTelegramSetupSession(sessionId: string) {
+    return this.activeRuntime.service.getTelegramSetupSession(sessionId);
   }
 
   async reloadExternalChannels() {
@@ -96,6 +111,10 @@ export class DesktopRuntimeController {
 
   async sendAgentMessage(agentId: string, text: string) {
     await this.activeRuntime.service.sendMessage(agentId, text);
+  }
+
+  async startTelegramSetupSession(input: StartTelegramSetupSessionInput) {
+    return this.activeRuntime.service.startTelegramSetupSession(input);
   }
 
   selectAgent(agentId: string) {

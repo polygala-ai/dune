@@ -22,8 +22,11 @@ function createPresentedAgent(): PresentedAgent {
     name: 'Navigator',
     note: 'A durable agent workspace.',
     preview: 'Ready for a first instruction.',
+    projectId: 'project-1',
+    role: 'custom',
     status: 'draft',
     statusLabel: 'Draft',
+    telegram: null,
     updatedAt: Date.now(),
     updatedLabel: 'Now',
     workspace: 'Prototype agent',
@@ -36,7 +39,6 @@ describe('useAgentShellController', () => {
     openAgent: vi.fn<(agentId: string) => void>(),
     openSettings: vi.fn<() => void>(),
     setCommandOpen: vi.fn<(isOpen: boolean) => void>(),
-    setSettingsRoute: vi.fn<(route: 'appearance' | 'channels' | 'network' | 'models' | 'shortcuts') => void>(),
     toggleInspector: vi.fn<(force?: boolean) => void>(),
   };
   const focusComposer = vi.fn();
@@ -143,7 +145,7 @@ describe('useAgentShellController', () => {
     });
   });
 
-  it('opens channels settings from the create-agent flow', async () => {
+  it('opens settings and closes compact shell chrome', async () => {
     const { result } = renderHook(() =>
       useAgentShellController({
         activeAgent: null,
@@ -155,19 +157,16 @@ describe('useAgentShellController', () => {
     );
 
     act(() => {
-      result.current.handleOpenCreateAgent();
+      result.current.handleSidebarDrawerOpenChange(true);
     });
 
-    expect(result.current.isCreateAgentOpen).toBe(true);
-
-    await act(async () => {
-      result.current.handleOpenChannelsSettings();
+    act(() => {
+      result.current.handleOpenSettings();
     });
 
     await waitFor(() => {
-      expect(result.current.isCreateAgentOpen).toBe(false);
+      expect(result.current.isSidebarDrawerOpen).toBe(false);
       expect(commands.openSettings).toHaveBeenCalled();
-      expect(commands.setSettingsRoute).toHaveBeenCalledWith('channels');
     });
   });
 });

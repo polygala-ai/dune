@@ -7,23 +7,17 @@ import { createDefaultExternalChannelsState } from '@/renderer/features/agents/m
 
 import { NetworkSettings } from './NetworkSettings';
 
-function createRuntimeSnapshot(
-  overrides: Partial<AgentServiceSnapshot['externalChannels']['telegram']> = {},
-): AgentServiceSnapshot {
+function createRuntimeSnapshot(): AgentServiceSnapshot {
   return {
     agents: [],
-    externalChannels: {
-      telegram: {
-        ...createDefaultExternalChannelsState().telegram,
-        ...overrides,
-      },
-    },
+    externalChannels: createDefaultExternalChannelsState(),
     isStreaming: false,
     runtimeInfo: {
       mode: 'real',
       status: 'ready',
     },
     selectedAgentId: null,
+    telegramSetupSessions: [],
   };
 }
 
@@ -102,28 +96,6 @@ describe('NetworkSettings', () => {
 
     expect(await screen.findByText(
       'Failed to save network settings. Error: Manual proxy authentication is not supported yet.',
-    )).toBeInTheDocument();
-  });
-
-  it('surfaces Telegram reconnect errors after applying new network settings', async () => {
-    const user = userEvent.setup();
-    window.duneDesktop = createDesktopBridge(
-      {},
-      createRuntimeSnapshot({
-        configured: true,
-        errorMessage:
-          'Telegram failed to connect within 15s. Check the Network settings or proxy configuration.',
-        status: 'error',
-      }),
-    );
-
-    renderNetworkSettings();
-
-    await user.click(await screen.findByRole('button', { name: /^Direct/i }));
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    expect(await screen.findByText(
-      'Telegram failed to connect within 15s. Check the Network settings or proxy configuration.',
     )).toBeInTheDocument();
   });
 

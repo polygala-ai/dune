@@ -1,6 +1,7 @@
 export type MessageRole = 'assistant' | 'system' | 'user';
 export type MessageStatus = 'complete' | 'streaming';
 export type AgentStatus = 'draft' | 'live' | 'ready';
+export type AgentRole = 'custom' | 'project-main';
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
 export type ExternalChannelId = Exclude<AgentChannelId, 'dune-chat'>;
 export type AgentChannelKind = 'built-in' | 'external';
@@ -20,6 +21,11 @@ export type TelegramConnectionStatus =
   | 'disconnected'
   | 'error'
   | 'not-configured';
+export type TelegramPairingStatus =
+  | 'expired'
+  | 'idle'
+  | 'listening'
+  | 'matched';
 
 export interface AgentExternalTarget {
   channelId: ExternalChannelId;
@@ -32,17 +38,29 @@ export interface DiscoveredExternalChat extends AgentExternalTarget {
   lastSeenAt: number;
 }
 
-export interface TelegramRuntimeState {
+export interface TelegramAgentRuntimeState {
   botUsername: string | null;
-  configured: boolean;
-  discoveredChats: DiscoveredExternalChat[];
+  boundChat: AgentExternalTarget | null;
   errorMessage: string | null;
+  pairCode: string | null;
+  pairExpiresAt: number | null;
+  pairingStatus: TelegramPairingStatus;
   status: TelegramConnectionStatus;
 }
 
-export interface ExternalChannelsState {
-  telegram: TelegramRuntimeState;
+export interface TelegramSetupSession {
+  agentId: string | null;
+  botUsername: string | null;
+  errorMessage: string | null;
+  id: string;
+  matchedChat: AgentExternalTarget | null;
+  pairCode: string | null;
+  pairExpiresAt: number | null;
+  pairingStatus: TelegramPairingStatus;
+  status: TelegramConnectionStatus;
 }
+
+export interface ExternalChannelsState {}
 
 export interface AgentRuntimeInfo {
   mode: AgentRuntimeMode;
@@ -66,6 +84,12 @@ export interface CreateAgentInput {
   model?: { providerId: string; modelId: string };
   name: string;
   projectId?: string | null;
+  telegramSetupSessionId?: string | null;
+}
+
+export interface StartTelegramSetupSessionInput {
+  agentId?: string | null;
+  token?: string | null;
 }
 
 export interface AgentMessage {
@@ -99,7 +123,9 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   channel: AgentChannelBinding;
   note: string;
   projectId: string | null;
+  role: AgentRole;
   status: AgentStatus;
+  telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;
   workspace: string;
   contextCards: AgentContextCard[];
@@ -110,7 +136,10 @@ export interface PresentedAgent extends AgentSummary {
   channel: AgentChannelBinding;
   id: string;
   note: string;
+  projectId: string | null;
+  role: AgentRole;
   status: AgentStatus;
+  telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;
   workspace: string;
   contextCards: AgentContextCard[];

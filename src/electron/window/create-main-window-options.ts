@@ -1,5 +1,7 @@
 import type { BrowserWindowConstructorOptions } from 'electron';
 
+import { MAC_TITLEBAR_OVERLAY_HEIGHT } from '@/shared/window/titlebar';
+
 export function createMainWindowOptions(
   platform: NodeJS.Platform,
   preloadPath: string,
@@ -23,8 +25,8 @@ export function createMainWindowOptions(
   };
 
   if (isMac) {
-    options.frame = false;
-    options.trafficLightPosition = { x: 18, y: 16 };
+    options.titleBarStyle = 'hidden';
+    options.titleBarOverlay = { height: MAC_TITLEBAR_OVERLAY_HEIGHT };
   }
 
   return options;

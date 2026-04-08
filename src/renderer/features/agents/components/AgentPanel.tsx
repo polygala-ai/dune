@@ -60,11 +60,11 @@ export function AgentPanel({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div
-        className="thin-scrollbar flex-1 min-h-0 overflow-y-auto px-8 pb-6 pt-8"
+        className="agent-panel-scroll thin-scrollbar flex-1 min-h-0 overflow-y-auto px-8 pb-6 pt-8"
         ref={transcriptRef}
       >
         <div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
-          <div className="mb-3 border-b border-app-border pb-4">
+          <div className="agent-panel-header mb-3 border-b border-app-border pb-4">
             <h2 className="truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
               {agent.name}
             </h2>

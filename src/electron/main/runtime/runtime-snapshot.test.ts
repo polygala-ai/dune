@@ -15,19 +15,14 @@ describe('runtime snapshot helpers', () => {
     });
     const liveSnapshot = {
       agents: [],
-      externalChannels: {
-        telegram: {
-          ...createDefaultExternalChannelsState().telegram,
-          configured: true,
-          status: 'connected' as const,
-        },
-      },
+      externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
         mode: 'real' as const,
         status: 'ready' as const,
       },
       selectedAgentId: null,
+      telegramSetupSessions: [],
     };
 
     const snapshot = await getBootstrappedRuntimeSnapshot({
@@ -40,6 +35,7 @@ describe('runtime snapshot helpers', () => {
           status: 'starting' as const,
         },
         selectedAgentId: null,
+        telegramSetupSessions: [],
       }),
       ensureRuntime,
       getRuntimeController: () =>
@@ -70,6 +66,7 @@ describe('runtime snapshot helpers', () => {
             status: 'ready',
           },
           selectedAgentId: null,
+          telegramSetupSessions: [],
         }),
       },
     );

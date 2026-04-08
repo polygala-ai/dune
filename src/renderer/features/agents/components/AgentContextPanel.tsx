@@ -1,6 +1,7 @@
 import { PanelRight, X } from 'lucide-react';
 
 import { formatChannelStatus } from '@/renderer/features/agents/model/channels';
+import { TelegramChannelSetupCard } from '@/renderer/features/agents/components/TelegramChannelSetupCard';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -141,6 +142,15 @@ export function AgentContextPanel({
                 </div>
               </div>
             </section>
+
+            {agent.channel.id === 'telegram' ? (
+              <>
+                <Separator className="my-4" />
+                <section className="px-3">
+                  <TelegramChannelSetupCard agent={agent} />
+                </section>
+              </>
+            ) : null}
 
             {visibleContextCards.map((card) => (
               <div key={card.id}>

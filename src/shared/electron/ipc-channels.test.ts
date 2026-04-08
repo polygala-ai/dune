@@ -17,7 +17,24 @@ describe('ipcChannels', () => {
   });
 
   it('runtime channels use dune:runtime: prefix', () => {
-    const runtimeKeys = ['applyNetworkSettings', 'createAgent', 'getRuntimeSnapshot', 'resetRuntime', 'restartApp', 'runtimeSnapshotUpdated', 'selectAgent', 'sendAgentMessage'];
+    const runtimeKeys = [
+      'applyNetworkSettings',
+      'cancelTelegramSetupSession',
+      'copyText',
+      'createAgent',
+      'deleteAgent',
+      'ensureProjectMainAgent',
+      'getRuntimeSnapshot',
+      'getTelegramSetupSession',
+      'openExternal',
+      'reloadExternalChannels',
+      'resetRuntime',
+      'restartApp',
+      'runtimeSnapshotUpdated',
+      'selectAgent',
+      'sendAgentMessage',
+      'startTelegramSetupSession',
+    ];
 
     for (const key of runtimeKeys) {
       expect(ipcChannels[key as keyof typeof ipcChannels]).toMatch(/^dune:runtime:/);

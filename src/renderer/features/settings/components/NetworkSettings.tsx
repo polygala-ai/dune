@@ -113,16 +113,7 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
 
       if (typeof window.duneDesktop?.applyNetworkSettings === 'function') {
         await window.duneDesktop.applyNetworkSettings();
-        const latestSnapshot = await syncAgentRuntimeSnapshot('network-settings-save');
-        const telegramState = latestSnapshot.externalChannels.telegram;
-
-        if (telegramState.configured && telegramState.status === 'error' && telegramState.errorMessage) {
-          setFeedback({
-            kind: 'error',
-            message: telegramState.errorMessage,
-          });
-          return;
-        }
+        await syncAgentRuntimeSnapshot('network-settings-save');
       }
 
       setFeedback({

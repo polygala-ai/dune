@@ -17,7 +17,10 @@ function getLayoutMode(windowWidth: number): ShellLayoutMode {
   return 'wide';
 }
 
-export function useResponsiveShell(showContextPanel: boolean) {
+export function useResponsiveShell(
+  showContextPanel: boolean,
+  lockCompactShell = false,
+) {
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
 
   useEffect(() => {
@@ -33,7 +36,7 @@ export function useResponsiveShell(showContextPanel: boolean) {
     };
   }, []);
 
-  const layoutMode = getLayoutMode(windowWidth);
+  const layoutMode = lockCompactShell ? 'compact' : getLayoutMode(windowWidth);
 
   return {
     isCompactShell: layoutMode === 'compact',
