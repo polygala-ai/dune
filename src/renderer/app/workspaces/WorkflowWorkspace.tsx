@@ -1,4 +1,7 @@
-import { Plus } from 'lucide-react';
+import {
+  Plus,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -17,11 +20,13 @@ import { WorkflowProjectSettings } from '@/renderer/features/workflow/components
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from '@/renderer/shared/ui/dialog';
 import { Button } from '@/renderer/shared/ui/button';
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 
 const projectHeaderTabs = [
   { label: 'Activity', value: 'activity' },
@@ -38,6 +43,7 @@ interface WorkflowWorkspaceProps {
   onCreateWorkItemOpenChange: (open: boolean) => void;
   onOpenCreateAgent: () => void;
   onToggleSidebar: () => void;
+  runtimeInfo: AgentRuntimeInfo;
   showCompactSidebarToggle: boolean;
   showTitlebarProjectCreateAction: boolean;
   showTitlebarProjectActions: boolean;
@@ -52,6 +58,7 @@ export function WorkflowWorkspace({
   onCreateWorkItemOpenChange,
   onOpenCreateAgent,
   onToggleSidebar,
+  runtimeInfo,
   showCompactSidebarToggle,
   showTitlebarProjectCreateAction,
   showTitlebarProjectActions,
@@ -62,6 +69,7 @@ export function WorkflowWorkspace({
     addTask,
     addWorkProduct,
     assignPrimaryAgent,
+    clearAgentAssignments,
     closeProjectSettings,
     createItem,
     createProject,
@@ -76,6 +84,7 @@ export function WorkflowWorkspace({
       addTask: state.addTask,
       addWorkProduct: state.addWorkProduct,
       assignPrimaryAgent: state.assignPrimaryAgent,
+      clearAgentAssignments: state.clearAgentAssignments,
       closeProjectSettings: state.closeProjectSettings,
       createItem: state.createItem,
       createProject: state.createProject,
@@ -101,6 +110,10 @@ export function WorkflowWorkspace({
   } = useWorkflowSession();
   const isBoardView = selectedProjectView === 'board';
   const isAgentsView = selectedProjectView === 'agents';
+  const isProjectAgentsInitializing =
+    isAgentsView &&
+    runtimeInfo.status === 'starting' &&
+    projectAgents.length === 0;
   const isSettingsScreen = selectedProjectScreen === 'settings';
 
   if (!isWorkflowHydrated) {
@@ -151,10 +164,34 @@ export function WorkflowWorkspace({
       return;
     }
 
+    projectAgents.forEach((agent) => {
+      clearAgentAssignments(agent.id);
+    });
     await Promise.all(projectAgents.map((agent) => agentRuntime.service.deleteAgent(agent.id)));
     deleteProject(selectedProject.id);
     setDeleteProjectOpen(false);
   };
+
+  const projectSettingsInspector = selectedProject ? (
+    <WorkflowProjectSettings
+      className={
+        isCompactShell
+          ? 'app-no-drag h-full'
+          : 'h-full rounded-[28px] border border-app-border bg-app-panel/90'
+      }
+      onCancel={closeProjectSettings}
+      onDelete={() => setDeleteProjectOpen(true)}
+      onSave={(input) => {
+        updateProject(selectedProject.id, input);
+        void agentRuntime.service.ensureProjectMainAgent(
+          selectedProject.id,
+          input.name ?? selectedProject.name,
+        );
+        closeProjectSettings();
+      }}
+      project={selectedProject}
+    />
+  ) : null;
 
   const boardView = (
     <>
@@ -183,30 +220,34 @@ export function WorkflowWorkspace({
           </div>
 
           <div className="min-h-0">
-            <WorkflowItemInspector
-              item={selectedItem}
-              onAddTask={(itemId, title) => {
-                addTask(itemId, title);
-              }}
-              onAddWorkProduct={(itemId, input) => {
-                addWorkProduct(itemId, input);
-              }}
-              onAssignPrimaryAgent={assignPrimaryAgent}
-              onCreateAgent={(itemId) => {
-                void handleCreateAgentForItem(itemId);
-              }}
-              onOpenAgent={(agentId) => commands.openAgent(agentId)}
-              onUpdateItem={updateItem}
-              onUpdateItemStatus={(itemId, status) =>
-                moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
-              }
-              onUpdateTask={updateTask}
-              project={selectedProject}
-              projectAgents={projectAgents.map((agent) => ({
-                id: agent.id,
-                name: agent.name,
-              }))}
-            />
+            {isSettingsScreen ? (
+              projectSettingsInspector
+            ) : (
+              <WorkflowItemInspector
+                item={selectedItem}
+                onAddTask={(itemId, title) => {
+                  addTask(itemId, title);
+                }}
+                onAddWorkProduct={(itemId, input) => {
+                  addWorkProduct(itemId, input);
+                }}
+                onAssignPrimaryAgent={assignPrimaryAgent}
+                onCreateAgent={(itemId) => {
+                  void handleCreateAgentForItem(itemId);
+                }}
+                onOpenAgent={(agentId) => commands.openAgent(agentId)}
+                onUpdateItem={updateItem}
+                onUpdateItemStatus={(itemId, status) =>
+                  moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
+                }
+                onUpdateTask={updateTask}
+                project={selectedProject}
+                projectAgents={projectAgents.map((agent) => ({
+                  id: agent.id,
+                  name: agent.name,
+                }))}
+              />
+            )}
           </div>
         </div>
       )}
@@ -273,125 +314,107 @@ export function WorkflowWorkspace({
         ? emptyState
         : (
           <div className="workflow-page-shell flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-5">
-            {isSettingsScreen ? (
-              <div
-                className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1"
-                data-testid="workflow-project-page-scroll"
-              >
-                <WorkflowProjectSettings
-                  onCancel={closeProjectSettings}
-                  onDelete={() => setDeleteProjectOpen(true)}
-                  onSave={(input) => {
-                    updateProject(selectedProject.id, input);
-                    void agentRuntime.service.ensureProjectMainAgent(
-                      selectedProject.id,
-                      input.name ?? selectedProject.name,
-                    );
-                    closeProjectSettings();
-                  }}
-                  project={selectedProject}
-                />
-              </div>
-            ) : (
-              <>
-                <div className="workflow-project-header-row flex flex-wrap items-center justify-between gap-4 border-b border-app-border pb-5">
-                  <div className="workflow-project-header-copy min-w-0">
-                    <h2 className="workflow-project-title surface-title">
-                      {selectedProject.name}
-                    </h2>
+            <>
+              <div className="workflow-project-header-row flex flex-wrap items-center justify-between gap-4 border-b border-app-border pb-5">
+                <div className="workflow-project-header-copy min-w-0">
+                  <h2 className="workflow-project-title surface-title">
+                    {selectedProject.name}
+                  </h2>
 
-                    <div
-                      aria-label="Project sections"
-                      className="mt-4 flex flex-wrap gap-2"
-                      role="tablist"
+                  <div
+                    aria-label="Project sections"
+                    className="mt-4 flex flex-wrap gap-2"
+                    role="tablist"
+                  >
+                    {projectHeaderTabs.map((tab) => {
+                      const isActive = selectedProjectView === tab.value;
+
+                      return (
+                        <button
+                          aria-selected={isActive}
+                          className={isActive ? 'pill-key bg-app-accent-soft text-app-text' : 'pill-key'}
+                          key={tab.value}
+                          onClick={() => {
+                            if (tab.value === 'activity') {
+                              commands.openProjectActivity();
+                              return;
+                            }
+
+                            if (tab.value === 'agents') {
+                              commands.openAgents();
+                              return;
+                            }
+
+                            commands.openWorkflow();
+                          }}
+                          role="tab"
+                          type="button"
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isBoardView && !showTitlebarProjectCreateAction ? (
+                    <Button
+                      onClick={() => onCreateWorkItemOpenChange(true)}
+                      type="button"
                     >
-                      {projectHeaderTabs.map((tab) => {
-                        const isActive = selectedProjectView === tab.value;
-
-                        return (
-                          <button
-                            aria-selected={isActive}
-                            className={isActive ? 'pill-key bg-app-accent-soft text-app-text' : 'pill-key'}
-                            key={tab.value}
-                            onClick={() => {
-                              if (tab.value === 'activity') {
-                                commands.openProjectActivity();
-                                return;
-                              }
-
-                              if (tab.value === 'agents') {
-                                commands.openAgents();
-                                return;
-                              }
-
-                              commands.openWorkflow();
-                            }}
-                            role="tab"
-                            type="button"
-                          >
-                            {tab.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {isBoardView && !showTitlebarProjectCreateAction ? (
-                      <Button
-                        onClick={() => onCreateWorkItemOpenChange(true)}
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" />
-                        New work item
-                      </Button>
-                    ) : null}
-                    {isAgentsView && !showTitlebarProjectCreateAction ? (
-                      <Button
-                        onClick={onOpenCreateAgent}
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" />
-                        New agent
-                      </Button>
-                    ) : null}
-                    {!showTitlebarProjectActions ? <WorkflowProjectActionsMenu /> : null}
-                  </div>
+                      <Plus className="h-4 w-4" />
+                      New work item
+                    </Button>
+                  ) : null}
+                  {isAgentsView && !showTitlebarProjectCreateAction ? (
+                    <Button
+                      disabled={isProjectAgentsInitializing}
+                      onClick={onOpenCreateAgent}
+                      title={isProjectAgentsInitializing ? 'Agents are still initializing' : undefined}
+                      type="button"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New agent
+                    </Button>
+                  ) : null}
+                  {!showTitlebarProjectActions ? <WorkflowProjectActionsMenu /> : null}
                 </div>
+              </div>
 
-                <div
-                  className={
-                    selectedProjectView === 'board'
-                      ? 'mt-5 min-h-0 flex-1 overflow-hidden'
-                      : 'mt-5 min-h-0 flex-1 overflow-y-auto pr-1'
-                  }
-                  data-testid={
-                    selectedProjectView === 'board'
-                      ? 'workflow-project-board-slot'
-                      : 'workflow-project-page-scroll'
-                  }
-                >
-                  {selectedProjectView === 'board' ? (
-                    boardView
-                  ) : selectedProjectView === 'agents' ? (
-                    <WorkflowProjectAgents
-                      agents={projectAgents}
-                      onOpenAgent={commands.openAgent}
-                      onOpenItem={(itemId) => {
-                        commands.openItem(itemId);
-                      }}
-                    />
-                  ) : (
-                    <WorkflowProjectActivity
-                      entries={activityEntries}
-                      onOpenItem={(itemId) => {
-                        commands.openItem(itemId);
-                      }}
-                    />
-                  )}
-                </div>
-              </>
-            )}
+              <div
+                className={
+                  selectedProjectView === 'board'
+                    ? 'mt-5 min-h-0 flex-1 overflow-hidden'
+                    : 'mt-5 min-h-0 flex-1 overflow-y-auto pr-1'
+                }
+                data-testid={
+                  selectedProjectView === 'board'
+                    ? 'workflow-project-board-slot'
+                    : 'workflow-project-page-scroll'
+                }
+              >
+                {selectedProjectView === 'board' ? (
+                  boardView
+                ) : selectedProjectView === 'agents' ? (
+                  <WorkflowProjectAgents
+                    agents={projectAgents}
+                    onOpenAgent={commands.openAgent}
+                    onOpenItem={(itemId) => {
+                      commands.openItem(itemId);
+                    }}
+                    runtimeInfo={runtimeInfo}
+                  />
+                ) : (
+                  <WorkflowProjectActivity
+                    entries={activityEntries}
+                    onOpenItem={(itemId) => {
+                      commands.openItem(itemId);
+                    }}
+                  />
+                )}
+              </div>
+            </>
           </div>
         )}
 
@@ -403,6 +426,7 @@ export function WorkflowWorkspace({
         }}
         open={
           isCompactShell &&
+          !isSettingsScreen &&
           selectedProjectScreen === 'main' &&
           selectedProjectView === 'board' &&
           !!selectedItem
@@ -414,6 +438,41 @@ export function WorkflowWorkspace({
             Review and edit the selected work item.
           </DialogDescription>
           {compactInspector}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            closeProjectSettings();
+          }
+        }}
+        open={isCompactShell && isSettingsScreen && !!selectedProject}
+      >
+        <DialogContent
+          className="shell-context-drawer"
+          data-dialog-motion="drawer"
+          overlayProps={{
+            'data-testid': 'workflow-project-settings-overlay',
+            onClick: closeProjectSettings,
+          }}
+        >
+          <DialogTitle className="sr-only">Project settings</DialogTitle>
+          <DialogDescription className="sr-only">
+            Inspect and manage the current project.
+          </DialogDescription>
+          <DialogClose asChild>
+            <Button
+              aria-label="Close project settings"
+              className="absolute right-4 top-4 z-10"
+              size="icon"
+              type="button"
+              variant="quiet"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+          {projectSettingsInspector}
         </DialogContent>
       </Dialog>
 

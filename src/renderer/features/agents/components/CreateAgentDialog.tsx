@@ -195,7 +195,7 @@ export function CreateAgentDialog({
         </DialogDescription>
 
         <form className="mt-6 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
             <div className="space-y-2">
               <label
                 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
@@ -220,7 +220,7 @@ export function CreateAgentDialog({
                 Project
               </label>
               <select
-                className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
                 id="create-agent-project"
                 onChange={(event) => setProjectId(event.target.value)}
                 value={projectId}
@@ -249,7 +249,7 @@ export function CreateAgentDialog({
                     aria-expanded={isChannelPickerOpen}
                     aria-haspopup="dialog"
                     aria-label={`Channel: ${selectedChannel.label}`}
-                    className="flex w-full items-center justify-between gap-3 rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-left transition-colors hover:bg-app-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-accent/25"
+                    className="focus-ring-app flex w-full items-center justify-between gap-3 rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-left transition-colors hover:bg-app-card focus-visible:outline-none focus-visible:ring-2"
                     data-testid="channel-select-trigger"
                     type="button"
                   >
@@ -294,7 +294,7 @@ export function CreateAgentDialog({
                         <button
                           aria-label={`Select ${channel.label}`}
                           className={cn(
-                            'flex w-full items-start justify-between gap-4 rounded-[16px] px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-accent/25',
+                            'focus-ring-app flex w-full items-start justify-between gap-4 rounded-[16px] px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2',
                             isDisabled
                               ? 'cursor-not-allowed opacity-60'
                               : isSelected

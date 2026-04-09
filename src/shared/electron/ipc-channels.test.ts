@@ -22,6 +22,7 @@ describe('ipcChannels', () => {
       'cancelTelegramSetupSession',
       'copyText',
       'createAgent',
+      'deleteLocalData',
       'deleteAgent',
       'ensureProjectMainAgent',
       'getRuntimeSnapshot',

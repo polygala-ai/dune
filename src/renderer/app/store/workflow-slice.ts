@@ -18,9 +18,7 @@ import type {
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
 
-function createId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
+import { createId } from '@/shared/id';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -358,6 +356,49 @@ export function createWorkflowSlice(
               selectedItemId: itemId,
               selectedProjectFilter: state.selectedProjectFilter,
               selectedProjectId: targetItem.projectId,
+              selectedProjectView: state.selectedProjectView,
+            }),
+          };
+        });
+      },
+      clearAgentAssignments: (agentId) => {
+        const updatedAt = Date.now();
+        const clearedDescription = 'Primary agent cleared.';
+
+        set((state) => {
+          const touchedProjectIds = new Set<string>();
+          let didClearAssignments = false;
+
+          const nextItems = state.items.map((item) => {
+            if (item.primaryAgentId !== agentId) {
+              return item;
+            }
+
+            didClearAssignments = true;
+            touchedProjectIds.add(item.projectId);
+
+            return appendItemEvent(
+              {
+                ...item,
+                primaryAgentId: null,
+              },
+              'assignment',
+              clearedDescription,
+              updatedAt,
+            );
+          });
+
+          if (!didClearAssignments) {
+            return state;
+          }
+
+          return {
+            ...withSelection({
+              items: nextItems,
+              projects: touchProjects(state.projects, touchedProjectIds, updatedAt),
+              selectedItemId: state.selectedItemId,
+              selectedProjectFilter: state.selectedProjectFilter,
+              selectedProjectId: state.selectedProjectId,
               selectedProjectView: state.selectedProjectView,
             }),
           };

@@ -41,7 +41,7 @@ export function CreateProjectDialog({
           Create a steady container for work items and project-owned agents.
         </DialogDescription>
 
-        <div className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
           <div className="space-y-2">
             <label
               className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
@@ -66,7 +66,7 @@ export function CreateProjectDialog({
               Description
             </label>
             <textarea
-              className="min-h-[120px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+              className="focus-ring-app min-h-[120px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
               id="workflow-project-description"
               onChange={(event) => setDescription(event.target.value)}
               placeholder="What this project is responsible for."

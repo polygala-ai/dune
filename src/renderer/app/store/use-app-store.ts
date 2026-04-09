@@ -40,7 +40,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
   return {
     ...createAgentSlice({
       agents: initialState.agents,
-      draft: initialState.draft,
+      agentDrafts: initialState.agentDrafts,
       externalChannels: initialState.externalChannels,
       isStreaming: initialState.isStreaming,
       runtimeInfo: initialState.runtimeInfo,

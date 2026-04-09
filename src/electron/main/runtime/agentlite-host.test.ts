@@ -21,6 +21,7 @@ import {
   type TelegramSecretsStore,
 } from '@/electron/runtime-core/agentlite-host';
 import type { DuneChannel } from '@/electron/runtime-core/dune-channel';
+import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
 type AgentLiteModule = typeof import('@boxlite-ai/agentlite');
 
@@ -326,6 +327,7 @@ function createTelegramChannelFactoryHarness(
     emitIncomingMessage: (
       chatJid: string,
       {
+        attachments,
         content,
         isBotMessage = false,
         isFromMe = false,
@@ -333,6 +335,7 @@ function createTelegramChannelFactoryHarness(
         senderName,
         timestamp = new Date().toISOString(),
       }: {
+        attachments?: string[];
         content: string;
         isBotMessage?: boolean;
         isFromMe?: boolean;
@@ -355,6 +358,7 @@ function createTelegramChannelFactoryHarness(
         is_from_me: isFromMe,
         sender,
         timestamp,
+        ...(attachments?.length ? { attachments } : {}),
         ...(senderName ? { sender_name: senderName } : {}),
       });
     },
@@ -537,7 +541,7 @@ describe('AgentLiteHost', () => {
     expect(harness.mockAgent('molly').start).toHaveBeenCalledTimes(1);
   });
 
-  it('creates one project-main agent per project and keeps it in sync with project renames', async () => {
+  it('creates one project-main agent per project and keeps a stable Dune character name', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
 
@@ -561,7 +565,7 @@ describe('AgentLiteHost', () => {
     const snapshotAgent = host.getSnapshot().agents.find((agent) => agent.id === initialAgentId);
 
     expect(snapshotAgent).toMatchObject({
-      name: 'Studio Systems main',
+      name: createProjectMainAgentName('project-1'),
       projectId: 'project-1',
       role: 'project-main',
     });
@@ -726,16 +730,97 @@ describe('AgentLiteHost', () => {
     })).rejects.toThrow(/without project ownership/i);
   });
 
-  it('blocks startup when legacy root-level AgentLite runtime folders exist', async () => {
+  it('normalizes persisted in-flight agent state during load', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
-    const runtimeRoot = resolveAgentLiteRuntimeRoot(homeDir);
+    const store = createMemoryStore({
+      agents: [
+        {
+          agent: {
+            channel: {
+              canCompose: true,
+              id: 'dune-chat',
+              kind: 'built-in',
+              label: 'Dune chat',
+              status: 'ready',
+            },
+            contextCards: [],
+            id: 'dune:agent:west',
+            messages: [
+              {
+                content: 'Investigate west',
+                createdAt: 1,
+                id: 'message-user-1',
+                role: 'user',
+                status: 'complete',
+              },
+              {
+                content: 'Partial west response',
+                createdAt: 2,
+                id: 'message-assistant-1',
+                role: 'assistant',
+                status: 'streaming',
+              },
+            ],
+            name: 'West lead',
+            note: 'West lead',
+            preview: 'Partial west response',
+            projectId: 'project-west',
+            role: 'custom',
+            status: 'live',
+            telegram: null,
+            updatedAt: 2,
+            workspace: 'AgentLite agent',
+          },
+          groupFolder: 'west-lead',
+        },
+        {
+          agent: {
+            channel: {
+              canCompose: true,
+              id: 'dune-chat',
+              kind: 'built-in',
+              label: 'Dune chat',
+              status: 'ready',
+            },
+            contextCards: [],
+            id: 'dune:agent:east',
+            messages: [
+              {
+                content: 'Investigate east',
+                createdAt: 3,
+                id: 'message-user-2',
+                role: 'user',
+                status: 'complete',
+              },
+              {
+                content: '',
+                createdAt: 4,
+                id: 'message-assistant-2',
+                role: 'assistant',
+                status: 'streaming',
+              },
+            ],
+            name: 'East lead',
+            note: 'East lead',
+            preview: 'Investigate east',
+            projectId: 'project-east',
+            role: 'custom',
+            status: 'live',
+            telegram: null,
+            updatedAt: 4,
+            workspace: 'AgentLite agent',
+          },
+          groupFolder: 'east-lead',
+        },
+      ],
+      selectedAgentId: 'dune:agent:west',
+    });
 
-    fs.mkdirSync(path.join(runtimeRoot, 'groups'), { recursive: true });
     tempDirs.push(homeDir);
 
     const host = new AgentLiteHost({
-      agentStore: createMemoryStore(),
+      agentStore: store,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
       resolveModelCredentials: async () => ({}),
@@ -743,11 +828,33 @@ describe('AgentLiteHost', () => {
 
     await host.start();
 
-    expect(harness.stop).not.toHaveBeenCalled();
-    expect(host.getSnapshot().runtimeInfo.status).toBe('error');
-    expect(host.getSnapshot().runtimeInfo.message).toContain(
-      `Legacy AgentLite runtime data was found at ${path.join(runtimeRoot, 'groups')}.`,
-    );
+    const westAgent = host.getSnapshot().agents.find((agent) => agent.id === 'dune:agent:west');
+    const eastAgent = host.getSnapshot().agents.find((agent) => agent.id === 'dune:agent:east');
+
+    expect(westAgent?.status).toBe('ready');
+    expect(westAgent?.messages.map((message) => ({
+      content: message.content,
+      status: message.status,
+    }))).toEqual([
+      {
+        content: 'Investigate west',
+        status: 'complete',
+      },
+      {
+        content: 'Partial west response',
+        status: 'complete',
+      },
+    ]);
+    expect(eastAgent?.status).toBe('ready');
+    expect(eastAgent?.messages.map((message) => ({
+      content: message.content,
+      status: message.status,
+    }))).toEqual([
+      {
+        content: 'Investigate east',
+        status: 'complete',
+      },
+    ]);
   });
 
   it('stops only the deleted agent when its last agent is removed', async () => {
@@ -835,6 +942,113 @@ describe('AgentLiteHost', () => {
 
     expect(westAgent?.messages.map((message) => message.content)).toEqual(['West response']);
     expect(eastAgent?.messages.map((message) => message.content)).toEqual(['East response']);
+  });
+
+  it('allows concurrent sends for different agents while replies are still streaming', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const homeDir = createTempHome();
+      const harness = createAgentLiteModuleHarness();
+
+      tempDirs.push(homeDir);
+
+      const host = new AgentLiteHost({
+        agentStore: createMemoryStore(),
+        homeDir,
+        loadAgentLiteModule: harness.loadAgentLiteModule,
+        resolveModelCredentials: async () => ({}),
+      });
+
+      await host.start();
+
+      const westAgentId = await host.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'West lead',
+        projectId: 'project-west',
+      });
+      const eastAgentId = await host.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'East lead',
+        projectId: 'project-east',
+      });
+
+      await host.service.sendMessage(westAgentId, 'Investigate west.');
+      await host.service.sendMessage(eastAgentId, 'Investigate east.');
+
+      const streamingSnapshot = host.getSnapshot();
+      const westAgent = streamingSnapshot.agents.find((agent) => agent.id === westAgentId);
+      const eastAgent = streamingSnapshot.agents.find((agent) => agent.id === eastAgentId);
+
+      expect(streamingSnapshot.isStreaming).toBe(true);
+      expect(westAgent?.messages.map((message) => message.status)).toEqual([
+        'complete',
+        'streaming',
+      ]);
+      expect(eastAgent?.messages.map((message) => message.status)).toEqual([
+        'complete',
+        'streaming',
+      ]);
+
+      await harness.duneChannel('west').sendMessage(westAgentId, 'West response');
+      await harness.duneChannel('east').sendMessage(eastAgentId, 'East response');
+      await vi.advanceTimersByTimeAsync(400);
+
+      const completedSnapshot = host.getSnapshot();
+
+      expect(completedSnapshot.isStreaming).toBe(false);
+      expect(
+        completedSnapshot.agents.find((agent) => agent.id === westAgentId)?.messages.map((message) =>
+          message.content
+        ),
+      ).toEqual(['Investigate west.', 'West response']);
+      expect(
+        completedSnapshot.agents.find((agent) => agent.id === eastAgentId)?.messages.map((message) =>
+          message.content
+        ),
+      ).toEqual(['Investigate east.', 'East response']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores a second send while the same agent already has a pending reply', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+      projectId: 'project-1',
+    });
+
+    await host.service.sendMessage(agentId, 'First pass.');
+    await host.service.sendMessage(agentId, 'Second pass.');
+
+    expect(host.getSnapshot().agents.find((agent) => agent.id === agentId)?.messages.map((message) => ({
+      content: message.content,
+      status: message.status,
+    }))).toEqual([
+      {
+        content: 'First pass.',
+        status: 'complete',
+      },
+      {
+        content: '',
+        status: 'streaming',
+      },
+    ]);
   });
 
   it('starts a Telegram setup session and matches the first chat that submits the pair code', async () => {
@@ -961,6 +1175,74 @@ describe('AgentLiteHost', () => {
       `agent:${agentId}:telegram:bot-token`,
     ]);
     expect(host.getSnapshot().telegramSetupSessions).toEqual([]);
+  });
+
+  it('preserves Telegram media as attachment metadata instead of only inline placeholder text', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'agentlite_test_bot',
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({
+      token: 'telegram-bot-token',
+    });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:123', {
+      isGroup: true,
+      name: 'Product QA',
+    });
+    telegramHarness.emitIncomingMessage('tg:123', {
+      content: `/pair ${pairCode}`,
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Release triage',
+      projectId: 'project-1',
+      telegramSetupSessionId: sessionId,
+    });
+
+    telegramHarness.emitIncomingMessage('tg:123', {
+      attachments: ['/workspace/group/attachments/photo_100.png'],
+      content: '[Photo] (/workspace/group/attachments/photo_100.png) Look at this',
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    const agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+    const message = agent?.messages[0];
+
+    expect(message).toMatchObject({
+      content: 'Alice: [Photo] Look at this',
+      format: 'plain',
+      role: 'user',
+    });
+    expect(message?.attachments).toHaveLength(1);
+    expect(message?.attachments[0]).toMatchObject({
+      kind: 'image',
+      name: 'photo_100.png',
+    });
+    expect(new URL(message?.attachments[0]?.url ?? '').pathname).toMatch(
+      /\/\.dune\/agentlite\/groups\/release-triage-[^/]+\/attachments\/photo_100\.png$/,
+    );
   });
 
   it('allows multiple agents to bind the same Telegram chat on one token and fans inbound messages out to each of them', async () => {
@@ -1471,6 +1753,7 @@ describe('AgentLiteHost', () => {
     });
 
     await restartedHost.start();
+    await flushMicrotasks();
 
     secondTelegramHarness.emitIncomingMessage('tg:123', {
       content: 'Post-restart fanout',

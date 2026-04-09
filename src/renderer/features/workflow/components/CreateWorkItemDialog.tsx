@@ -75,7 +75,7 @@ export function CreateWorkItemDialog({
               Work item title
             </label>
             <input
-              className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+              className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
               id="create-work-item-title"
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Homepage rewrite"
@@ -92,7 +92,7 @@ export function CreateWorkItemDialog({
                 Project
               </label>
               <select
-                className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
                 id="create-work-item-project"
                 onChange={(event) => setProjectId(event.target.value)}
                 value={projectId}
@@ -113,7 +113,7 @@ export function CreateWorkItemDialog({
                 Status
               </label>
               <select
-                className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
                 id="create-work-item-status"
                 onChange={(event) => setStatus(event.target.value as WorkflowItemStatus)}
                 value={status}
@@ -135,7 +135,7 @@ export function CreateWorkItemDialog({
               Brief
             </label>
             <textarea
-              className="min-h-[140px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+              className="focus-ring-app min-h-[140px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
               id="create-work-item-brief"
               onChange={(event) => setBrief(event.target.value)}
               placeholder="What should happen here, and why does it matter?"

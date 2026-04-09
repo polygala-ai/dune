@@ -1,5 +1,6 @@
 import { ArrowUpRight, Bot } from 'lucide-react';
 
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 import { Button } from '@/renderer/shared/ui/button';
 
 interface WorkflowProjectAgentsProps {
@@ -7,35 +8,53 @@ interface WorkflowProjectAgentsProps {
     currentItemId: string | null;
     currentItemTitle: string | null;
     id: string;
+    isProjectMain: boolean;
     name: string;
     statusLabel: string;
     updatedLabel: string;
   }>;
   onOpenAgent: (agentId: string) => void;
   onOpenItem: (itemId: string) => void;
+  runtimeInfo: AgentRuntimeInfo;
 }
 
 export function WorkflowProjectAgents({
   agents,
   onOpenAgent,
   onOpenItem,
+  runtimeInfo,
 }: WorkflowProjectAgentsProps) {
+  const isInitializing = runtimeInfo.status === 'starting' && agents.length === 0;
+  const runtimeMessage = runtimeInfo.message ?? 'Starting Dune runtime.';
+
   return (
     <section className="rounded-[28px] border border-app-border bg-app-panel/70 p-5">
-      <div className="flex items-end justify-between gap-4 border-b border-app-border pb-4">
-        <div>
-          <div className="surface-eyebrow">Agents</div>
-          <h3 className="mt-2 text-[1.3rem] font-semibold tracking-[-0.04em] text-app-text">
-            Project agents
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-app-muted">
-            Agents belong to the project, and each can pick up one primary work item at a time.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {agents.length === 0 ? (
+      <div className="space-y-2">
+        {isInitializing ? (
+          <div
+            aria-busy="true"
+            className="rounded-[20px] border border-app-border bg-app-card/60 px-5 py-6"
+          >
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="streaming-dot h-2.5 w-2.5 rounded-full bg-app-accent"
+              />
+              <div className="surface-eyebrow">Initializing agents</div>
+            </div>
+            <h2 className="surface-title">Preparing the agent runtime</h2>
+            <p className="surface-description">
+              Dune is connecting to AgentLite and loading this project's agents. This usually
+              takes a few seconds.
+            </p>
+            <div className="mt-5 rounded-[18px] border border-app-border bg-app-panel/70 px-4 py-3 text-sm text-app-text">
+              {runtimeMessage}
+            </div>
+            <p className="mt-3 text-sm leading-6 text-app-muted">
+              Agent controls will appear here as soon as initialization finishes.
+            </p>
+          </div>
+        ) : agents.length === 0 ? (
           <div className="rounded-[20px] border border-dashed border-app-border bg-app-card/60 px-5 py-6 text-sm leading-6 text-app-muted">
             No agents yet. Create the first project agent when a work item is ready for execution.
           </div>
@@ -49,7 +68,14 @@ export function WorkflowProjectAgents({
                 <div className="flex items-center gap-3">
                   <Bot className="h-4 w-4 text-app-muted" />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-app-text">{agent.name}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-sm font-medium text-app-text">{agent.name}</div>
+                      {agent.isProjectMain ? (
+                        <span className="pill-key border-transparent bg-app-accent-soft text-app-accent-ink">
+                          Main
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-1 text-xs leading-5 text-app-muted">
                       {agent.statusLabel} · Updated {agent.updatedLabel}
                     </div>

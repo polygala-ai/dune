@@ -4,6 +4,7 @@ import {
   addWorkflowItem,
   cleanupTempHome,
   closeElectronApp,
+  createProject,
   createTempHome,
   dispatchPrimaryShortcut,
   launchApp,
@@ -26,6 +27,10 @@ test.describe('Workflow persistence', () => {
     try {
       const page = await app1.firstWindow();
       await navigateToWorkflow(page);
+      await createProject(page, {
+        description: 'Keep workflow items scoped to a persisted project.',
+        name: 'Workflow Studio',
+      });
       await addWorkflowItem(
         page,
         'Persisted project work item',
@@ -53,12 +58,17 @@ test.describe('Workflow persistence', () => {
     try {
       const page = await app1.firstWindow();
       await navigateToWorkflow(page);
+      await createProject(page, {
+        description: 'Coordinate the calmer workflow shell.',
+        name: 'Workflow Studio',
+      });
       await page.getByTestId('project-actions-button').click();
-      await page.getByTestId('configure-project-button').click();
+      await expect(page.getByTestId('workflow-project-settings-panel')).toBeVisible();
       await page.getByLabel('Project name').fill('Studio Systems');
       await page.getByLabel('Description').fill('Coordinate the calmer workflow shell.');
       await page.getByRole('button', { name: /^Save$/i }).click();
-      await expect(page.getByRole('heading', { name: 'Studio Systems' })).toBeVisible();
+      await expect(page.getByTestId('workflow-board')).toBeVisible();
+      await expect(page.getByText('Studio Systems', { exact: true }).first()).toBeVisible();
     } finally {
       await closeElectronApp(app1);
     }
@@ -68,17 +78,17 @@ test.describe('Workflow persistence', () => {
     try {
       const page = await app2.firstWindow();
       await navigateToWorkflow(page);
-      await expect(page.getByRole('heading', { name: 'Studio Systems' })).toBeVisible();
+      await expect(page.getByText('Studio Systems', { exact: true }).first()).toBeVisible();
 
       await dispatchPrimaryShortcut(page, 'k');
       await page.getByText('New agent', { exact: true }).click();
       await page.getByLabel('Agent name').fill('Studio agent');
-      await page.getByLabel('Agent name').press('Enter');
-      await expect(page.getByRole('heading', { name: 'Studio agent' })).toBeVisible();
+      await page.getByRole('button', { name: /^Create agent$/i }).click();
+      await expect(page.getByLabel('Agent composer')).toBeVisible();
 
       await navigateToWorkflow(page);
       await page.getByTestId('project-actions-button').click();
-      await page.getByTestId('configure-project-button').click();
+      await expect(page.getByTestId('workflow-project-settings-panel')).toBeVisible();
       await page.getByRole('button', { name: /^Delete project$/i }).click();
       await page.getByTestId('confirm-delete-project-button').click();
 

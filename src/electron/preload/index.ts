@@ -13,6 +13,7 @@ const bridge: DesktopBridge = {
   copyText: (text) => ipcRenderer.invoke(ipcChannels.copyText, text),
   platform: process.platform,
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
+  deleteLocalData: () => ipcRenderer.invoke(ipcChannels.deleteLocalData),
   deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
   ensureProjectMainAgent: (projectId, projectName) =>
     ipcRenderer.invoke(ipcChannels.ensureProjectMainAgent, projectId, projectName),
@@ -26,8 +27,10 @@ const bridge: DesktopBridge = {
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   sendAgentMessage: (agentId, text) =>
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
+  startAgentIpc: () => ipcRenderer.invoke(ipcChannels.startAgentIpc),
   startTelegramSetupSession: (input) =>
     ipcRenderer.invoke(ipcChannels.startTelegramSetupSession, input),
+  stopAgentIpc: () => ipcRenderer.invoke(ipcChannels.stopAgentIpc),
   storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
   storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
@@ -44,6 +47,13 @@ const bridge: DesktopBridge = {
 
     return () => {
       ipcRenderer.removeListener(ipcChannels.runtimeSnapshotUpdated, handleSnapshot);
+    };
+  },
+  subscribeWorkflowChanged: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(ipcChannels.workflowChanged, handler);
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.workflowChanged, handler);
     };
   },
 };

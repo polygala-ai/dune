@@ -71,11 +71,11 @@ export default function AppShell() {
     commandAgents,
     draft,
     externalChannels,
-    isStreaming,
     runtimeInfo,
   } = useAgentSession();
   const {
     filteredItemSummaries,
+    projectAgents,
     projects,
     selectedProject,
     selectedProjectId,
@@ -96,9 +96,11 @@ export default function AppShell() {
   } = useSettingsState();
   const {
     agents,
+    clearAgentAssignments,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
+      clearAgentAssignments: state.clearAgentAssignments,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
@@ -151,6 +153,22 @@ export default function AppShell() {
     isCompactShell,
     route,
   });
+  const handleDeleteActiveAgent = async () => {
+    if (!activeAgent) {
+      return;
+    }
+
+    clearAgentAssignments(activeAgent.id);
+    commands.toggleInspector(false);
+
+    if (activeAgent.projectId) {
+      commands.openAgents(activeAgent.projectId);
+    } else {
+      commands.openWorkflow();
+    }
+
+    await agentRuntime.service.deleteAgent(activeAgent.id);
+  };
   const sidebarProps = {
     isCommandOpen,
     onOpenCommand: controller.handleOpenCommand,
@@ -198,7 +216,6 @@ export default function AppShell() {
   const showNativeTitlebarWorkflowTitle =
     showNativeTitlebarSidebarToggle &&
     route === 'workflow' &&
-    selectedProjectScreen === 'main' &&
     !!selectedProject;
   const showNativeTitlebarProjectActions =
     showNativeTitlebarSidebarToggle &&
@@ -211,6 +228,10 @@ export default function AppShell() {
     selectedProjectScreen === 'main' &&
     !!selectedProject &&
     (selectedProjectView === 'board' || selectedProjectView === 'agents');
+  const isProjectAgentsInitializing =
+    selectedProjectView === 'agents' &&
+    runtimeInfo.status === 'starting' &&
+    projectAgents.length === 0;
   const showCompactSidebarToggle = !showNativeTitlebarSidebarToggle;
   const windowShellStyle: WindowShellStyle | undefined = titlebarAreaRect
     ? {
@@ -343,12 +364,14 @@ export default function AppShell() {
                 aria-label={selectedProjectView === 'agents' ? 'New agent' : 'New work item'}
                 className="app-no-drag shrink-0"
                 data-testid="titlebar-project-create-button"
+                disabled={isProjectAgentsInitializing}
                 onClick={
                   selectedProjectView === 'agents'
                     ? controller.handleOpenCreateAgent
                     : () => setCreateWorkItemOpen(true)
                 }
                 size="icon"
+                title={isProjectAgentsInitializing ? 'Agents are still initializing' : undefined}
                 type="button"
                 variant="quiet"
               >
@@ -421,7 +444,6 @@ export default function AppShell() {
                 isCompactShell={isCompactShell}
                 isContextPanelOpen={isContextPanelOpen}
                 isSidebarOpen={controller.isSidebarDrawerOpen}
-                isStreaming={isStreaming}
                 onCreateAgent={controller.handleOpenCreateAgent}
                 onDraftChange={commands.setDraft}
                 onSubmit={handleSubmit}
@@ -442,6 +464,7 @@ export default function AppShell() {
                 onCreateWorkItemOpenChange={setCreateWorkItemOpen}
                 onOpenCreateAgent={controller.handleOpenCreateAgent}
                 onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={runtimeInfo}
                 showCompactSidebarToggle={showCompactSidebarToggle}
                 showTitlebarProjectCreateAction={showNativeTitlebarProjectCreateAction}
                 showTitlebarProjectActions={showNativeTitlebarProjectActions}
@@ -484,6 +507,7 @@ export default function AppShell() {
                     : 'hidden'
             }
             onClose={controller.handleCloseContextPanel}
+            onDeleteAgent={handleDeleteActiveAgent}
           />
         </div>
 

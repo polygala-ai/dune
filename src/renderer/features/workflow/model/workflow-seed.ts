@@ -1,7 +1,15 @@
+import { createId } from '@/shared/id';
 import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
 
-function createId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
+export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
+  return {
+    items: [],
+    projects: [],
+    selectedItemId: null,
+    selectedProjectFilter: 'all',
+    selectedProjectId: null,
+    selectedProjectView: 'board',
+  };
 }
 
 export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSnapshot {

@@ -57,11 +57,12 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 beforeEach(() => {
   window.duneDesktop = {
-    applyNetworkSettings: vi.fn(async () => undefined),
-    cancelTelegramSetupSession: vi.fn(async () => undefined),
-    copyText: vi.fn(async () => undefined),
-    ensureProjectMainAgent: vi.fn(async () => 'agent-project-main'),
-    getRuntimeSnapshot: vi.fn(async () => ({
+    applyNetworkSettings: vi.fn(() => Promise.resolve(undefined)),
+    cancelTelegramSetupSession: vi.fn(() => Promise.resolve(undefined)),
+    copyText: vi.fn(() => Promise.resolve(undefined)),
+    ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
+    deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       externalChannels: {},
       isStreaming: false,
@@ -72,16 +73,16 @@ beforeEach(() => {
       selectedAgentId: null,
       telegramSetupSessions: [],
     })),
-    getTelegramSetupSession: vi.fn(async () => null),
-    openExternal: vi.fn(async () => undefined),
+    getTelegramSetupSession: vi.fn(() => Promise.resolve(null)),
+    openExternal: vi.fn(() => Promise.resolve(undefined)),
     platform: 'darwin',
-    reloadExternalChannels: vi.fn(async () => undefined),
-    restartApp: vi.fn(async () => undefined),
-    startTelegramSetupSession: vi.fn(async () => 'telegram-session-test'),
-    storageDelete: vi.fn(async () => undefined),
-    storageGet: vi.fn(async () => null),
-    storageKeys: vi.fn(async () => []),
-    storageSet: vi.fn(async () => undefined),
+    reloadExternalChannels: vi.fn(() => Promise.resolve(undefined)),
+    restartApp: vi.fn(() => Promise.resolve(undefined)),
+    startTelegramSetupSession: vi.fn(() => Promise.resolve('telegram-session-test')),
+    storageDelete: vi.fn(() => Promise.resolve(undefined)),
+    storageGet: vi.fn(() => Promise.resolve(null)),
+    storageKeys: vi.fn(() => Promise.resolve([])),
+    storageSet: vi.fn(() => Promise.resolve(undefined)),
   };
   document.documentElement.dataset.theme = 'light';
 });

@@ -1,4 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+
+import { createId } from '@/shared/id';
 
 import type {
   ChannelDriver,
@@ -21,6 +23,7 @@ import {
   cloneTelegramSetupSession,
   createDefaultTelegramAgentRuntimeState,
 } from '../../renderer/features/agents/model/channels';
+import { extractWorkspaceAttachmentPaths } from '../../shared/agents/message-content';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -126,6 +129,8 @@ export interface ChannelBridgeCallbacks {
   onInboundMessage: (
     agentId: string,
     opts: {
+      attachmentSources: string[];
+      format: 'markdown' | 'plain';
       rawText: string;
       senderName: string;
       selectAgent: boolean;
@@ -245,7 +250,7 @@ export class TelegramBridge {
       }
     }
 
-    const sessionId = `telegram-session-${randomUUID()}`;
+    const sessionId = createId('telegram-session');
     const expiresAt = this.callbacks.now() + TELEGRAM_PAIR_CODE_TTL_MS;
     const tokenFingerprint = fingerprintTelegramToken(token);
 
@@ -667,6 +672,7 @@ export class TelegramBridge {
     fingerprint: string,
     chatJid: string,
     message: {
+      attachments?: string[];
       content: string;
       is_bot_message?: boolean;
       is_from_me: boolean;
@@ -727,13 +733,21 @@ export class TelegramBridge {
 
     const senderName = message.sender_name?.trim() || message.sender.trim() || 'Telegram';
     const timestamp = parseMessageTimestamp(message.timestamp, this.callbacks.now());
+    const extracted = extractWorkspaceAttachmentPaths(message.content);
+    const attachmentSources = [
+      ...(Array.isArray(message.attachments) ? message.attachments : []),
+      ...extracted.paths,
+    ];
+    const transcriptBody = extracted.content || message.content;
 
     for (const agent of agents) {
       const transcriptText = agent.channel.target?.kind === 'group'
-        ? `${senderName}: ${message.content}`
-        : message.content;
+        ? `${senderName}: ${transcriptBody}`
+        : transcriptBody;
 
       await this.callbacks.onInboundMessage(agent.id, {
+        attachmentSources,
+        format: 'plain',
         rawText: message.content,
         selectAgent: false,
         senderName,

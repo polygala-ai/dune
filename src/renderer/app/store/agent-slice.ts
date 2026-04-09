@@ -8,7 +8,7 @@ import type {
 export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentState {
   return {
     agents: snapshot.agents,
-    draft: '',
+    agentDrafts: {},
     externalChannels: snapshot.externalChannels,
     isStreaming: snapshot.isStreaming,
     runtimeInfo: snapshot.runtimeInfo,
@@ -28,17 +28,43 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
       selectedAgentId,
       telegramSetupSessions,
     }) => {
-      set({
-        agents,
-        externalChannels,
-        isStreaming,
-        runtimeInfo,
-        selectedAgentId,
-        telegramSetupSessions,
+      set((state) => {
+        const nextAgentIds = new Set(agents.map((agent) => agent.id));
+        const nextAgentDrafts = Object.fromEntries(
+          Object.entries(state.agentDrafts).filter(([agentId]) => nextAgentIds.has(agentId)),
+        );
+
+        return {
+          agentDrafts: nextAgentDrafts,
+          agents,
+          externalChannels,
+          isStreaming,
+          runtimeInfo,
+          selectedAgentId,
+          telegramSetupSessions,
+        };
       });
     },
-    setDraft: (draft) => {
-      set({ draft });
+    setDraft: (agentId, draft) => {
+      if (!agentId) {
+        return;
+      }
+
+      set((state) => {
+        if (!state.agents.some((agent) => agent.id === agentId)) {
+          return {};
+        }
+
+        const nextAgentDrafts = { ...state.agentDrafts };
+
+        if (draft) {
+          nextAgentDrafts[agentId] = draft;
+        } else {
+          delete nextAgentDrafts[agentId];
+        }
+
+        return { agentDrafts: nextAgentDrafts };
+      });
     },
   });
 }

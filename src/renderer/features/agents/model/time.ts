@@ -83,7 +83,7 @@ export function formatAgentStatus(status: AgentStatus) {
     case 'draft':
       return 'Draft';
     case 'live':
-      return 'Live';
+      return 'Streaming';
     case 'ready':
       return 'Ready';
   }
@@ -97,4 +97,3 @@ export function formatMessageStatus(status: MessageStatus) {
       return 'Streaming';
   }
 }
-

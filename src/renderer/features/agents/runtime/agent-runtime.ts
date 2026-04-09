@@ -146,7 +146,10 @@ class BridgeAgentRuntime implements AgentRuntime {
           target: agent.channel.target ? { ...agent.channel.target } : null,
         },
         contextCards: agent.contextCards.map((card) => ({ ...card })),
-        messages: agent.messages.map((message) => ({ ...message })),
+        messages: agent.messages.map((message) => ({
+          ...message,
+          attachments: message.attachments.map((attachment) => ({ ...attachment })),
+        })),
         telegram: cloneTelegramAgentRuntimeState(agent.telegram),
       })),
       externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),

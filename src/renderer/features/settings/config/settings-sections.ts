@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
+import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
 
@@ -36,22 +37,28 @@ export const settingsSections: SettingsSectionDefinition[] = [
     Component: AppearanceSettings,
   },
   {
-    id: 'network',
-    title: 'Network',
-    description: 'Proxy and transport path',
-    Component: NetworkSettings,
-  },
-  {
     id: 'models',
     title: 'Models',
     description: 'LLM provider catalog',
     Component: ModelsSettings,
   },
   {
+    id: 'network',
+    title: 'Network',
+    description: 'Proxy and transport path',
+    Component: NetworkSettings,
+  },
+  {
     id: 'shortcuts',
     title: 'Shortcuts',
     description: 'Keyboard-first reference',
     Component: ShortcutsSettings,
+  },
+  {
+    id: 'nuclear',
+    title: 'Nuclear',
+    description: 'Delete local data',
+    Component: NuclearSettings,
   },
 ];
 

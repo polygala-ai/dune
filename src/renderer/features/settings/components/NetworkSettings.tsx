@@ -207,7 +207,7 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
                 Bypass list
               </label>
               <textarea
-                className="min-h-[124px] w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className="focus-ring-app min-h-[124px] w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isLoading}
                 id="network-bypass-rules"
                 onChange={(event) => setRawBypassRules(event.target.value)}

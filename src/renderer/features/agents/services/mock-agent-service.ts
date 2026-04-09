@@ -21,6 +21,8 @@ import {
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
 } from '@/renderer/features/agents/model/channels';
+import { summarizeMessagePreview } from '@/shared/agents/message-content';
+import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
 function createAgentId(name: string, now: number) {
   const slug = name
@@ -37,7 +39,7 @@ function createMessageId(role: AgentMessage['role'], now: number) {
 }
 
 function summarizePreview(content: string) {
-  return content.replace(/\s+/g, ' ').trim().slice(0, 92);
+  return summarizeMessagePreview(content);
 }
 
 function createDraftAgent(
@@ -89,20 +91,24 @@ function createDraftAgent(
 
 function createUserMessage(content: string, now: number): AgentMessage {
   return {
+    attachments: [],
     id: createMessageId('user', now),
     role: 'user',
     content,
     createdAt: now,
+    format: 'markdown',
     status: 'complete',
   };
 }
 
 function createAssistantMessage(now: number): AgentMessage {
   return {
+    attachments: [],
     id: createMessageId('assistant', now),
     role: 'assistant',
     content: '',
     createdAt: now,
+    format: 'markdown',
     status: 'streaming',
   };
 }
@@ -154,7 +160,10 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
         target: agent.channel.target ? { ...agent.channel.target } : null,
       },
       contextCards: agent.contextCards.map((card) => ({ ...card })),
-      messages: agent.messages.map((message) => ({ ...message })),
+      messages: agent.messages.map((message) => ({
+        ...message,
+        attachments: message.attachments.map((attachment) => ({ ...attachment })),
+      })),
       projectId: agent.projectId ?? null,
       role: agent.role,
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
@@ -318,10 +327,9 @@ class MockAgentService implements AgentService {
     const existingAgent = this.snapshot.agents.find((agent) =>
       agent.projectId === trimmedProjectId && agent.role === 'project-main',
     );
+    const expectedName = createProjectMainAgentName(trimmedProjectId);
 
     if (existingAgent) {
-      const expectedName = `${trimmedProjectName} main`;
-
       if (existingAgent.name === expectedName) {
         return Promise.resolve(existingAgent.id);
       }
@@ -346,7 +354,7 @@ class MockAgentService implements AgentService {
 
     const now = Date.now();
     const nextAgent = createDraftAgent(
-      `${trimmedProjectName} main`,
+      expectedName,
       now,
       'dune-chat',
       null,
@@ -434,7 +442,7 @@ class MockAgentService implements AgentService {
   async sendMessage(agentId: string, text: string) {
     const trimmedText = text.trim();
 
-    if (!trimmedText || this.snapshot.isStreaming) {
+    if (!trimmedText || this.streamingAgentIds.has(agentId)) {
       return;
     }
 

@@ -20,6 +20,10 @@ export function getUserDataDir(runtimeHome: string) {
   return path.join(runtimeHome, 'userdata');
 }
 
+export function getAgentLiteRuntimeRoot(runtimeHome: string) {
+  return path.join(runtimeHome, '.dune', 'agentlite');
+}
+
 export function readDesktopRuntimeChunk() {
   const appRoot = path.resolve(__dirname, '../../');
   const buildDir = path.join(appRoot, '.vite', 'build');
@@ -38,6 +42,58 @@ export function readUserDataJson(runtimeHome: string, fileName: string) {
   return JSON.parse(
     fs.readFileSync(path.join(getUserDataDir(runtimeHome), fileName), 'utf-8'),
   ) as Record<string, unknown>;
+}
+
+export function seedAgentStore(
+  runtimeHome: string,
+  data: {
+    agents: unknown[];
+    selectedAgentId: string | null;
+  },
+) {
+  const userDataDir = getUserDataDir(runtimeHome);
+  fs.mkdirSync(userDataDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(userDataDir, 'agents.json'),
+    JSON.stringify(data, null, 2),
+  );
+}
+
+export function seedWorkflowStore(
+  runtimeHome: string,
+  snapshot: {
+    items: unknown[];
+    projects: unknown[];
+    selectedItemId: string | null;
+    selectedProjectFilter: string;
+    selectedProjectId: string | null;
+    selectedProjectView: string;
+  },
+) {
+  const userDataDir = getUserDataDir(runtimeHome);
+  fs.mkdirSync(userDataDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(userDataDir, 'workflow.json'),
+    JSON.stringify({ snapshot }, null, 2),
+  );
+}
+
+export function seedAgentAttachment(
+  runtimeHome: string,
+  input: {
+    content: Buffer | string;
+    fileName: string;
+    groupFolder: string;
+  },
+) {
+  const attachmentDir = path.join(
+    getAgentLiteRuntimeRoot(runtimeHome),
+    'groups',
+    input.groupFolder,
+    'attachments',
+  );
+  fs.mkdirSync(attachmentDir, { recursive: true });
+  fs.writeFileSync(path.join(attachmentDir, input.fileName), input.content);
 }
 
 export async function launchApp(runtimeHome: string): Promise<ElectronApp> {
@@ -141,11 +197,48 @@ export async function navigateToWorkflow(page: AppPage) {
     return;
   }
 
+  if (await page.getByRole('heading', { name: 'No projects yet' }).count()) {
+    await expect(page.getByRole('heading', { name: 'No projects yet' })).toBeVisible();
+    return;
+  }
+
   await dispatchPrimaryShortcut(page, 'k');
   await expect(
     page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
   ).toBeVisible();
   await page.getByText('Project board', { exact: true }).click();
+
+  if (await page.getByTestId('workflow-board').count()) {
+    await expect(page.getByTestId('workflow-board')).toBeVisible();
+    return;
+  }
+
+  await expect(page.getByRole('heading', { name: 'No projects yet' })).toBeVisible();
+}
+
+export async function createProject(
+  page: AppPage,
+  input: {
+    description: string;
+    name: string;
+  },
+) {
+  const emptyStateButton = page.getByRole('button', { name: /^New project$/i });
+
+  if (await emptyStateButton.count()) {
+    await emptyStateButton.click();
+  } else {
+    await page.getByLabel('Create project').click();
+  }
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Project name')).toBeVisible();
+  await dialog.getByLabel('Project name').fill(input.name);
+  await dialog.getByLabel('Description').fill(input.description);
+  const createProjectButton = dialog.getByRole('button', { name: /^Create project$/i });
+  await expect(createProjectButton).toBeEnabled();
+  await createProjectButton.click();
+  await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId('workflow-board')).toBeVisible();
 }
 

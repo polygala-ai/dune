@@ -74,7 +74,7 @@
     "vitest": "^4.1.1"
   },
   "dependencies": {
-    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#85c45aa49e0510976d403041be0fbefd20d78a8b",
+    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -92,8 +92,12 @@
     "electron-squirrel-startup": "^1.0.1",
     "global-agent": "^3.0.0",
     "lucide-react": "^0.511.0",
+    "nanoid": "^5.1.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.8"
   },
