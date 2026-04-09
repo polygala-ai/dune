@@ -19,6 +19,7 @@ interface ContextPanelHostProps {
   isInlineResizing?: boolean;
   mode: 'hidden' | 'inline' | 'overlay';
   onClose: () => void;
+  onDeleteAgent?: () => Promise<void> | void;
 }
 
 export function ContextPanelHost({
@@ -27,7 +28,10 @@ export function ContextPanelHost({
   isInlineResizing = false,
   mode,
   onClose,
+  onDeleteAgent,
 }: ContextPanelHostProps) {
+  const deleteAgentProps = onDeleteAgent ? { onDeleteAgent } : {};
+
   if (mode === 'hidden' || !agent) {
     return null;
   }
@@ -46,6 +50,7 @@ export function ContextPanelHost({
           agent={agent}
           className="h-full border-l border-app-border"
           onClose={onClose}
+          {...deleteAgentProps}
         />
       </div>
     );
@@ -88,6 +93,7 @@ export function ContextPanelHost({
           className="app-no-drag h-full"
           onClose={onClose}
           showCloseButton={false}
+          {...deleteAgentProps}
         />
       </DialogContent>
     </Dialog>

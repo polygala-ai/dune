@@ -43,6 +43,9 @@ test.describe('Settings', () => {
 
       await clickSettingsNav(page, 'Shortcuts');
       await expect(page.getByRole('heading', { name: 'Keyboard-first reference' })).toBeVisible();
+
+      await clickSettingsNav(page, 'Nuclear');
+      await expect(page.getByRole('heading', { name: 'Factory reset' })).toBeVisible();
     } finally {
       await closeElectronApp(app);
     }

@@ -9,13 +9,21 @@ import {
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
+import { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
+import { createBoardHandler } from '@/electron/main/agent-ipc/board-handler';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import {
   getBootstrappedRuntimeSnapshot,
   pushCurrentRuntimeSnapshot,
 } from '@/electron/main/runtime/runtime-snapshot';
+import { resetLocalData } from '@/electron/main/reset-local-data';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
 import { EncryptedFileStorage, JsonFileStorage } from '@/electron/main/storage';
+import type {
+  CreateAgentInput,
+  StartTelegramSetupSessionInput,
+} from '@/renderer/features/agents/types';
 import { loadNetworkSettings } from '@/renderer/features/settings/model/network-settings';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
@@ -92,7 +100,9 @@ const createWindow = () => {
     },
   );
   mainWindow.webContents.on('did-finish-load', () => {
-    pushCurrentRuntimeSnapshot(mainWindow!, runtimeController);
+    if (mainWindow) {
+      pushCurrentRuntimeSnapshot(mainWindow, runtimeController);
+    }
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -116,6 +126,8 @@ function createInitialRuntimeSnapshot() {
 }
 
 void app.whenReady().then(async () => {
+  const agentLiteHomeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
+  const agentLiteRuntimeRoot = resolveAgentLiteRuntimeRoot(agentLiteHomeDir);
   const userDataDir = app.getPath('userData');
   const stores = {
     agents: new JsonFileStorage(userDataDir, 'agents'),
@@ -155,16 +167,27 @@ void app.whenReady().then(async () => {
       modelProvidersModule,
       _telegramChannelModule,
     ]) => {
+      void _telegramChannelModule;
       const { DesktopRuntimeController } = runtimeControllerModule;
       const {
         migrateModelProviders,
         resolveDefaultModelCredentials,
       } = modelProvidersModule;
-      const homeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
+
+      const agentIpcManager = new AgentIpcManager(agentLiteHomeDir ?? require('node:os').homedir());
+      agentIpcManager.setBoardMessageHandler(createBoardHandler(stores.workflow, () => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.send(ipcChannels.workflowChanged);
+        }
+      }));
 
       runtimeController = new DesktopRuntimeController({
+        agentIpcManager,
         agentStore: stores.agents,
-        ...(homeDir ? { homeDir } : {}),
+        ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
+        onIpcDirCreated: (agentId, agentName, projectId, ipcHostPath) => {
+          agentIpcManager.addConnection(agentId, agentName, projectId, ipcHostPath);
+        },
         resolveModelCredentials: () => resolveDefaultModelCredentials({
           secretsStore: stores.secrets,
           settingsStore: stores.settings,
@@ -183,6 +206,7 @@ void app.whenReady().then(async () => {
         settingsStore: stores.settings,
       });
       await runtimeController.start();
+      agentIpcManager.start();
     }).catch((error) => {
       console.error('Failed to bootstrap the Dune runtime.', error);
       throw error;
@@ -217,7 +241,7 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.copyText, (_event, text: string) => {
     clipboard.writeText(text);
   });
-  ipcMain.handle(ipcChannels.cancelTelegramSetupSession, async (_event, sessionId) => {
+  ipcMain.handle(ipcChannels.cancelTelegramSetupSession, async (_event, sessionId: string) => {
     await ensureRuntime();
     return requireRuntimeController().cancelTelegramSetupSession(sessionId);
   });
@@ -226,37 +250,66 @@ void app.whenReady().then(async () => {
     await ensureRuntime();
     return requireRuntimeController().reloadExternalChannels();
   });
-  ipcMain.handle(ipcChannels.getTelegramSetupSession, async (_event, sessionId) => {
+  ipcMain.handle(ipcChannels.getTelegramSetupSession, async (_event, sessionId: string) => {
     await ensureRuntime();
     return requireRuntimeController().getTelegramSetupSession(sessionId);
   });
-  ipcMain.handle(ipcChannels.createAgent, async (_event, input) => {
+  ipcMain.handle(ipcChannels.createAgent, async (_event, input: CreateAgentInput) => {
     await ensureRuntime();
     return requireRuntimeController().createAgent(input);
   });
-  ipcMain.handle(ipcChannels.ensureProjectMainAgent, async (_event, projectId, projectName) => {
+  ipcMain.handle(ipcChannels.deleteLocalData, async () => {
+    await runtimeController?.shutdown();
+    await Promise.allSettled([
+      session.defaultSession.clearCache(),
+      session.defaultSession.clearStorageData(),
+    ]);
+    await resetLocalData({
+      agentLiteRuntimeRoot,
+      userDataDir,
+    });
+    quitCoordinator.restart();
+  });
+  ipcMain.handle(ipcChannels.ensureProjectMainAgent, async (
+    _event,
+    projectId: string,
+    projectName: string,
+  ) => {
     await ensureRuntime();
     return requireRuntimeController().ensureProjectMainAgent(projectId, projectName);
   });
-  ipcMain.handle(ipcChannels.deleteAgent, async (_event, agentId) => {
+  ipcMain.handle(ipcChannels.deleteAgent, async (_event, agentId: string) => {
     await ensureRuntime();
     return requireRuntimeController().deleteAgent(agentId);
   });
-  ipcMain.handle(ipcChannels.selectAgent, async (_event, agentId) => {
+  ipcMain.handle(ipcChannels.selectAgent, async (_event, agentId: string) => {
     await ensureRuntime();
     requireRuntimeController().selectAgent(agentId);
   });
-  ipcMain.handle(ipcChannels.sendAgentMessage, async (_event, agentId, text) => {
+  ipcMain.handle(ipcChannels.sendAgentMessage, async (
+    _event,
+    agentId: string,
+    text: string,
+  ) => {
     await ensureRuntime();
     return requireRuntimeController().sendAgentMessage(agentId, text);
   });
-  ipcMain.handle(ipcChannels.startTelegramSetupSession, async (_event, input) => {
+  ipcMain.handle(ipcChannels.startTelegramSetupSession, async (
+    _event,
+    input: StartTelegramSetupSessionInput,
+  ) => {
     await ensureRuntime();
     return requireRuntimeController().startTelegramSetupSession(input);
   });
   ipcMain.handle(ipcChannels.resetRuntime, async () => {
     await ensureRuntime();
     return requireRuntimeController().reset();
+  });
+  ipcMain.handle(ipcChannels.startAgentIpc, async () => {
+    await ensureRuntime();
+  });
+  ipcMain.handle(ipcChannels.stopAgentIpc, async () => {
+    await ensureRuntime();
   });
   ipcMain.handle(ipcChannels.restartApp, () => {
     quitCoordinator.restart();

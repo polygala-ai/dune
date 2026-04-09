@@ -2,6 +2,7 @@ import type {
   Agent as AgentLiteAgent,
   AgentLite,
   ChannelDriverFactory,
+  MountAllowlist,
   RegisterGroupOptions,
 } from '@boxlite-ai/agentlite';
 
@@ -12,19 +13,35 @@ export interface DuneAgentOptions {
   credentials: () => Promise<Record<string, string>>;
   extraChannels?: Record<string, ChannelDriverFactory>;
   groupFolder: string;
+  ipcHostPath?: string;
   name: string;
   onOutboundMessage: (agentId: string, text: string) => void;
   primaryChatJid: string;
 }
 
-function createRegisteredMainGroup(name: string): RegisterGroupOptions {
-  return {
+function createRegisteredMainGroup(
+  name: string,
+  ipcHostPath?: string,
+): RegisterGroupOptions {
+  const options: RegisterGroupOptions = {
     folder: 'main',
     isMain: true,
     name,
     requiresTrigger: false,
     trigger: `@${name}`,
   };
+
+  if (ipcHostPath) {
+    options.containerConfig = {
+      additionalMounts: [{
+        hostPath: ipcHostPath,
+        containerPath: 'ipc',
+        readonly: false,
+      }],
+    };
+  }
+
+  return options;
 }
 
 export class DuneAgent {
@@ -60,6 +77,13 @@ export class DuneAgent {
     this.agent = options.agentLite.createAgent(options.groupFolder, {
       channels,
       credentials: options.credentials,
+      ...(options.ipcHostPath ? {
+        mountAllowlist: {
+          allowedRoots: [{ path: options.ipcHostPath, allowReadWrite: true }],
+          blockedPatterns: [],
+          nonMainReadOnly: false,
+        },
+      } : {}),
       name: options.name,
     });
 
@@ -74,7 +98,7 @@ export class DuneAgent {
   private async registerPrimaryGroup() {
     await this.agent.registerGroup(
       this.options.primaryChatJid,
-      createRegisteredMainGroup(this.options.name),
+      createRegisteredMainGroup(this.options.name, this.options.ipcHostPath),
     );
   }
 }

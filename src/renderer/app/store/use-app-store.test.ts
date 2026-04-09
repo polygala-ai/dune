@@ -1,6 +1,8 @@
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useAppStore, resetAppStore } from '@/renderer/app/store/use-app-store';
+import { useAgentSession } from '@/renderer/app/store/selectors';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
@@ -20,17 +22,17 @@ describe('app store agent runtime sync', () => {
   });
 
   it('clears runtime and local draft state on reset', async () => {
-    await agentRuntime.service.createAgent({
+    const agentId = await agentRuntime.service.createAgent({
       channelId: 'dune-chat',
       name: 'Navigator',
     });
-    useAppStore.getState().setDraft('Pending note');
+    useAppStore.getState().setDraft(agentId, 'Pending note');
 
     resetAppStore();
 
     expect(useAppStore.getState().agents).toEqual([]);
     expect(useAppStore.getState().selectedAgentId).toBeNull();
-    expect(useAppStore.getState().draft).toBe('');
+    expect(useAppStore.getState().agentDrafts).toEqual({});
     expect(agentRuntime.getSnapshot()).toEqual({
       agents: [],
       externalChannels: createDefaultExternalChannelsState(),
@@ -43,5 +45,36 @@ describe('app store agent runtime sync', () => {
       selectedAgentId: null,
       telegramSetupSessions: [],
     });
+  });
+
+  it('derives the active draft from the selected agent', async () => {
+    const { result } = renderHook(() => useAgentSession());
+    let firstAgentId = '';
+    let secondAgentId = '';
+
+    await act(async () => {
+      firstAgentId = await agentRuntime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+      });
+      secondAgentId = await agentRuntime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'QA triage',
+      });
+    });
+
+    act(() => {
+      useAppStore.getState().setDraft(firstAgentId, 'Draft for navigator');
+      agentRuntime.service.selectAgent(secondAgentId);
+      useAppStore.getState().setDraft(secondAgentId, 'Draft for QA');
+    });
+
+    expect(result.current.draft).toBe('Draft for QA');
+
+    act(() => {
+      agentRuntime.service.selectAgent(firstAgentId);
+    });
+
+    expect(result.current.draft).toBe('Draft for navigator');
   });
 });

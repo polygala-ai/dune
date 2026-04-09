@@ -24,6 +24,7 @@ interface CommandAgent {
   name: string;
   projectId: string | null;
   preview: string;
+  statusLabel: string;
   updatedLabel: string;
   workspace: string;
 }
@@ -175,13 +176,13 @@ export function CommandMenu({
             <CommandItem
               key={agent.id}
               onSelect={() => closeAndRun(() => onSelectAgent(agent.id))}
-              value={`${agent.name} ${agent.preview} ${agent.workspace}`}
+              value={`${agent.name} ${agent.preview} ${agent.statusLabel} ${agent.workspace}`}
             >
               <Bot className="h-4 w-4 text-app-muted" />
               <div className="flex min-w-0 flex-col">
                 <span className="truncate">{agent.name}</span>
                 <span className="truncate text-xs text-app-muted">
-                  {agent.workspace}
+                  {agent.statusLabel} · {agent.workspace}
                 </span>
               </div>
               <CommandShortcut>{agent.updatedLabel}</CommandShortcut>

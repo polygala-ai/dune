@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
+import { createId } from '@/shared/id';
+
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
 import {
   deleteModelProviderSecret,
@@ -43,7 +45,7 @@ function DefaultSwitch({ checked, onToggle, providerName }: DefaultSwitchProps) 
       aria-checked={checked}
       aria-label={`Default provider ${providerName}`}
       className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-accent/25',
+        'focus-ring-app inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors focus-visible:outline-none focus-visible:ring-2',
         checked
           ? 'border-app-accent/40 bg-app-accent/12 text-app-text'
           : 'border-app-border bg-app-panel text-app-muted hover:border-app-border-strong hover:text-app-text',
@@ -140,7 +142,7 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
       <div className="space-y-3">
         <select
           aria-label="Auth type"
-          className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+          className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
           onChange={(e) => setForm({
             ...form,
             authType: e.target.value as ModelAuthType,
@@ -221,7 +223,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     name: string;
     secret: string;
   }) => {
-    const id = crypto.randomUUID();
+    const id = createId('provider');
     await writeModelProviderSecret(secretsStore, id, data.secret);
     await persist([...providers, {
       authType: data.authType,

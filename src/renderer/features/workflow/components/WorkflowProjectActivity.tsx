@@ -15,17 +15,7 @@ export function WorkflowProjectActivity({
 }: WorkflowProjectActivityProps) {
   return (
     <section className="rounded-[28px] border border-app-border bg-app-panel/70 p-5">
-      <div className="border-b border-app-border pb-4">
-        <div className="surface-eyebrow">Activity</div>
-        <h3 className="mt-2 text-[1.3rem] font-semibold tracking-[-0.04em] text-app-text">
-          Project timeline
-        </h3>
-        <p className="mt-2 text-sm leading-6 text-app-muted">
-          A calm project-level timeline of item changes, assignment moves, and new outputs.
-        </p>
-      </div>
-
-      <div className="mt-4 space-y-2">
+      <div className="space-y-2">
         {entries.length === 0 ? (
           <div className="rounded-[20px] border border-dashed border-app-border bg-app-card/60 px-5 py-6 text-sm leading-6 text-app-muted">
             Activity will appear here as the project moves forward.

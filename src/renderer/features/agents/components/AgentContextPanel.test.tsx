@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 
-function createAgent(): PresentedAgent {
+function createAgent(
+  overrides: Partial<PresentedAgent> = {},
+): PresentedAgent {
   return {
     channel: {
       canCompose: true,
@@ -58,6 +60,7 @@ function createAgent(): PresentedAgent {
     updatedAt: Date.now(),
     updatedLabel: 'Now',
     workspace: 'Prototype agent',
+    ...overrides,
   };
 }
 
@@ -83,5 +86,27 @@ describe('AgentContextPanel', () => {
     expect(screen.queryByText('Desktop-managed runtime')).not.toBeInTheDocument();
     expect(screen.queryByText('Dune chat is attached by default')).not.toBeInTheDocument();
     expect(screen.queryByText('UI first, runtime next')).not.toBeInTheDocument();
+  });
+
+  it('shows the delete action for custom agents only', () => {
+    const { rerender } = render(
+      <AgentContextPanel
+        agent={createAgent()}
+        onClose={vi.fn()}
+        onDeleteAgent={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /^Delete agent$/i })).toBeInTheDocument();
+
+    rerender(
+      <AgentContextPanel
+        agent={createAgent({ role: 'project-main' })}
+        onClose={vi.fn()}
+        onDeleteAgent={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /^Delete agent$/i })).not.toBeInTheDocument();
   });
 });

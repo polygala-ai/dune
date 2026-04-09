@@ -12,6 +12,7 @@ export interface DesktopBridge {
   copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
   createAgent?: (input: CreateAgentInput) => Promise<string>;
+  deleteLocalData?: () => Promise<void>;
   deleteAgent?: (agentId: string) => Promise<void>;
   ensureProjectMainAgent?: (projectId: string, projectName: string) => Promise<string>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
@@ -22,10 +23,13 @@ export interface DesktopBridge {
   restartApp?: () => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
+  startAgentIpc?: () => Promise<void>;
   startTelegramSetupSession?: (input: StartTelegramSetupSessionInput) => Promise<string>;
+  stopAgentIpc?: () => Promise<void>;
   storageDelete?: (store: string, key: string) => Promise<void>;
   storageGet?: (store: string, key: string) => Promise<unknown>;
   storageKeys?: (store: string) => Promise<string[]>;
   storageSet?: (store: string, key: string, value: unknown) => Promise<void>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
+  subscribeWorkflowChanged?: (listener: () => void) => () => void;
 }

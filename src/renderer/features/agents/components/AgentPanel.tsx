@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type RefObject } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 
+import { AgentMessageContent } from '@/renderer/features/agents/components/AgentMessageContent';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
@@ -10,7 +11,6 @@ interface AgentPanelProps {
   agent: PresentedAgent;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   draft: string;
-  isStreaming: boolean;
   onDraftChange: (value: string) => void;
   onSubmit: (value: string) => Promise<void>;
   transcriptRef: RefObject<HTMLDivElement | null>;
@@ -31,14 +31,14 @@ export function AgentPanel({
   agent,
   composerRef,
   draft,
-  isStreaming,
   onDraftChange,
   onSubmit,
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
   const attachedLabel = agent.channel.target?.name ?? agent.channel.label;
-  const isComposerDisabled = isStreaming || !agent.channel.canCompose;
+  const isAgentStreaming = agent.status === 'live';
+  const isComposerDisabled = isAgentStreaming || !agent.channel.canCompose;
   const composerHint = agent.channel.canCompose
     ? `${modifierLabel} Enter to send · Shift Enter for a new line`
     : `This agent is attached to ${attachedLabel}. Reply in the source channel.`;
@@ -100,9 +100,7 @@ export function AgentPanel({
                       </>
                     ) : null}
                   </div>
-                  <div className="prose-message mt-2 break-words whitespace-pre-wrap text-[15px] leading-7 text-app-text">
-                    {message.content || '…'}
-                  </div>
+                  <AgentMessageContent message={message} />
                 </article>
               </div>
             );
@@ -136,7 +134,7 @@ export function AgentPanel({
             <p className="text-[12px] leading-5 text-app-muted">{composerHint}</p>
 
             <Button disabled={!draft.trim() || isComposerDisabled} size="sm" type="submit">
-              {isStreaming ? 'Streaming…' : 'Send'}
+              {isAgentStreaming ? 'Streaming…' : 'Send'}
               <ArrowUpRight className="h-4 w-4" />
             </Button>
           </div>

@@ -29,7 +29,6 @@ function createSnapshot(
 describe('TelegramChannelSetupCard', () => {
   const resetStore = () => {
     useAppStore.getState().setAgentsSnapshot(createSnapshot());
-    useAppStore.getState().setDraft('');
   };
 
   beforeEach(() => {

@@ -1,5 +1,6 @@
 export type MessageRole = 'assistant' | 'system' | 'user';
 export type MessageStatus = 'complete' | 'streaming';
+export type MessageFormat = 'markdown' | 'plain';
 export type AgentStatus = 'draft' | 'live' | 'ready';
 export type AgentRole = 'custom' | 'project-main';
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
@@ -60,7 +61,7 @@ export interface TelegramSetupSession {
   status: TelegramConnectionStatus;
 }
 
-export interface ExternalChannelsState {}
+export type ExternalChannelsState = Record<string, never>;
 
 export interface AgentRuntimeInfo {
   mode: AgentRuntimeMode;
@@ -92,11 +93,22 @@ export interface StartTelegramSetupSessionInput {
   token?: string | null;
 }
 
+export interface AgentAttachment {
+  caption?: string;
+  kind: 'audio' | 'file' | 'image' | 'video';
+  mimeType?: string;
+  name: string;
+  sizeBytes?: number;
+  url: string;
+}
+
 export interface AgentMessage {
+  attachments: AgentAttachment[];
   id: string;
   role: MessageRole;
   content: string;
   createdAt: number;
+  format: MessageFormat;
   status: MessageStatus;
 }
 

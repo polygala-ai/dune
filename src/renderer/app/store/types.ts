@@ -37,7 +37,7 @@ export interface NavigationSnapshot {
 
 export interface AgentState {
   agents: Agent[];
-  draft: string;
+  agentDrafts: Record<string, string>;
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
@@ -47,7 +47,7 @@ export interface AgentState {
 
 export interface AgentActions {
   setAgentsSnapshot: (snapshot: AgentServiceSnapshot) => void;
-  setDraft: (draft: string) => void;
+  setDraft: (agentId: string | null, draft: string) => void;
 }
 
 export type AgentSlice = AgentState & AgentActions;
@@ -76,6 +76,7 @@ export interface WorkflowActions {
     itemId: string,
     input: { agentId: string | null; agentName?: string | null },
   ) => void;
+  clearAgentAssignments: (agentId: string) => void;
   createItem: (
     input: {
       brief: string;
@@ -187,6 +188,7 @@ export interface WorkflowSessionState {
   projectAgents: Array<AgentSummary & {
     currentItemId: string | null;
     currentItemTitle: string | null;
+    isProjectMain: boolean;
     projectId: string | null;
   }>;
   recentItems: Array<{

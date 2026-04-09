@@ -26,8 +26,7 @@ describe('agent time presenters', () => {
 
   it('formats agent statuses for display', () => {
     expect(formatAgentStatus('draft')).toBe('Draft');
-    expect(formatAgentStatus('live')).toBe('Live');
+    expect(formatAgentStatus('live')).toBe('Streaming');
     expect(formatAgentStatus('ready')).toBe('Ready');
   });
 });
-

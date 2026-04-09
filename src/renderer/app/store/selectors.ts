@@ -17,8 +17,8 @@ import {
 
 export function useAgentSession() {
   const {
+    agentDrafts,
     agents,
-    draft,
     externalChannels,
     isStreaming,
     runtimeInfo,
@@ -26,8 +26,8 @@ export function useAgentSession() {
     telegramSetupSessions,
   } = useAppStore(
     useShallow((state) => ({
+      agentDrafts: state.agentDrafts,
       agents: state.agents,
-      draft: state.draft,
       externalChannels: state.externalChannels,
       isStreaming: state.isStreaming,
       runtimeInfo: state.runtimeInfo,
@@ -40,6 +40,7 @@ export function useAgentSession() {
     agents,
     selectedAgentId,
   );
+  const draft = selectedAgentId ? agentDrafts[selectedAgentId] ?? '' : '';
 
   return {
     activeAgent: activeAgent
@@ -165,6 +166,7 @@ export function useWorkflowSession() {
           ...presentAgentSummary(agent),
           currentItemId: currentItem?.id ?? null,
           currentItemTitle: currentItem?.title ?? null,
+          isProjectMain: agent.role === 'project-main',
           projectId: agent.projectId ?? null,
         };
       })

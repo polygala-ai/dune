@@ -16,7 +16,6 @@ interface AgentWorkspaceProps {
   isCompactShell: boolean;
   isContextPanelOpen: boolean;
   isSidebarOpen: boolean;
-  isStreaming: boolean;
   onCreateAgent: () => void;
   onDraftChange: (value: string) => void;
   onSubmit: (value: string) => Promise<void>;
@@ -35,7 +34,6 @@ export function AgentWorkspace({
   isCompactShell,
   isContextPanelOpen,
   isSidebarOpen,
-  isStreaming,
   onCreateAgent,
   onDraftChange,
   onSubmit,
@@ -70,7 +68,6 @@ export function AgentWorkspace({
             agent={agent}
             composerRef={composerRef}
             draft={draft}
-            isStreaming={isStreaming}
             onDraftChange={onDraftChange}
             onSubmit={onSubmit}
             transcriptRef={transcriptRef}

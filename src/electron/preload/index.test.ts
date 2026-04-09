@@ -73,6 +73,7 @@ describe('preload bridge', () => {
       name: 'Navigator',
       projectId: 'project-1',
     });
+    await desktopBridge?.deleteLocalData?.();
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
@@ -81,7 +82,8 @@ describe('preload bridge', () => {
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
 
-    const unsubscribe = desktopBridge?.subscribe?.(() => {});
+    const listener = vi.fn();
+    const unsubscribe = desktopBridge?.subscribe?.(listener);
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
@@ -94,6 +96,7 @@ describe('preload bridge', () => {
       name: 'Navigator',
       projectId: 'project-1',
     });
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.deleteLocalData);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.ensureProjectMainAgent,
       'project-1',
@@ -158,6 +161,7 @@ describe('preload bridge', () => {
       'cancelTelegramSetupSession',
       'createAgent',
       'copyText',
+      'deleteLocalData',
       'ensureProjectMainAgent',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',

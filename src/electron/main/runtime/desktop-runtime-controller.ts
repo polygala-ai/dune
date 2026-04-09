@@ -12,6 +12,7 @@ import {
   resolveAgentLiteRuntimeRoot,
   type AgentLiteHostOptions,
 } from '@/electron/runtime-core/agentlite-host';
+import type { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 
 type ActiveRuntime = AgentRuntime & {
   reloadExternalChannels?: () => Promise<void>;
@@ -24,6 +25,7 @@ type RealRuntime = ActiveRuntime & {
 
 export interface DesktopRuntimeControllerOptions
   extends AgentLiteHostOptions {
+  agentIpcManager?: AgentIpcManager;
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
 }
 
@@ -38,6 +40,8 @@ export class DesktopRuntimeController {
 
   private readonly runtimeRoot: string;
 
+  private readonly agentIpcManager: AgentIpcManager | null;
+
   private readonly runtimeOptions: DesktopRuntimeControllerOptions;
 
   private shutdownPromise: Promise<void> | null = null;
@@ -45,6 +49,7 @@ export class DesktopRuntimeController {
   constructor(options: DesktopRuntimeControllerOptions) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.runtimeOptions = options;
+    this.agentIpcManager = options.agentIpcManager ?? null;
     this.createRealRuntime =
       options.createRealRuntime ??
       ((runtimeOptions) => new AgentLiteHost(runtimeOptions));
@@ -74,7 +79,7 @@ export class DesktopRuntimeController {
     }
   }
 
-  getSnapshot() {
+  getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
   }
 
@@ -135,6 +140,8 @@ export class DesktopRuntimeController {
     this.shutdownPromise = (async () => {
       this.activeRuntimeUnsubscribe?.();
       this.activeRuntimeUnsubscribe = null;
+
+      this.agentIpcManager?.stop();
 
       if (typeof this.activeRuntime.shutdown === 'function') {
         await this.activeRuntime.shutdown();

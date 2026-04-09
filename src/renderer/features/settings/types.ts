@@ -1,4 +1,9 @@
-export type SettingsRoute = 'appearance' | 'network' | 'models' | 'shortcuts';
+export type SettingsRoute =
+  | 'appearance'
+  | 'models'
+  | 'network'
+  | 'shortcuts'
+  | 'nuclear';
 export type ThemePreference = 'dark' | 'light' | 'system';
 export type {
   ModelAuthType,

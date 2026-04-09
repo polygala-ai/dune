@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAppStore } from '@/renderer/app/store/use-app-store';
-import { createSeedWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
+import { createEmptyWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
 import {
   workflowItemStatuses,
   workflowProjectFilters,
@@ -341,7 +341,7 @@ export function useWorkflowPersistence() {
     const load = async () => {
       const rawSnapshot = await window.duneDesktop?.storageGet?.(STORE_NAME, STORE_KEY);
       const snapshot = normalizeWorkflowSnapshot(rawSnapshot)
-        ?? createSeedWorkflowSnapshot();
+        ?? createEmptyWorkflowSnapshot();
 
       if (isDisposed) {
         return;
@@ -356,8 +356,13 @@ export function useWorkflowPersistence() {
 
     void load();
 
+    const unsubscribe = window.duneDesktop?.subscribeWorkflowChanged?.(() => {
+      void load();
+    });
+
     return () => {
       isDisposed = true;
+      unsubscribe?.();
     };
   }, [hydrateWorkflow]);
 

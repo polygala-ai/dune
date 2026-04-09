@@ -116,7 +116,7 @@ export function WorkflowItemInspector({
                 value={titleValue}
               />
               <textarea
-                className="mt-3 min-h-[112px] w-full rounded-[20px] border border-app-border bg-app-card/60 px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app mt-3 min-h-[112px] w-full rounded-[20px] border border-app-border bg-app-card/60 px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
                 onBlur={() => {
                   if (briefValue.trim() !== item.brief) {
                     onUpdateItem(item.id, { brief: briefValue });
@@ -131,7 +131,7 @@ export function WorkflowItemInspector({
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <select
                 aria-label="Work item status"
-                className="h-10 rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-10 rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
                 onChange={(event) =>
                   onUpdateItemStatus(
                     item.id,
@@ -177,7 +177,7 @@ export function WorkflowItemInspector({
                 <Bot className="h-4 w-4 text-app-muted" />
                 <select
                   aria-label="Primary agent"
-                  className="h-10 min-w-0 flex-1 rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                  className="focus-ring-app h-10 min-w-0 flex-1 rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
                   onChange={(event) => {
                     const nextAgentId = event.target.value || null;
                     const nextAgent = projectAgents.find((agent) => agent.id === nextAgentId) ?? null;
@@ -263,7 +263,7 @@ export function WorkflowItemInspector({
 
             <div className="flex gap-2">
               <input
-                className="h-11 flex-1 rounded-[16px] border border-app-border bg-app-panel px-4 text-sm text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-11 flex-1 rounded-[16px] border border-app-border bg-app-panel px-4 text-sm text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
                 onChange={(event) => setNewTaskTitle(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && newTaskTitle.trim()) {
@@ -299,13 +299,13 @@ export function WorkflowItemInspector({
 
             <div className="space-y-3">
               <input
-                className="h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 text-sm text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 text-sm text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
                 onChange={(event) => setProductTitle(event.target.value)}
                 placeholder="Output title"
                 value={productTitle}
               />
               <textarea
-                className="min-h-[120px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2 focus-visible:ring-app-accent/30"
+                className="focus-ring-app min-h-[120px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
                 onChange={(event) => setProductBody(event.target.value)}
                 placeholder="Add a note, summary, or work product."
                 value={productBody}

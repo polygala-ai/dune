@@ -246,6 +246,7 @@ export function openProjectSettings() {
   withNavigationChange(() => {
     const state = useAppStore.getState();
 
+    state.selectProjectView('board');
     state.openProjectSettings();
     state.setRoute('workflow');
   });
@@ -304,7 +305,9 @@ export function toggleInspector(force?: boolean) {
 }
 
 export function setDraft(draft: string) {
-  useAppStore.getState().setDraft(draft);
+  const state = useAppStore.getState();
+
+  state.setDraft(state.selectedAgentId, draft);
 }
 
 export function setSettingsRoute(route: SettingsRoute) {

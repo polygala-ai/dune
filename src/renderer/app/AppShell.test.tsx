@@ -24,6 +24,8 @@ import {
 } from '@/renderer/app/hooks/use-resizable-sidebar';
 import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
+import { createSeedWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
+import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
 interface TitlebarAreaRectInput {
   height: number;
@@ -92,6 +94,17 @@ function getContextPanelDialog() {
   return screen.getByRole('dialog', { name: 'Agent inspector' });
 }
 
+function getOpenAgentButton(agentName: string) {
+  const agentLabel = screen.getByText(agentName);
+  const agentRow = agentLabel.closest('div[class*="justify-between"]');
+
+  if (!(agentRow instanceof HTMLElement)) {
+    throw new Error(`Expected an agent row for "${agentName}".`);
+  }
+
+  return within(agentRow).getByRole('button', { name: /^Open agent$/i });
+}
+
 function expectSidebarWidth(width: number) {
   expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
     `--app-shell-sidebar-width: ${width}px`,
@@ -142,6 +155,29 @@ describe('AppShell', () => {
     window.localStorage.removeItem(SIDEBAR_WIDTH_STORAGE_KEY);
     setWindowControlsOverlayMock(undefined);
     setWindowWidth(1440);
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      storageGet: vi.fn(async () => createSeedWorkflowSnapshot(1_700_000_000_000)),
+      storageSet: vi.fn(async () => undefined),
+    };
+  });
+
+  it('shows the empty project shell on first launch without persisted workflow state', async () => {
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      storageGet: vi.fn(async () => null),
+      storageSet: vi.fn(async () => undefined),
+    };
+
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'No projects yet' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /^New project$/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('workflow-board')).not.toBeInTheDocument();
   });
 
   it('launches on the project board and opens settings and the command palette through shortcuts', async () => {
@@ -206,9 +242,65 @@ describe('AppShell', () => {
       within(channelPopover).getByRole('button', { name: /Select Telegram/i }),
     );
 
+    expect(await screen.findByRole('heading', { name: 'Telegram setup' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /I already have a token/i }));
     expect(await screen.findByLabelText('Bot token')).toBeInTheDocument();
     expect(screen.getByTestId('telegram-settings-card')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-view')).not.toBeInTheDocument();
+  });
+
+  it('disables the project agent create action during startup and restores the empty state once ready', async () => {
+    const user = userEvent.setup();
+    installWindowControlsOverlayMock();
+
+    setWindowWidth(960);
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    act(() => {
+      const { runtimeInfo } = useAppStore.getState();
+
+      useAppStore.setState({
+        agents: [],
+        runtimeInfo: {
+          ...runtimeInfo,
+          message: 'Connecting to the desktop runtime.',
+          status: 'starting',
+        },
+      });
+    });
+
+    await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
+
+    const titlebarCreateButton = await screen.findByTestId('titlebar-project-create-button');
+
+    expect(titlebarCreateButton).toBeDisabled();
+    expect(screen.getByText('Initializing agents')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'No agents yet. Create the first project agent when a work item is ready for execution.',
+      ),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      const { runtimeInfo } = useAppStore.getState();
+
+      useAppStore.setState({
+        runtimeInfo: {
+          ...runtimeInfo,
+          status: 'ready',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('titlebar-project-create-button')).toBeEnabled();
+    });
+    expect(
+      screen.getByText(
+        'No agents yet. Create the first project agent when a work item is ready for execution.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('reconciles one built-in main agent per project in the workflow shell', async () => {
@@ -224,7 +316,7 @@ describe('AppShell', () => {
       );
 
       expect(projectMainAgents).toHaveLength(1);
-      expect(projectMainAgents[0]?.name).toBe('Research Platform main');
+      expect(projectMainAgents[0]?.name).toBe(createProjectMainAgentName(selectedProjectId ?? ''));
     });
 
     act(() => {
@@ -243,7 +335,9 @@ describe('AppShell', () => {
 
       expect(studioProject).toBeTruthy();
       expect(projectMainAgents).toHaveLength(1);
-      expect(projectMainAgents[0]?.name).toBe('Studio Ops main');
+      expect(projectMainAgents[0]?.name).toBe(
+        createProjectMainAgentName(studioProject?.id ?? ''),
+      );
     });
   });
 
@@ -324,10 +418,9 @@ describe('AppShell', () => {
 
     await user.click(actionsButton);
 
-    expect(await screen.findByTestId('project-actions-overlay')).toBeInTheDocument();
-    expect(screen.getByTestId('project-actions-panel')).toBeInTheDocument();
-    expect(await screen.findByTestId('configure-project-button')).toBeInTheDocument();
-    expect(screen.getByTestId('delete-project-menu-button')).toBeInTheDocument();
+    expect(await screen.findByTestId('workflow-project-settings-overlay')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-project-settings-panel')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Project settings' })).toBeInTheDocument();
   });
 
   it('uses compact macOS titlebar back and forward buttons to navigate workflow pages', async () => {
@@ -485,14 +578,7 @@ describe('AppShell', () => {
     });
 
     await user.click(await screen.findByRole('tab', { name: /^Agents$/i }));
-    const openAgentButtons = await screen.findAllByRole('button', { name: /^Open agent$/i });
-    const firstOpenAgentButton = openAgentButtons[0];
-
-    if (!firstOpenAgentButton) {
-      throw new Error('Expected at least one open agent button.');
-    }
-
-    await user.click(firstOpenAgentButton);
+    await user.click(getOpenAgentButton('Navigator'));
 
     expect(await screen.findByLabelText('Agent composer')).toBeInTheDocument();
     expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
@@ -683,10 +769,10 @@ describe('AppShell', () => {
     expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
 
     await agentRuntime.service.createAgent({
-      channelId: 'telegram',
+      channelId: 'slack',
       externalTarget: {
-        channelId: 'telegram',
-        jid: 'tg:123',
+        channelId: 'slack',
+        jid: 'slack:C123',
         kind: 'group',
         name: 'QA Inbox',
       },
@@ -695,14 +781,7 @@ describe('AppShell', () => {
     });
 
     await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
-    const openAgentButtons = await screen.findAllByRole('button', { name: /^Open agent$/i });
-    const firstOpenAgentButton = openAgentButtons[0];
-
-    if (!firstOpenAgentButton) {
-      throw new Error('Expected at least one open agent button.');
-    }
-
-    await user.click(firstOpenAgentButton);
+    await user.click(getOpenAgentButton('QA triage'));
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'QA triage' })).toBeInTheDocument();
@@ -712,6 +791,63 @@ describe('AppShell', () => {
     expect(
       screen.getByText(/This agent is attached to QA Inbox\. Reply in the source channel\./i),
     ).toBeInTheDocument();
+  });
+
+  it('deletes a custom agent from the inspector and clears its work item assignments', async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+
+    const itemId = useAppStore.getState().items[0]?.id;
+
+    if (!itemId) {
+      throw new Error('Expected a seeded work item.');
+    }
+
+    await createAgent(user, 'Alpha cleanup');
+
+    const createdAgent = useAppStore.getState().agents.find((agent) => agent.name === 'Alpha cleanup');
+
+    if (!createdAgent) {
+      throw new Error('Expected the created agent to exist.');
+    }
+
+    act(() => {
+      useAppStore.getState().assignPrimaryAgent(itemId, {
+        agentId: createdAgent.id,
+        agentName: createdAgent.name,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Alpha cleanup' })).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /^Delete agent$/i }));
+
+    const deleteDialog = await screen.findByRole('dialog', {
+      name: /^Delete Alpha cleanup\?$/i,
+    });
+
+    await user.click(
+      within(deleteDialog).getByRole('button', { name: /^Delete agent$/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^Agents$/i })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.queryByText('Alpha cleanup')).not.toBeInTheDocument();
+    });
+
+    expect(
+      useAppStore.getState().items.find((item) => item.id === itemId)?.primaryAgentId ?? null,
+    ).toBeNull();
   });
 
   it('reflows between wide, medium, and compact layouts on resize', async () => {
@@ -1053,13 +1189,10 @@ describe('AppShell', () => {
     expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^Project actions$/i }));
-    expect(screen.getByRole('button', { name: /^Configure project$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Delete project$/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^Configure project$/i }));
     expect(screen.getByText('Project settings')).toBeInTheDocument();
-    expect(screen.getByTestId('workflow-project-page-scroll')).toBeInTheDocument();
-    expect(screen.queryByTestId('workflow-project-board-slot')).not.toBeInTheDocument();
+    expect(screen.getByTestId('workflow-project-settings-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-project-board-slot')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflow-project-page-scroll')).not.toBeInTheDocument();
 
     const nameInput = screen.getByLabelText('Project name');
     await user.clear(nameInput);
@@ -1096,7 +1229,6 @@ describe('AppShell', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /^Project actions$/i }));
-    await user.click(screen.getByRole('button', { name: /^Configure project$/i }));
     await user.click(screen.getByRole('button', { name: /^Delete project$/i }));
     const deleteDialog = await screen.findByRole('dialog', {
       name: /^Delete Research Platform\?$/i,
@@ -1129,12 +1261,12 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('tab', { name: /^Activity$/i }));
     expect(screen.getByTestId('workflow-project-page-scroll')).toBeInTheDocument();
     expect(screen.queryByTestId('workflow-project-board-slot')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Project timeline/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Homepage copy rewrite$/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
     expect(screen.getByTestId('workflow-project-page-scroll')).toBeInTheDocument();
     expect(screen.queryByTestId('workflow-project-board-slot')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Project agents/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Open agent$/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /^Board$/i }));
     expect(screen.getByTestId('workflow-project-board-slot')).toBeInTheDocument();

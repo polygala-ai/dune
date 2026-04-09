@@ -61,6 +61,74 @@ describe('agent runtime', () => {
     }
   });
 
+  it('allows different agents to stream concurrently', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const runtime = createMockAgentRuntime();
+      const firstAgentId = await runtime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+      });
+      const secondAgentId = await runtime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'QA triage',
+      });
+      const firstSendPromise = runtime.service.sendMessage(firstAgentId, 'Handle the nav pass.');
+      const secondSendPromise = runtime.service.sendMessage(secondAgentId, 'Handle the QA pass.');
+
+      const streamingSnapshot = runtime.getSnapshot();
+      const firstAgent = streamingSnapshot.agents.find((agent) => agent.id === firstAgentId);
+      const secondAgent = streamingSnapshot.agents.find((agent) => agent.id === secondAgentId);
+
+      expect(streamingSnapshot.isStreaming).toBe(true);
+      expect(firstAgent?.messages.at(-1)?.status).toBe('streaming');
+      expect(secondAgent?.messages.at(-1)?.status).toBe('streaming');
+
+      await vi.runAllTimersAsync();
+      await Promise.all([firstSendPromise, secondSendPromise]);
+
+      const nextSnapshot = runtime.getSnapshot();
+
+      expect(nextSnapshot.isStreaming).toBe(false);
+      expect(
+        nextSnapshot.agents.find((agent) => agent.id === firstAgentId)?.messages.at(-1)?.status,
+      ).toBe('complete');
+      expect(
+        nextSnapshot.agents.find((agent) => agent.id === secondAgentId)?.messages.at(-1)?.status,
+      ).toBe('complete');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores a second send while the same agent is already streaming', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const runtime = createMockAgentRuntime();
+      const agentId = await runtime.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+      });
+      const firstSendPromise = runtime.service.sendMessage(agentId, 'First pass.');
+
+      await runtime.service.sendMessage(agentId, 'Second pass.');
+      await vi.runAllTimersAsync();
+      await firstSendPromise;
+
+      const agent = runtime.getSnapshot().agents.find((item) => item.id === agentId);
+
+      expect(agent?.messages.map((message) => message.content)).toEqual([
+        'First pass.',
+        expect.any(String),
+      ]);
+      expect(agent?.messages.at(-1)?.status).toBe('complete');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets runtime state cleanly', async () => {
     const runtime = createMockAgentRuntime();
 
