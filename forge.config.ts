@@ -64,6 +64,23 @@ const config: ForgeConfig = {
       // Packager passes empty string for the app root directory
       if (!file) return false;
       if (file === '/package.json' || file.startsWith('/.vite')) return false;
+      // Keep the agent-ipc source tree. AgentLiteHost copies these dirs out
+      // of the asar into ~/.dune/agent-ipc/ at boot and hands the extracted
+      // paths to AgentLite's addSkill/addMcpServer. Parent dirs must also be
+      // kept so the packager descends into them.
+      if (file === '/src' || file === '/src/shared') return false;
+      if (file === '/src/shared/agent-ipc') return false;
+      if (file.startsWith('/src/shared/agent-ipc/')) {
+        const rest = file.slice('/src/shared/agent-ipc/'.length).split('/')[0]!;
+        return ![
+          'dune',
+          'dune-project-kickoff',
+          'dune-mcp-server',
+          'dune-agent-instructions.md',
+          'ipc-guide.md',
+          'project-main-instructions.md',
+        ].includes(rest);
+      }
       // Must keep /node_modules itself so packager enters it to check children
       if (file === '/node_modules') return false;
       if (file.startsWith('/node_modules/')) {

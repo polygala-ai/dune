@@ -163,6 +163,7 @@ export type { TelegramSecretsStore };
 
 export interface AgentLiteHostOptions {
   agentStore: AgentStore;
+  bundledAgentIpcDir?: string;
   createTelegramChannelFactory?: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
@@ -429,18 +430,42 @@ export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
   return path.join(homeDir, '.dune', 'agentlite');
 }
 
-import { readAgentInstructions, readIpcGuide, resolveArtifactsDir, seedArtifacts } from './artifacts';
+import {
+  copyDirRecursive,
+  readAgentInstructions,
+  readIpcGuide,
+  resolveArtifactsDir,
+  resolveBundledAgentIpcDir,
+  seedArtifacts,
+} from './artifacts';
 
-function resolveSourcePath(...segments: string[]): string {
-  // In dev (Vite), __dirname points to .vite/build/. Use process.cwd() which is the project root.
-  // In packaged builds, resources are alongside the asar.
-  const root = process.cwd();
-  return path.resolve(root, 'src', 'shared', 'agent-ipc', ...segments);
+const AGENT_IPC_SOURCE_NAMES = [
+  'dune',
+  'dune-project-kickoff',
+  'dune-mcp-server',
+] as const;
+
+/**
+ * Extract agent-ipc source directories from the bundled location (which may
+ * live inside app.asar) to a writable, asar-free location under ~/.dune/.
+ * AgentLite's addSkill/addMcpServer validate the path exists on disk and
+ * downstream code copies the tree with fs.cpSync — neither is asar-safe, so
+ * we stage a plain-filesystem copy once per boot.
+ */
+function seedAgentIpcSources(bundledDir: string, homeDir: string): string {
+  const stagingDir = path.join(homeDir, '.dune', 'agent-ipc');
+  fs.mkdirSync(stagingDir, { recursive: true });
+  for (const name of AGENT_IPC_SOURCE_NAMES) {
+    const src = path.join(bundledDir, name);
+    if (!fs.existsSync(src)) continue;
+    const dst = path.join(stagingDir, name);
+    if (fs.existsSync(dst)) {
+      fs.rmSync(dst, { recursive: true, force: true });
+    }
+    copyDirRecursive(src, dst);
+  }
+  return stagingDir;
 }
-
-const DUNE_SKILL_DIR = resolveSourcePath('dune');
-const PROJECT_KICKOFF_SKILL_DIR = resolveSourcePath('dune-project-kickoff');
-const DUNE_MCP_SERVER_DIR = resolveSourcePath('dune-mcp-server');
 
 function createIpcLayout(
   homeDir: string,
@@ -593,6 +618,14 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly runtimeRoot: string;
 
+  private readonly duneSkillDir: string;
+
+  private readonly projectKickoffSkillDir: string;
+
+  private readonly duneMcpServerDir: string;
+
+  private readonly bundledAgentIpcDir: string;
+
   private agentLite: AgentLite | null = null;
 
   private agentLiteStartPromise: Promise<AgentLite> | null = null;
@@ -625,6 +658,11 @@ export class AgentLiteHost implements AgentRuntime {
     this.onAgentIdle = options.onAgentIdle;
     this.onIpcDirCreated = options.onIpcDirCreated;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
+    this.bundledAgentIpcDir = options.bundledAgentIpcDir ?? resolveBundledAgentIpcDir();
+    const stagingDir = seedAgentIpcSources(this.bundledAgentIpcDir, this.homeDir);
+    this.duneSkillDir = path.join(stagingDir, 'dune');
+    this.projectKickoffSkillDir = path.join(stagingDir, 'dune-project-kickoff');
+    this.duneMcpServerDir = path.join(stagingDir, 'dune-mcp-server');
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
@@ -723,7 +761,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   async start() {
-    seedArtifacts(this.homeDir);
+    seedArtifacts(this.homeDir, this.bundledAgentIpcDir);
     await this.loadPersistedState();
 
     const persistedAgentValidationError = this.validatePersistedAgents();
@@ -1861,7 +1899,7 @@ export class AgentLiteHost implements AgentRuntime {
         instructions: readAgentInstructions(record.agent.role, this.homeDir),
         mcpServers: ipcHostPath ? {
           dune: {
-            source: DUNE_MCP_SERVER_DIR,
+            source: this.duneMcpServerDir,
             command: 'node',
             args: ['server.ts'],
             env: {
@@ -1881,8 +1919,8 @@ export class AgentLiteHost implements AgentRuntime {
         },
         primaryChatJid: toAgentChatJid(agentId),
         skills: record.agent.role === 'project-main'
-          ? [DUNE_SKILL_DIR, PROJECT_KICKOFF_SKILL_DIR]
-          : [DUNE_SKILL_DIR],
+          ? [this.duneSkillDir, this.projectKickoffSkillDir]
+          : [this.duneSkillDir],
       });
 
       try {
