@@ -180,6 +180,26 @@ export async function expectRightEdgeWithin(container: Locator, item: Locator) {
   );
 }
 
+export async function expectBoundingBoxWithin(container: Locator, item: Locator) {
+  const [containerBox, itemBox] = await Promise.all([
+    container.boundingBox(),
+    item.boundingBox(),
+  ]);
+
+  if (!containerBox || !itemBox) {
+    throw new Error('Expected both container and item to have bounding boxes.');
+  }
+
+  expect(itemBox.x).toBeGreaterThanOrEqual(containerBox.x - 1);
+  expect(itemBox.y).toBeGreaterThanOrEqual(containerBox.y - 1);
+  expect(itemBox.x + itemBox.width).toBeLessThanOrEqual(
+    containerBox.x + containerBox.width + 1,
+  );
+  expect(itemBox.y + itemBox.height).toBeLessThanOrEqual(
+    containerBox.y + containerBox.height + 1,
+  );
+}
+
 export async function navigateToSettings(page: AppPage) {
   await page.waitForFunction(
     () => Boolean(document.querySelector('[data-testid="app-shell-layout"]')),

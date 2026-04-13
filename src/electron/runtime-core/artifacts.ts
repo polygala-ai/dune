@@ -28,19 +28,20 @@ function readSourceFile(filename: string): string {
   return fs.readFileSync(path.join(SOURCE_DIR, filename), 'utf-8');
 }
 
-/** Seed default artifact files if they don't already exist. */
+/** Seed artifact files, always overwriting with the latest bundled version. */
 export function seedArtifacts(homeDir: string = os.homedir()): void {
   const dir = resolveArtifactsDir(homeDir);
   fs.mkdirSync(dir, { recursive: true });
 
   for (const filename of Object.values(ARTIFACT_FILES)) {
     const targetPath = path.join(dir, filename);
+    const sourcePath = path.join(SOURCE_DIR, filename);
 
-    if (!fs.existsSync(targetPath)) {
-      try {
-        fs.copyFileSync(path.join(SOURCE_DIR, filename), targetPath);
-      } catch {
-        // Source file may not exist in packaged builds; write a placeholder.
+    try {
+      fs.copyFileSync(sourcePath, targetPath);
+    } catch {
+      // Source file may not exist in packaged builds; only write placeholder if missing.
+      if (!fs.existsSync(targetPath)) {
         fs.writeFileSync(targetPath, `# ${filename}\n\nEdit this file to customize agent behavior.\n`, 'utf-8');
       }
     }

@@ -419,8 +419,12 @@ server.tool(
 if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true') {
   server.tool(
     'coding_engine_claude_code',
-    'Delegate a coding task to Claude Code (Anthropic). Use for file edits, refactoring, debugging, and code analysis. Claude Code can read files, write files, run shell commands, and use other tools autonomously.',
-    { prompt: z.string().describe('What to ask Claude Code to do (be specific about files and goals)') },
+    'Start a coding task with Claude Code (Anthropic). Returns a jobId immediately. Use coding_engine_poll to check progress and get results. Claude Code can read files, write files, run shell commands, and use other tools autonomously. To resume a previous session, pass args: ["--resume", "<session_id>"] with or without a prompt.',
+    {
+      prompt: z.string().describe('What to ask Claude Code to do (be specific about files and goals)'),
+      args: z.array(z.string()).optional().describe('Additional CLI arguments (e.g. ["--model", "sonnet"], ["--resume", "<session_id>"])'),
+      cwd: z.string().optional().describe('Working directory. Affects session storage and file access.'),
+    },
     async (args) => {
       try { return mcpResult(await callTool('coding_engine.claude_code', args)); }
       catch (e) { return mcpError(String(e)); }
@@ -431,10 +435,27 @@ if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true') {
 if (process.env.DUNE_CODEX_AVAILABLE === 'true') {
   server.tool(
     'coding_engine_codex',
-    'Delegate a coding task to Codex (OpenAI). Use for sandboxed code execution, testing, and code generation. Codex runs in a sandbox with full-auto approval.',
-    { prompt: z.string().describe('What to ask Codex to do (be specific about files and goals)') },
+    'Start a coding task with Codex (OpenAI). Returns a jobId immediately. Use coding_engine_poll to check progress and get results. Codex runs in a sandbox with full-auto approval.',
+    {
+      prompt: z.string().describe('What to ask Codex to do (be specific about files and goals)'),
+      args: z.array(z.string()).optional().describe('Additional CLI arguments'),
+      cwd: z.string().optional().describe('Working directory.'),
+    },
     async (args) => {
       try { return mcpResult(await callTool('coding_engine.codex', args)); }
+      catch (e) { return mcpError(String(e)); }
+    },
+  );
+}
+
+// Poll tool is always available when any engine is available
+if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true' || process.env.DUNE_CODEX_AVAILABLE === 'true') {
+  server.tool(
+    'coding_engine_poll',
+    'Poll a running coding engine job. Returns status (running/completed/error), steps taken, raw output (stream-json messages), and the result when complete. The output field contains the raw CLI output so you can see exactly what the engine did and resume sessions if needed. Call periodically after starting a job — you are free to do other work between polls.',
+    { jobId: z.string().describe('The jobId returned by coding_engine_claude_code or coding_engine_codex') },
+    async (args) => {
+      try { return mcpResult(await callTool('coding_engine.poll', args)); }
       catch (e) { return mcpError(String(e)); }
     },
   );

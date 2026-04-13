@@ -24,10 +24,17 @@ You have Dune workflow tools available as MCP tools (prefixed `mcp__dune__`). Ke
 
 ### Coding engines (if available)
 
-- `mcp__dune__coding_engine_claude_code` — delegate a coding task to Claude Code (Anthropic). Use for file edits, refactoring, debugging, code analysis. Pass a specific prompt describing what to do.
-- `mcp__dune__coding_engine_codex` — delegate a coding task to Codex (OpenAI). Use for sandboxed code execution, testing, code generation. Pass a specific prompt.
+Coding engines use an **async job pattern** — they return immediately with a `jobId`. Poll for results while doing other work.
 
-Use coding engines when you need to make real code changes in the project. Be specific in your prompt — include file paths, what to change, and why.
+- `mcp__dune__coding_engine_claude_code` — start a task with Claude Code. Returns `{ jobId, status: "running" }`.
+  - `prompt` (required): be specific — file paths, what to change, why.
+  - `args` (optional): extra CLI args, e.g. `["--model", "sonnet"]`.
+- `mcp__dune__coding_engine_codex` — start a task with Codex. Same interface.
+- `mcp__dune__coding_engine_poll` — check job progress.
+  - `jobId` (required): the ID from the start call.
+  - Returns `{ status, engineId, steps, result?, error? }`.
+
+**Workflow:** start engine → do other work → poll → if `"running"` keep working and poll again → if `"completed"` read `result`.
 
 See the `/dune` skill for the full tool reference.
 

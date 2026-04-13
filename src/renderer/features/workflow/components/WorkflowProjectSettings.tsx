@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   Copy,
   FolderOpen,
+  PanelRight,
   Trash2,
 } from 'lucide-react';
 
@@ -9,7 +15,50 @@ import type { WorkflowProject } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import { Input } from '@/renderer/shared/ui/input';
-import { Separator } from '@/renderer/shared/ui/separator';
+import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
+
+function ProjectInspectorCard({
+  children,
+  className,
+  tone = 'default',
+}: {
+  children: ReactNode;
+  className?: string;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-[22px] border p-4',
+        tone === 'danger'
+          ? 'border-app-border bg-app-panel-strong/80'
+          : 'border-app-border bg-app-card/60',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProjectInspectorInset({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'mt-3 rounded-[16px] border border-app-border bg-app-panel/60 px-3 py-3',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface WorkflowProjectSettingsProps {
   className?: string;
@@ -18,6 +67,7 @@ interface WorkflowProjectSettingsProps {
   onOpenPath: (targetPath: string) => Promise<void> | void;
   onPickRootPath: () => Promise<string | null>;
   onSave: (input: { description: string; name: string; rootPath?: string | null }) => Promise<void> | void;
+  presentation: 'inline' | 'drawer';
   project: WorkflowProject;
 }
 
@@ -28,6 +78,7 @@ export function WorkflowProjectSettings({
   onOpenPath,
   onPickRootPath,
   onSave,
+  presentation,
   project,
 }: WorkflowProjectSettingsProps) {
   const [name, setName] = useState(project.name);
@@ -93,147 +144,197 @@ export function WorkflowProjectSettings({
     }
   };
 
+  const isDrawerPresentation = presentation === 'drawer';
+
   return (
     <aside
       className={cn(
-        'panel-reveal flex min-h-0 flex-col overflow-hidden px-3 pb-4 pt-4',
+        'panel-reveal flex min-h-0 flex-col overflow-hidden',
+        isDrawerPresentation
+          ? 'h-full px-3 pb-4 pt-4'
+          : 'px-3 pb-4 pt-4',
         className,
       )}
       data-testid="workflow-project-settings-panel"
     >
-      <div className="px-2 pb-4">
-        <div className="surface-eyebrow">Project settings</div>
-        <h3 className="mt-5 truncate text-[13px] font-medium text-app-text">
-          {project.name}
-        </h3>
-        <p className="mt-1 text-[12px] leading-5 text-app-muted">
-          Update the project metadata without changing its board structure.
-        </p>
+      <div className="px-2">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.26em] text-app-muted">
+              <PanelRight className="h-3 w-3" />
+              Inspector
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <ProjectInspectorCard>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+              Project settings
+            </div>
+            <ProjectInspectorInset className={isDrawerPresentation ? 'space-y-1.5' : 'space-y-2'}>
+              <p className="text-sm font-medium text-app-text">{project.name}</p>
+              <p className="text-xs leading-5 text-app-muted">
+                {project.rootPath ? 'Folder connected' : 'Folder not connected yet'}
+              </p>
+            </ProjectInspectorInset>
+          </ProjectInspectorCard>
+        </div>
       </div>
 
-      <Separator />
+      <div
+        className="mt-6 min-h-0 flex flex-1 flex-col"
+      >
+        <ScrollArea
+          className="min-h-0 flex-1"
+          contentWidth="fill"
+          data-testid="workflow-project-settings-scroll-region"
+        >
+          <div className={cn('px-2', isDrawerPresentation ? 'space-y-4 pb-4' : 'space-y-4 pb-2')}>
+            <section>
+              <ProjectInspectorCard>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                  Metadata
+                </div>
+                <ProjectInspectorInset className={cn(isDrawerPresentation ? 'space-y-3' : 'space-y-4')}>
+                  <div className="space-y-2">
+                    <label
+                      className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                      htmlFor="workflow-project-settings-name"
+                    >
+                      Project name
+                    </label>
+                    <Input
+                      id="workflow-project-settings-name"
+                      onChange={(event) => setName(event.target.value)}
+                      value={name}
+                    />
+                  </div>
 
-      <div className="thin-scrollbar mt-6 min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-        <div className="space-y-6">
-          <section className="space-y-4">
-            <div className="space-y-2">
-              <label
-                className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
-                htmlFor="workflow-project-settings-name"
-              >
-                Project name
-              </label>
-              <Input
-                id="workflow-project-settings-name"
-                onChange={(event) => setName(event.target.value)}
-                value={name}
-              />
-            </div>
+                  <div className="space-y-2">
+                    <label
+                      className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                      htmlFor="workflow-project-settings-description"
+                    >
+                      Description
+                    </label>
+                    <textarea
+                      className={cn(
+                        'focus-ring-app w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2',
+                        isDrawerPresentation ? 'min-h-[112px]' : 'min-h-[160px]',
+                      )}
+                      id="workflow-project-settings-description"
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="What this project is responsible for."
+                      value={description}
+                    />
+                  </div>
 
-            <div className="space-y-2">
-              <label
-                className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
-                htmlFor="workflow-project-settings-root-path"
-              >
-                Project folder
-              </label>
-              <div className="space-y-3">
-                <Input
-                  id="workflow-project-settings-root-path"
-                  readOnly
-                  value={rootPath}
-                />
-                {project.rootPath ? (
-                  <div className="flex flex-wrap items-center gap-2">
+                  {errorMessage ? (
+                    <p className="text-sm leading-6 text-red-700">{errorMessage}</p>
+                  ) : null}
+                </ProjectInspectorInset>
+              </ProjectInspectorCard>
+            </section>
+
+            <section>
+              <ProjectInspectorCard>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                  Project folder
+                </div>
+                <ProjectInspectorInset className="space-y-3">
+                  <Input
+                    id="workflow-project-settings-root-path"
+                    readOnly
+                    value={rootPath}
+                  />
+
+                  {project.rootPath ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        onClick={() => {
+                          void onOpenPath(project.rootPath!);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        Open folder
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          void window.duneDesktop?.copyText?.(project.rootPath!);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="quiet"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy path
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
+                      disabled={isPickingFolder || isSaving}
                       onClick={() => {
-                        void onOpenPath(project.rootPath!);
+                        void handlePickRootPath();
                       }}
+                      size="sm"
                       type="button"
                       variant="outline"
                     >
                       <FolderOpen className="h-4 w-4" />
-                      Open folder
+                      Choose folder
                     </Button>
-                    <Button
-                      onClick={() => {
-                        void window.duneDesktop?.copyText?.(project.rootPath!);
-                      }}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Copy path
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    disabled={isPickingFolder || isSaving}
-                    onClick={() => {
-                      void handlePickRootPath();
-                    }}
-                    type="button"
-                    variant="outline"
+                  )}
+
+                  <p
+                    className={cn(
+                      'text-app-muted',
+                      isDrawerPresentation ? 'text-[13px] leading-5' : 'text-sm leading-6',
+                    )}
                   >
-                    <FolderOpen className="h-4 w-4" />
-                    Choose folder
-                  </Button>
-                )}
-                <p className="text-sm leading-6 text-app-muted">
-                  {project.rootPath
-                    ? 'This user-owned folder is fixed for this project.'
-                    : 'Choose an existing empty folder to enable on-disk project and work-item artifacts.'}
-                </p>
-              </div>
-            </div>
+                    {project.rootPath
+                      ? 'This user-owned folder is fixed for this project.'
+                      : 'Choose an existing empty folder to enable on-disk project and work-item artifacts.'}
+                  </p>
+                </ProjectInspectorInset>
+              </ProjectInspectorCard>
+            </section>
 
-            <div className="space-y-2">
-              <label
-                className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
-                htmlFor="workflow-project-settings-description"
-              >
-                Description
-              </label>
-              <textarea
-                className="focus-ring-app min-h-[160px] w-full rounded-[18px] border border-app-border bg-app-panel px-4 py-3 text-sm leading-6 text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
-                id="workflow-project-settings-description"
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="What this project is responsible for."
-                value={description}
-              />
-            </div>
-
-            {errorMessage ? (
-              <p className="text-sm leading-6 text-red-700">{errorMessage}</p>
-            ) : null}
-          </section>
-
-          <section className="rounded-[22px] border border-app-border bg-app-panel-strong/80 p-5">
-            <div className="surface-eyebrow">Danger zone</div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-app-text">Delete this project</p>
-                <p className="mt-1 text-sm leading-6 text-app-muted">
+            <section>
+              <ProjectInspectorCard tone="danger">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                  Danger zone
+                </div>
+                <p className="mt-3 text-sm font-medium text-app-text">Delete this project</p>
+                <p className="mt-2 text-sm leading-6 text-app-muted">
                   This will delete the project, its work items, and its project-owned agents.
                 </p>
-              </div>
-              <Button
-                className="border-red-300/60 text-red-700 hover:border-red-400 hover:bg-red-50"
-                onClick={onDelete}
-                type="button"
-                variant="outline"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete project
-              </Button>
-            </div>
-          </section>
-        </div>
+                <Button
+                  className="mt-4 border-red-300/60 text-red-700 hover:border-red-400 hover:bg-red-50"
+                  onClick={onDelete}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete project
+                </Button>
+              </ProjectInspectorCard>
+            </section>
+          </div>
+        </ScrollArea>
       </div>
 
-      <Separator className="mt-4" />
-
-      <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-4">
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-end gap-2 border-t border-app-border bg-app-panel/35',
+          isDrawerPresentation ? 'px-4 py-3' : 'px-5 py-4',
+        )}
+        data-testid="workflow-project-settings-footer"
+      >
         <Button onClick={onCancel} type="button" variant="ghost">
           Cancel
         </Button>

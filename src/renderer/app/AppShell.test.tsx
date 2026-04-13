@@ -464,6 +464,8 @@ describe('AppShell', () => {
 
     expect(await screen.findByTestId('workflow-project-settings-overlay')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-project-settings-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-project-settings-scroll-region')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-project-settings-footer')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Project settings' })).toBeInTheDocument();
   });
 
