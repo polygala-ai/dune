@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 
 import type {
   Agent,
+  CodingEngineStatus,
   ExternalChannelsState,
   AgentRuntimeInfo,
   AgentSummary,
@@ -40,6 +41,7 @@ export interface AgentState {
   agents: Agent[];
   agentCustomizations: Record<string, AgentCustomizationDraft>;
   agentDrafts: Record<string, string>;
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;

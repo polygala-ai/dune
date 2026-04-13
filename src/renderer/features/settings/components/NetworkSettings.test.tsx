@@ -10,6 +10,7 @@ import { NetworkSettings } from './NetworkSettings';
 function createRuntimeSnapshot(): AgentServiceSnapshot {
   return {
     agents: [],
+    codingEngines: [],
     externalChannels: createDefaultExternalChannelsState(),
     isStreaming: false,
     runtimeInfo: {

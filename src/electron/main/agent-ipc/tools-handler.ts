@@ -1,5 +1,8 @@
+import { spawn } from 'node:child_process';
+
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import type { CodingEngineEvent, CodingEngineId } from '@/renderer/features/agents/types';
 import {
   ensureProjectArtifactFolder,
   prepareProjectRootPath,
@@ -85,6 +88,7 @@ interface WorkflowProject {
 
 interface ToolHandlerOptions {
   getRuntimeController: () => DesktopRuntimeController;
+  onCodingEngineEvent?: (agentId: string, event: CodingEngineEvent) => void;
   onWorkflowChanged: () => void;
   workflowStore: AppStorage;
 }
@@ -806,11 +810,241 @@ const registeredTools: RegisteredTool[] = [
       return { snapshot: sanitizeRuntimeSnapshot(getRuntimeController().getSnapshot(), agentContext.projectId) };
     },
   },
+  {
+    definition: {
+      description: 'Delegate a coding task to Claude Code (Anthropic). Claude Code can read files, write files, run shell commands, and use other tools autonomously.',
+      inputSchema: objectSchema(
+        { prompt: { ...stringSchema, description: 'What to ask Claude Code to do' } },
+        ['prompt'],
+      ),
+      name: 'coding_engine.claude_code',
+    },
+    handler: async (services, args) => {
+      return runCodingEngine(services, 'claude-code', requireString(args.prompt, 'prompt'));
+    },
+  },
+  {
+    definition: {
+      description: 'Delegate a coding task to Codex (OpenAI). Codex runs in a sandbox with full-auto approval for safe code execution and testing.',
+      inputSchema: objectSchema(
+        { prompt: { ...stringSchema, description: 'What to ask Codex to do' } },
+        ['prompt'],
+      ),
+      name: 'coding_engine.codex',
+    },
+    handler: async (services, args) => {
+      return runCodingEngine(services, 'codex', requireString(args.prompt, 'prompt'));
+    },
+  },
 ];
 
 const toolsByName = new Map(
   registeredTools.map((tool) => [tool.definition.name, tool] as const),
 );
+
+// ---------------------------------------------------------------------------
+// Coding engine runner
+// ---------------------------------------------------------------------------
+
+const CODING_ENGINE_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
+
+function createEngineEventId(): string {
+  return `ce-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function emitEngineEvent(
+  services: ToolServices,
+  event: CodingEngineEvent,
+) {
+  services.onCodingEngineEvent?.(services.agentContext.agentId, event);
+}
+
+function buildEngineCommand(
+  engineId: CodingEngineId,
+  prompt: string,
+): { command: string; args: string[] } {
+  if (engineId === 'claude-code') {
+    return {
+      command: 'claude',
+      args: [
+        '-p', prompt,
+        '--output-format', 'stream-json',
+        '--permission-mode', 'bypassPermissions',
+        '--verbose',
+      ],
+    };
+  }
+
+  return {
+    command: 'codex',
+    args: ['exec', prompt, '--json', '--full-auto'],
+  };
+}
+
+function parseStreamedSteps(
+  engineId: CodingEngineId,
+  line: string,
+): string | null {
+  try {
+    const event = JSON.parse(line) as Record<string, unknown>;
+
+    if (engineId === 'claude-code') {
+      // Claude Code stream-json emits tool_use events
+      if (event.type === 'assistant' && typeof event.message === 'object' && event.message !== null) {
+        const message = event.message as Record<string, unknown>;
+        if (Array.isArray(message.content)) {
+          for (const block of message.content) {
+            if (typeof block === 'object' && block !== null && (block as Record<string, unknown>).type === 'tool_use') {
+              const toolBlock = block as Record<string, unknown>;
+              return `${String(toolBlock.name ?? 'tool')}`;
+            }
+          }
+        }
+      }
+      if (event.type === 'result') {
+        return null; // handled by completion
+      }
+    }
+
+    if (engineId === 'codex') {
+      const type = String(event.type ?? '');
+      if (type === 'item.completed' || type.startsWith('item.')) {
+        const item = event.item as Record<string, unknown> | undefined;
+        if (item?.type === 'function_call') {
+          return `${String(item.name ?? 'tool')}`;
+        }
+      }
+    }
+  } catch {
+    // Not valid JSON, skip
+  }
+
+  return null;
+}
+
+function extractFinalResult(
+  engineId: CodingEngineId,
+  allOutput: string,
+): string {
+  const lines = allOutput.trim().split('\n');
+
+  // Try to find the last meaningful result
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    try {
+      const event = JSON.parse(line) as Record<string, unknown>;
+
+      if (engineId === 'claude-code' && event.type === 'result') {
+        return String((event as Record<string, unknown>).result ?? 'Completed');
+      }
+
+      if (engineId === 'codex' && event.type === 'turn.completed') {
+        return 'Completed';
+      }
+    } catch {
+      // Not JSON
+    }
+  }
+
+  // Fallback: return last non-empty line
+  return lines.filter(Boolean).pop() ?? 'Completed';
+}
+
+async function runCodingEngine(
+  services: ToolServices,
+  engineId: CodingEngineId,
+  prompt: string,
+): Promise<unknown> {
+  const snapshot = services.getRuntimeController().getSnapshot();
+  const engine = snapshot.codingEngines.find((e) => e.id === engineId);
+
+  if (!engine?.available) {
+    const label = engineId === 'claude-code' ? 'Claude Code' : 'Codex';
+    throw new ToolHandlerError('unavailable', `${label} is not installed or not found in PATH.`);
+  }
+
+  const { command, args } = buildEngineCommand(engineId, prompt);
+
+  emitEngineEvent(services, {
+    id: createEngineEventId(),
+    engineId,
+    kind: 'started',
+    prompt,
+    timestamp: Date.now(),
+  });
+
+  return new Promise((resolve, reject) => {
+    let allOutput = '';
+    const seenSteps = new Set<string>();
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: CODING_ENGINE_TIMEOUT_MS,
+    });
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      allOutput += text;
+
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+
+        const stepLabel = parseStreamedSteps(engineId, line);
+
+        if (stepLabel && !seenSteps.has(stepLabel)) {
+          seenSteps.add(stepLabel);
+          emitEngineEvent(services, {
+            id: createEngineEventId(),
+            engineId,
+            kind: 'step',
+            stepLabel,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      allOutput += chunk.toString();
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        const result = extractFinalResult(engineId, allOutput);
+        emitEngineEvent(services, {
+          id: createEngineEventId(),
+          engineId,
+          kind: 'completed',
+          result,
+          timestamp: Date.now(),
+        });
+        resolve({ result, steps: [...seenSteps] });
+      } else {
+        const errorMessage = `Process exited with code ${code}`;
+        emitEngineEvent(services, {
+          id: createEngineEventId(),
+          engineId,
+          kind: 'error',
+          error: errorMessage,
+          timestamp: Date.now(),
+        });
+        reject(new ToolHandlerError('engine-failed', errorMessage));
+      }
+    });
+
+    child.on('error', (err) => {
+      const errorMessage = err.message;
+      emitEngineEvent(services, {
+        id: createEngineEventId(),
+        engineId,
+        kind: 'error',
+        error: errorMessage,
+        timestamp: Date.now(),
+      });
+      reject(new ToolHandlerError('engine-error', errorMessage));
+    });
+  });
+}
 
 export function createToolHandler(
   options: ToolHandlerOptions,

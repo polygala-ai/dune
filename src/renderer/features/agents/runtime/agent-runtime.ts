@@ -16,12 +16,14 @@ import {
 import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
+  UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   return {
     agents: [],
+    codingEngines: [],
     externalChannels: createDefaultExternalChannelsState(),
     isStreaming: false,
     runtimeInfo: {
@@ -52,6 +54,7 @@ type ConnectedBridge = DesktopBridge & Required<
     | 'selectAgent'
     | 'sendAgentMessage'
     | 'startTelegramSetupSession'
+    | 'updateAgentChannel'
     | 'subscribe'
   >
 >;
@@ -69,6 +72,7 @@ function hasRuntimeBridge(
       bridge.selectAgent &&
       bridge.sendAgentMessage &&
       bridge.startTelegramSetupSession &&
+      bridge.updateAgentChannel &&
       bridge.subscribe,
   );
 }
@@ -126,6 +130,9 @@ class BridgeAgentRuntime implements AgentRuntime {
       return this.bridge.startTelegramSetupSession(input);
     },
     subscribe: (listener: AgentServiceListener) => this.subscribe(listener),
+    updateAgentChannel: async (input: UpdateAgentChannelInput) => {
+      await this.bridge.updateAgentChannel(input);
+    },
   };
 
   constructor(private readonly bridge: ConnectedBridge) {

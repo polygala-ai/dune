@@ -22,6 +22,7 @@ export interface DuneAgentOptions {
     readonly?: boolean;
   }>;
   name: string;
+  onExternalInbound?: (text: string, senderName: string) => void;
   onOutboundMessage: (chatJid: string, text: string) => void;
   primaryChatJid: string;
   skills?: string[] | undefined;
@@ -75,6 +76,7 @@ export class DuneAgent {
           boundExternalJid: options.boundExternalJid,
           config,
           externalChannelFactory: options.externalChannelFactory,
+          onExternalInbound: options.onExternalInbound,
           onOutboundMessage: (jid, text) => {
             options.onOutboundMessage(jid, text);
           },
@@ -108,6 +110,11 @@ export class DuneAgent {
     await this.registerPrimaryGroup();
   }
 
+  /** The underlying AgentLite agent instance for event subscriptions. */
+  get agentLiteAgent(): AgentLiteAgent {
+    return this.agent;
+  }
+
   async pushUserMessage(chatJid: string, text: string, senderName: string = 'You') {
     await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
   }
@@ -118,6 +125,15 @@ export class DuneAgent {
     senderName: string = 'Dune Control',
   ) {
     await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
+  }
+
+  /** Attach an external channel to a running agent (hot-plug). */
+  async attachExternalChannel(factory: ChannelDriverFactory, boundJid: string) {
+    await this.duneChannel.attachExternalChannel(factory, boundJid);
+  }
+
+  async detachExternalChannel() {
+    await this.duneChannel.detachExternalChannel();
   }
 
   private async registerPrimaryGroup() {

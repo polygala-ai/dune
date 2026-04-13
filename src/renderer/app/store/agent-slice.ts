@@ -11,6 +11,7 @@ export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentSt
     agents: snapshot.agents,
     agentCustomizations: {},
     agentDrafts: {},
+    codingEngines: snapshot.codingEngines,
     externalChannels: snapshot.externalChannels,
     isStreaming: snapshot.isStreaming,
     runtimeInfo: snapshot.runtimeInfo,
@@ -24,6 +25,7 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
     ...initialState,
     setAgentsSnapshot: ({
       agents,
+      codingEngines,
       externalChannels,
       isStreaming,
       runtimeInfo,
@@ -43,6 +45,7 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
           agentCustomizations: nextAgentCustomizations,
           agentDrafts: nextAgentDrafts,
           agents,
+          codingEngines,
           externalChannels,
           isStreaming,
           runtimeInfo,

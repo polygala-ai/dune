@@ -3,6 +3,7 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
+  UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
@@ -45,4 +46,5 @@ export interface DesktopBridge {
   selectProjectDirectory?: () => Promise<string | null>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;
+  updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
 }

@@ -413,6 +413,34 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Coding Engines
+// ---------------------------------------------------------------------------
+
+if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true') {
+  server.tool(
+    'coding_engine_claude_code',
+    'Delegate a coding task to Claude Code (Anthropic). Use for file edits, refactoring, debugging, and code analysis. Claude Code can read files, write files, run shell commands, and use other tools autonomously.',
+    { prompt: z.string().describe('What to ask Claude Code to do (be specific about files and goals)') },
+    async (args) => {
+      try { return mcpResult(await callTool('coding_engine.claude_code', args)); }
+      catch (e) { return mcpError(String(e)); }
+    },
+  );
+}
+
+if (process.env.DUNE_CODEX_AVAILABLE === 'true') {
+  server.tool(
+    'coding_engine_codex',
+    'Delegate a coding task to Codex (OpenAI). Use for sandboxed code execution, testing, and code generation. Codex runs in a sandbox with full-auto approval.',
+    { prompt: z.string().describe('What to ask Codex to do (be specific about files and goals)') },
+    async (args) => {
+      try { return mcpResult(await callTool('coding_engine.codex', args)); }
+      catch (e) { return mcpError(String(e)); }
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 

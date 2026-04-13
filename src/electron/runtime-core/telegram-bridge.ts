@@ -125,19 +125,7 @@ export interface TelegramSecretsStore {
 export interface ChannelBridgeCallbacks {
   getAgents: () => Agent[];
   now: () => number;
-  onChange: () => void;
-  onInboundMessage: (
-    agentId: string,
-    opts: {
-      attachmentSources: string[];
-      format: 'markdown' | 'plain';
-      rawText: string;
-      senderName: string;
-      selectAgent: boolean;
-      timestamp: number;
-      transcriptText: string;
-    },
-  ) => Promise<void>;
+  onChange: () => Promise<void> | void;
 }
 
 /** Patch returned by syncAgentPatches — host applies to its snapshot. */
@@ -267,7 +255,7 @@ export class TelegramBridge {
 
       session.pairingStatus = 'expired';
       session.timeout = null;
-      this.callbacks.onChange();
+      void this.callbacks.onChange();
     }, TELEGRAM_PAIR_CODE_TTL_MS);
 
     const session: TelegramSetupSessionRecord = {
@@ -286,7 +274,7 @@ export class TelegramBridge {
     };
 
     this.setupSessions.set(sessionId, session);
-    this.callbacks.onChange();
+    await this.callbacks.onChange();
     await this.refreshRuntimeState();
 
     return sessionId;
@@ -337,6 +325,9 @@ export class TelegramBridge {
 
     this.agentFingerprints.clear();
 
+    // Build the agent→fingerprint mapping but do NOT create observers for
+    // already-bound agents. Their external driver (via DuneChannel) handles
+    // all Telegram polling. Observers are only needed for setup sessions.
     for (const agent of this.callbacks.getAgents()) {
       if (agent.channel.id !== 'telegram') {
         continue;
@@ -355,13 +346,6 @@ export class TelegramBridge {
       }
 
       this.agentFingerprints.set(agent.id, fingerprint);
-      requiredTokens.set(fingerprint, token);
-      const members = requiredObserverMembers.get(fingerprint) ?? {
-        agentIds: new Set<string>(),
-        sessionIds: new Set<string>(),
-      };
-      members.agentIds.add(agent.id);
-      requiredObserverMembers.set(fingerprint, members);
     }
 
     for (const session of this.setupSessions.values()) {
@@ -438,7 +422,7 @@ export class TelegramBridge {
       }
     }
 
-    this.callbacks.onChange();
+    await this.callbacks.onChange();
   }
 
   /** Returns patches for Telegram agents — host applies them to the snapshot. */
@@ -492,15 +476,7 @@ export class TelegramBridge {
     return patches;
   }
 
-  /** Send a completed assistant reply back to Telegram. */
-  sendReply(agentId: string, jid: string, content: string) {
-    const fingerprint = this.agentFingerprints.get(agentId) ?? null;
-    const observer = fingerprint ? this.observers.get(fingerprint) ?? null : null;
-
-    if (observer?.status === 'connected' && observer.driver) {
-      void observer.driver.sendMessage(jid, content);
-    }
-  }
+  // sendReply removed — DuneChannel's external driver handles outbound delivery.
 
   async disconnectAll() {
     for (const fingerprint of [...this.observers.keys()]) {
@@ -516,6 +492,23 @@ export class TelegramBridge {
 
   deleteAgentFingerprint(agentId: string) {
     this.agentFingerprints.delete(agentId);
+  }
+
+  /** Disconnect the observer for an agent's token so the external driver can poll. */
+  async disconnectAgentObserver(agentId: string) {
+    const fingerprint = this.agentFingerprints.get(agentId) ?? null;
+
+    if (!fingerprint) {
+      return;
+    }
+
+    // Only disconnect if no other agents share this observer.
+    const otherAgents = [...this.agentFingerprints.entries()]
+      .filter(([id, fp]) => fp === fingerprint && id !== agentId);
+
+    if (otherAgents.length === 0) {
+      await this.disconnectObserver(fingerprint);
+    }
   }
 
   clearAgentSetupSessions(agentId: string) {
@@ -595,9 +588,8 @@ export class TelegramBridge {
       onChatMetadata: (chatJid, timestamp, name, _channel, isGroup) => {
         this.handleChatMetadata(fingerprint, chatJid, timestamp, name, isGroup);
       },
-      onMessage: (chatJid, message) => {
-        void this.handleObserverMessage(fingerprint, chatJid, message);
-      },
+      onMessage: (chatJid, message) =>
+        this.handleObserverMessage(fingerprint, chatJid, message),
       registeredGroups: () => registeredGroups,
     };
 
@@ -711,50 +703,20 @@ export class TelegramBridge {
           if (patch) {
             // The host applies this patch via onChange callback.
             // Store on the session so the host can retrieve it.
-            this.callbacks.onChange();
+            await this.callbacks.onChange();
           }
         } else {
-          this.callbacks.onChange();
+          await this.callbacks.onChange();
         }
 
         return;
       }
     }
 
-    const agents = this.callbacks.getAgents().filter((item) =>
-      item.channel.id === 'telegram'
-        && item.channel.target?.jid === chatJid
-        && this.agentFingerprints.get(item.id) === fingerprint,
-    );
-
-    if (agents.length === 0) {
-      return;
-    }
-
-    const senderName = message.sender_name?.trim() || message.sender.trim() || 'Telegram';
-    const timestamp = parseMessageTimestamp(message.timestamp, this.callbacks.now());
-    const extracted = extractWorkspaceAttachmentPaths(message.content);
-    const attachmentSources = [
-      ...(Array.isArray(message.attachments) ? message.attachments : []),
-      ...extracted.paths,
-    ];
-    const transcriptBody = extracted.content || message.content;
-
-    for (const agent of agents) {
-      const transcriptText = agent.channel.target?.kind === 'group'
-        ? `${senderName}: ${transcriptBody}`
-        : transcriptBody;
-
-      await this.callbacks.onInboundMessage(agent.id, {
-        attachmentSources,
-        format: 'plain',
-        rawText: message.content,
-        selectAgent: false,
-        senderName,
-        timestamp,
-        transcriptText,
-      });
-    }
+    // Inbound message routing is handled by the external driver attached to
+    // DuneChannel. The observer only needs to run for the /pair setup flow.
+    // DuneChannel.onExternalInbound records the user message in the snapshot,
+    // and the external driver delivers it to AgentLite.
   }
 
   private toPublicSetupSession(

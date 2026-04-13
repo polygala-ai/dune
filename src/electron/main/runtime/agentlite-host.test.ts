@@ -83,8 +83,9 @@ function createDeferred<T>() {
 }
 
 async function flushMicrotasks() {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 interface MockAgent {
@@ -284,7 +285,8 @@ function createTelegramChannelFactoryHarness(
 ) {
   const connectedTokens = new Set<string>();
   let currentToken: string | null = null;
-  const configsByToken = new Map<string, ChannelDriverConfig>();
+  const observerConfigsByToken = new Map<string, ChannelDriverConfig>();
+  const attachedConfigsByToken = new Map<string, ChannelDriverConfig[]>();
   const connect = vi.fn(async () => {
     await options.connect?.();
     if (currentToken) {
@@ -301,17 +303,42 @@ function createTelegramChannelFactoryHarness(
     await options.sendMessage?.(jid, text);
   });
 
-  const resolveConfig = (token?: string | null) => {
+  const resolveConfig = (
+    token?: string | null,
+    kind: 'attached' | 'observer' = 'observer',
+  ) => {
     if (token) {
-      return configsByToken.get(token) ?? null;
+      if (kind === 'observer') {
+        return observerConfigsByToken.get(token)
+          ?? attachedConfigsByToken.get(token)?.[0]
+          ?? null;
+      }
+
+      return attachedConfigsByToken.get(token)?.[0]
+        ?? observerConfigsByToken.get(token)
+        ?? null;
     }
 
     if (currentToken) {
-      return configsByToken.get(currentToken) ?? null;
+      if (kind === 'observer') {
+        return observerConfigsByToken.get(currentToken)
+          ?? attachedConfigsByToken.get(currentToken)?.[0]
+          ?? null;
+      }
+
+      return attachedConfigsByToken.get(currentToken)?.[0]
+        ?? observerConfigsByToken.get(currentToken)
+        ?? null;
     }
 
-    const [onlyConfig] = configsByToken.values();
-    return onlyConfig ?? null;
+    const [onlyObserverConfig] = observerConfigsByToken.values();
+
+    if (onlyObserverConfig) {
+      return onlyObserverConfig;
+    }
+
+    const [onlyAttachedConfigs] = attachedConfigsByToken.values();
+    return onlyAttachedConfigs?.[0] ?? null;
   };
 
   return {
@@ -319,7 +346,16 @@ function createTelegramChannelFactoryHarness(
     createTelegramChannelFactory: async (token: string): Promise<ChannelDriverFactory> => {
       currentToken = token;
       return (config: ChannelDriverConfig) => {
-        configsByToken.set(token, config);
+        const probeGroup = config.registeredGroups()['tg:observer-probe'] as { name?: string } | undefined;
+
+        if (probeGroup?.name === 'Telegram Observer') {
+          observerConfigsByToken.set(token, config);
+        } else {
+          const configs = attachedConfigsByToken.get(token) ?? [];
+          configs.push(config);
+          attachedConfigsByToken.set(token, configs);
+        }
+
         const channel: ChannelDriver = {
           connect: async () => {
             currentToken = token;
@@ -350,7 +386,7 @@ function createTelegramChannelFactoryHarness(
       } = {},
       token?: string,
     ) => {
-      const currentConfig = resolveConfig(token);
+      const currentConfig = resolveConfig(token, 'observer');
 
       if (!currentConfig) {
         throw new Error('Telegram observer has not been created yet.');
@@ -379,7 +415,7 @@ function createTelegramChannelFactoryHarness(
       },
       token?: string,
     ) => {
-      const currentConfig = resolveConfig(token);
+      const currentConfig = resolveConfig(token, 'observer');
 
       if (!currentConfig) {
         throw new Error('Telegram observer has not been created yet.');
@@ -435,7 +471,7 @@ describe('AgentLiteHost', () => {
     const capturedOptions = harness.capturedOptions();
 
     expect(capturedOptions?.workdir).toBe(runtimeRoot);
-    expect(host.getSnapshot().runtimeInfo).toEqual({
+    expect(host.getSnapshot().runtimeInfo).toMatchObject({
       message: 'AgentLite is running with saved model credentials.',
       mode: 'real',
       rootPath: runtimeRoot,
@@ -933,6 +969,8 @@ describe('AgentLiteHost', () => {
               label: 'Dune chat',
               status: 'ready',
             },
+            activityEvents: [],
+            codingEngineEvents: [],
             contextCards: [],
             id: 'dune:agent:legacy',
             messages: [],
@@ -994,6 +1032,8 @@ describe('AgentLiteHost', () => {
               label: 'Dune chat',
               status: 'ready',
             },
+            activityEvents: [],
+            codingEngineEvents: [],
             contextCards: [],
             id: 'dune:agent:xwTmkq2Tf8uQViIpreL4o',
             messages: [],
@@ -1051,6 +1091,8 @@ describe('AgentLiteHost', () => {
               label: 'Dune chat',
               status: 'ready',
             },
+            activityEvents: [],
+            codingEngineEvents: [],
             contextCards: [],
             id: 'dune:agent:west',
             messages: [
@@ -1090,6 +1132,8 @@ describe('AgentLiteHost', () => {
               label: 'Dune chat',
               status: 'ready',
             },
+            activityEvents: [],
+            codingEngineEvents: [],
             contextCards: [],
             id: 'dune:agent:east',
             messages: [
@@ -1662,6 +1706,98 @@ describe('AgentLiteHost', () => {
     expect(host.getSnapshot().telegramSetupSessions).toEqual([]);
   });
 
+  it('updates a live agent when its channel is changed between Dune chat and Telegram', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'agentlite_test_bot',
+      telegramSecretsStore,
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Release triage',
+      projectId: 'project-1',
+    });
+
+    const sessionId = await host.service.startTelegramSetupSession({
+      agentId,
+      token: 'telegram-bot-token',
+    });
+    const pairCode = host.getSnapshot().telegramSetupSessions.find((session) => session.id === sessionId)?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:123', {
+      isGroup: true,
+      name: 'Product QA',
+    });
+    telegramHarness.emitIncomingMessage('tg:123', {
+      content: `/pair ${pairCode}`,
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    await host.service.updateAgentChannel({
+      agentId,
+      channelId: 'telegram',
+      telegramSetupSessionId: sessionId,
+    });
+
+    let agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+
+    expect(agent?.channel.target).toEqual({
+      channelId: 'telegram',
+      jid: 'tg:123',
+      kind: 'group',
+      name: 'Product QA',
+    });
+
+    await harness.duneChannel('release-triage').sendMessage(
+      toAgentChatJid(agentId),
+      'Investigating now.',
+    );
+
+    expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
+      'tg:123',
+      'Investigating now.',
+    );
+
+    await host.service.updateAgentChannel({
+      agentId,
+      channelId: 'dune-chat',
+    });
+
+    agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+
+    expect(agent?.channel).toMatchObject({
+      canCompose: true,
+      id: 'dune-chat',
+      kind: 'built-in',
+      label: 'Dune chat',
+      status: 'ready',
+    });
+    expect(agent?.telegram).toBeNull();
+
+    await harness.duneChannel('release-triage').sendMessage(
+      toAgentChatJid(agentId),
+      'Back in Dune.',
+    );
+
+    expect(telegramHarness.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves Telegram media as attachment metadata instead of only inline placeholder text', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -1800,7 +1936,7 @@ describe('AgentLiteHost', () => {
     let firstAgent = host.getSnapshot().agents.find((agent) => agent.id === firstAgentId);
     let secondAgent = host.getSnapshot().agents.find((agent) => agent.id === secondAgentId);
 
-    expect(telegramHarness.connect).toHaveBeenCalledTimes(1);
+    expect(telegramHarness.connect).toHaveBeenCalledTimes(3);
     expect(firstAgent?.messages).toHaveLength(2);
     expect(secondAgent?.messages).toHaveLength(2);
     expect(firstAgent?.messages[0]?.content).toBe('Need eyes on release');
@@ -1900,7 +2036,7 @@ describe('AgentLiteHost', () => {
     let westAgent = host.getSnapshot().agents.find((agent) => agent.id === westAgentId);
     let eastAgent = host.getSnapshot().agents.find((agent) => agent.id === eastAgentId);
 
-    expect(telegramHarness.connect).toHaveBeenCalledTimes(2);
+    expect(telegramHarness.connect).toHaveBeenCalledTimes(4);
     expect(westAgent?.messages).toHaveLength(2);
     expect(westAgent?.messages[0]?.content).toBe('West-only incident');
     expect(eastAgent?.messages).toHaveLength(0);
@@ -2004,7 +2140,7 @@ describe('AgentLiteHost', () => {
     const westAgent = host.getSnapshot().agents.find((agent) => agent.id === westAgentId);
     const eastAgent = host.getSnapshot().agents.find((agent) => agent.id === eastAgentId);
 
-    expect(telegramHarness.connect).toHaveBeenCalledTimes(1);
+    expect(telegramHarness.connect).toHaveBeenCalledTimes(3);
     expect(westAgent?.messages.map((message) => message.content)).toEqual([
       'Alice: West build is red',
       'Investigating west.',
@@ -2250,7 +2386,7 @@ describe('AgentLiteHost', () => {
     const restartedTelegramAgents = restartedHost.getSnapshot().agents
       .filter((agent) => agent.channel.id === 'telegram');
 
-    expect(secondTelegramHarness.connect).toHaveBeenCalledTimes(1);
+    expect(secondTelegramHarness.connect).toHaveBeenCalledTimes(3);
     expect(restartedTelegramAgents).toHaveLength(2);
     expect(restartedTelegramAgents.map((agent) => agent.telegram)).toEqual([
       expect.objectContaining({

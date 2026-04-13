@@ -65,6 +65,7 @@ beforeEach(() => {
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
+      codingEngines: [],
       externalChannels: {},
       isStreaming: false,
       runtimeInfo: {

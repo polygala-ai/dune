@@ -9,6 +9,7 @@ import type {
 
 import type {
   Agent,
+  AgentActivityEvent,
   AgentChannelBinding,
   AgentChannelId,
   AgentChannelStatus,
@@ -16,12 +17,15 @@ import type {
   AgentMessage,
   AgentRole,
   AgentRuntimeInfo,
+  CodingEngineEvent,
+  CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
   StartTelegramSetupSessionInput,
   TelegramAgentRuntimeState,
   TelegramConnectionStatus,
   TelegramSetupSession,
+  UpdateAgentChannelInput,
 } from '../../renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
@@ -57,6 +61,7 @@ import {
 import { DuneAgent } from './dune-agent';
 import { TelegramBridge } from './telegram-bridge';
 import type { TelegramSecretsStore } from './telegram-bridge';
+import { detectCodingEngines } from './coding-engine-detect';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
@@ -64,6 +69,7 @@ const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 
 export interface AgentServiceSnapshot {
   agents: Agent[];
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
@@ -93,6 +99,7 @@ export interface AgentService {
   ) => Promise<void>;
   startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
   subscribe: (listener: AgentServiceListener) => () => void;
+  updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
 }
 
 export interface AgentRuntime {
@@ -173,10 +180,12 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
       ...agent,
+      activityEvents: agent.activityEvents.map((event) => ({ ...event })),
       channel: {
         ...agent.channel,
         target: agent.channel.target ? { ...agent.channel.target } : null,
       },
+      codingEngineEvents: agent.codingEngineEvents.map((event) => ({ ...event })),
       contextCards: agent.contextCards.map((card) => ({ ...card })),
       messages: agent.messages.map((message) => ({
         ...message,
@@ -186,6 +195,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       role: agent.role,
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
     })),
+    codingEngines: snapshot.codingEngines.map((engine) => ({ ...engine })),
     externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
     isStreaming: snapshot.isStreaming,
     runtimeInfo: { ...snapshot.runtimeInfo },
@@ -303,6 +313,20 @@ function createChannelBinding(
   }
 }
 
+function createBuiltInAgentCopy() {
+  return {
+    note: 'This agent is running inside the real AgentLite foundation that Dune now hosts directly in the desktop runtime.',
+    preview: 'Ready for a first instruction.',
+  };
+}
+
+function createExternalAgentCopy(attachedLabel: string) {
+  return {
+    note: `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
+    preview: `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
+  };
+}
+
 function createDraftAgent(
   agentId: string,
   name: string,
@@ -314,21 +338,21 @@ function createDraftAgent(
   role: AgentRole,
 ): Agent {
   const channel = createChannelBinding(channelId, telegramState, externalTarget);
-  const isBuiltInChannel = channel.kind === 'built-in';
   const attachedLabel = channel.target?.name ?? channel.label;
+  const copy = channel.kind === 'built-in'
+    ? createBuiltInAgentCopy()
+    : createExternalAgentCopy(attachedLabel);
 
   return {
     channel,
+    activityEvents: [],
+    codingEngineEvents: [],
     contextCards: [],
     id: agentId,
     messages: [] satisfies AgentMessage[],
     name,
-    note: isBuiltInChannel
-      ? 'This agent is running inside the real AgentLite foundation that Dune now hosts directly in the desktop runtime.'
-      : `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
-    preview: isBuiltInChannel
-      ? 'Ready for a first instruction.'
-      : `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
+    note: copy.note,
+    preview: copy.preview,
     projectId,
     role,
     status: 'draft',
@@ -373,10 +397,16 @@ function normalizePersistedAgentRecord(
   return {
     agent: {
       ...record.agent,
+      activityEvents: Array.isArray(record.agent.activityEvents)
+        ? record.agent.activityEvents.map((event) => ({ ...event }))
+        : [],
       channel: {
         ...record.agent.channel,
         target: record.agent.channel.target ? { ...record.agent.channel.target } : null,
       },
+      codingEngineEvents: Array.isArray(record.agent.codingEngineEvents)
+        ? record.agent.codingEngineEvents.map((event) => ({ ...event }))
+        : [],
       contextCards: record.agent.contextCards.map((card) => ({ ...card })),
       messages: normalizePersistedMessages(record.agent.messages, {
         groupFolder,
@@ -617,8 +647,6 @@ export class AgentLiteHost implements AgentRuntime {
         getAgents: () => this.snapshot.agents,
         now: () => this.now(),
         onChange: () => this.applyTelegramPatches(),
-        onInboundMessage: (agentId, opts) =>
-          this.dispatchAgentInput(agentId, opts),
       },
       createChannelFactory: this.createTelegramChannelFactory,
       resolveBotUsername:
@@ -645,6 +673,7 @@ export class AgentLiteHost implements AgentRuntime {
     });
     this.snapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir),
@@ -675,6 +704,10 @@ export class AgentLiteHost implements AgentRuntime {
         return this.telegram.startSetupSession(input);
       },
       subscribe: (listener) => this.subscribe(listener),
+      updateAgentChannel: async (input) => {
+        this.assertWritableRuntime();
+        await this.updateAgentChannel(input);
+      },
     };
   }
 
@@ -715,8 +748,11 @@ export class AgentLiteHost implements AgentRuntime {
       }
     }
 
+    const codingEngines = await detectCodingEngines();
+
     this.snapshot = {
       ...this.snapshot,
+      codingEngines,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
         message: createRuntimeReadyMessage(credentials),
         status: 'ready',
@@ -763,6 +799,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.agentRuntimeStarts.clear();
     this.snapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
@@ -872,6 +909,99 @@ export class AgentLiteHost implements AgentRuntime {
     }
 
     return agentId;
+  }
+
+  private async updateAgentChannel(input: UpdateAgentChannelInput) {
+    const agentId = input.agentId.trim();
+    const record = this.persistedAgents.get(agentId);
+
+    if (!record) {
+      throw new Error(`Agent "${input.agentId}" was not found.`);
+    }
+
+    if (input.channelId === 'telegram') {
+      const setupSessionId = input.telegramSetupSessionId?.trim() ?? '';
+      const setupSession = setupSessionId
+        ? this.telegram.getSetupSessionRecord(setupSessionId)
+        : null;
+
+      if (!setupSession?.matchedChat) {
+        throw new Error('Telegram pairing must finish before changing the channel.');
+      }
+
+      if (setupSession.status !== 'connected') {
+        throw new Error('Telegram is not connected.');
+      }
+
+      const duneAgent = this.agentRuntimes.get(agentId)
+        ?? await this.ensureAgentRuntime(record);
+      const channelFactory = await this.createTelegramChannelFactory(setupSession.token);
+
+      await duneAgent.attachExternalChannel(channelFactory, setupSession.matchedChat.jid);
+      await this.telegram.writeAgentToken(agentId, setupSession.token);
+      this.telegram.consumeSetupSession(setupSession.id);
+
+      const telegramState = createDefaultTelegramAgentRuntimeState({
+        botUsername: setupSession.botUsername,
+        boundChat: setupSession.matchedChat,
+        errorMessage: setupSession.errorMessage,
+        pairingStatus: 'matched',
+        status: setupSession.status,
+      });
+      const channel = createChannelBinding('telegram', telegramState, setupSession.matchedChat);
+      const copy = createExternalAgentCopy(setupSession.matchedChat.name);
+
+      this.snapshot = {
+        ...this.snapshot,
+        agents: this.snapshot.agents.map((agent) =>
+          agent.id === agentId
+            ? {
+                ...agent,
+                channel,
+                note: copy.note,
+                preview: copy.preview,
+                telegram: telegramState,
+              }
+            : agent
+        ),
+        telegramSetupSessions: this.telegram.listSetupSessions(),
+      };
+      this.persistState();
+      this.emit();
+      await this.telegram.refreshRuntimeState();
+      return;
+    }
+
+    if (input.channelId !== 'dune-chat') {
+      throw new Error(`${input.channelId} is not available yet.`);
+    }
+
+    const duneAgent = this.agentRuntimes.get(agentId)
+      ?? await this.ensureAgentRuntime(record);
+
+    await duneAgent.detachExternalChannel();
+    this.telegram.clearAgentSetupSessions(agentId);
+
+    const copy = createBuiltInAgentCopy();
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              channel: createChannelBinding('dune-chat', null),
+              note: copy.note,
+              preview: copy.preview,
+              telegram: null,
+            }
+          : agent
+      ),
+      telegramSetupSessions: this.telegram.listSetupSessions(),
+    };
+    this.persistState();
+    this.emit();
+    await this.telegram.refreshRuntimeState();
   }
 
   private async ensureProjectMainAgent(
@@ -1239,6 +1369,33 @@ export class AgentLiteHost implements AgentRuntime {
     );
   }
 
+  private handleExternalInboundMessage(agentId: string, text: string, senderName: string) {
+    const now = this.now();
+    const transcriptText = senderName !== 'External'
+      ? `${senderName}: ${text}`
+      : text;
+    const userMessage = {
+      ...createUserMessage(transcriptText, now),
+      format: 'plain' as const,
+    };
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              messages: [...agent.messages, userMessage],
+              preview: summarizePreview(transcriptText),
+              updatedAt: now,
+            }
+          : agent,
+      ),
+    };
+    this.persistState();
+    this.emit();
+  }
+
   private handleOutboundMessage(chatJid: string, text: string) {
     const agentId = this.resolveAgentIdByChatJid(chatJid);
 
@@ -1257,6 +1414,15 @@ export class AgentLiteHost implements AgentRuntime {
         }
 
         if (!pending) {
+          // No pending message — start a new streaming assistant message
+          // so subsequent chunks from AgentLite append to it.
+          const newMessageId = createMessageId('assistant', now);
+          this.pendingAssistantMessages.set(agentId, {
+            idleTimer: null,
+            messageId: newMessageId,
+            safetyTimer: null,
+          });
+
           return {
             ...agent,
             messages: [
@@ -1266,13 +1432,13 @@ export class AgentLiteHost implements AgentRuntime {
                 content: text,
                 createdAt: now,
                 format: 'markdown',
-                id: createMessageId('assistant', now),
+                id: newMessageId,
                 role: 'assistant',
-                status: 'complete',
+                status: 'streaming',
               },
             ],
             preview: summarizePreview(text),
-            status: 'ready',
+            status: 'live',
             updatedAt: now,
           };
         }
@@ -1301,6 +1467,42 @@ export class AgentLiteHost implements AgentRuntime {
 
     this.scheduleFinalizeAssistantMessage(agentId);
     this.persistState();
+    this.emit();
+  }
+
+  private pushActivityEvent(agentId: string, event: AgentActivityEvent) {
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) => {
+        if (agent.id !== agentId) {
+          return agent;
+        }
+
+        return {
+          ...agent,
+          activityEvents: [...agent.activityEvents, event],
+          updatedAt: this.now(),
+        };
+      }),
+    };
+    this.emit();
+  }
+
+  pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) => {
+        if (agent.id !== agentId) {
+          return agent;
+        }
+
+        return {
+          ...agent,
+          codingEngineEvents: [...agent.codingEngineEvents, event],
+          updatedAt: this.now(),
+        };
+      }),
+    };
     this.emit();
   }
 
@@ -1371,13 +1573,7 @@ export class AgentLiteHost implements AgentRuntime {
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
     const completedMessage = agent?.messages.find((message) => message.id === pending.messageId);
 
-    if (
-      agent?.channel.id === 'telegram'
-      && agent.channel.target
-      && completedMessage?.content
-    ) {
-      this.telegram.sendReply(agent.id, agent.channel.target.jid, completedMessage.content);
-    }
+    // Outbound Telegram delivery is handled by DuneChannel's external driver.
 
     const pendingReadyInboxSignal = this.pendingReadyInboxSignals.get(agentId) ?? null;
 
@@ -1390,8 +1586,9 @@ export class AgentLiteHost implements AgentRuntime {
   // Telegram patch application
   // -------------------------------------------------------------------------
 
-  private applyTelegramPatches() {
+  private async applyTelegramPatches() {
     const patches = this.telegram.syncAgentPatches();
+    const previousAgentsById = new Map(this.snapshot.agents.map((agent) => [agent.id, agent]));
 
     if (patches.length > 0) {
       const patchMap = new Map(patches.map((p) => [p.agentId, p]));
@@ -1419,6 +1616,47 @@ export class AgentLiteHost implements AgentRuntime {
     };
     this.persistState();
     this.emit();
+
+    for (const patch of patches) {
+      const previousAgent = previousAgentsById.get(patch.agentId) ?? null;
+      const previousTargetJid = previousAgent?.channel.target?.jid ?? null;
+      const nextTargetJid = patch.channel.target?.jid ?? null;
+      const shouldRebindExternalChannel = Boolean(
+        nextTargetJid
+        && (
+          nextTargetJid !== previousTargetJid
+          || patch.telegram.botUsername !== previousAgent?.telegram?.botUsername
+        )
+      );
+
+      if (!shouldRebindExternalChannel) {
+        continue;
+      }
+
+      const record = this.persistedAgents.get(patch.agentId);
+
+      if (!record) {
+        continue;
+      }
+
+      try {
+        const duneAgent = this.agentRuntimes.get(patch.agentId)
+          ?? await this.ensureAgentRuntime(record);
+        const channelFactory = await this.resolveExternalChannelFactory(
+          patch.channel.id,
+          patch.agentId,
+        );
+
+        if (!channelFactory || !nextTargetJid) {
+          await duneAgent.detachExternalChannel();
+          continue;
+        }
+
+        await duneAgent.attachExternalChannel(channelFactory, nextTargetJid);
+      } catch (error) {
+        console.error(`Failed to rebind Telegram channel for "${patch.agentId}".`, error);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1513,6 +1751,24 @@ export class AgentLiteHost implements AgentRuntime {
     }
   }
 
+  private async resolveExternalChannelFactory(
+    channelId: string,
+    agentId: string,
+  ): Promise<ChannelDriverFactory | null> {
+    switch (channelId) {
+      case 'telegram': {
+        const token = await this.telegram.readAgentToken(agentId);
+        return token ? await this.createTelegramChannelFactory(token) : null;
+      }
+      // Future channels: add cases here
+      // case 'slack': { ... }
+      // case 'whatsapp': { ... }
+      // case 'discord': { ... }
+      default:
+        return null;
+    }
+  }
+
   private async ensureAgentRuntime(record: PersistedAgentRecord): Promise<DuneAgent> {
     const agentId = record.agent.id;
     const existing = this.agentRuntimes.get(agentId);
@@ -1584,11 +1840,14 @@ export class AgentLiteHost implements AgentRuntime {
       let externalChannelFactory: ChannelDriverFactory | undefined;
       let boundExternalJid: string | undefined;
 
-      if (record.agent.channel.id === 'telegram' && record.agent.channel.target?.jid) {
-        const token = await this.telegram.readAgentToken(agentId);
-
-        if (token) {
-          externalChannelFactory = await this.createTelegramChannelFactory(token);
+      // Wire external channel if the agent is bound to one
+      if (record.agent.channel.target?.jid) {
+        const channelFactory = await this.resolveExternalChannelFactory(
+          record.agent.channel.id,
+          agentId,
+        );
+        if (channelFactory) {
+          externalChannelFactory = channelFactory;
           boundExternalJid = record.agent.channel.target.jid;
         }
       }
@@ -1605,11 +1864,18 @@ export class AgentLiteHost implements AgentRuntime {
             source: DUNE_MCP_SERVER_DIR,
             command: 'node',
             args: ['server.ts'],
-            env: { DUNE_IPC_PATH: ipcContainerPath! },
+            env: {
+              DUNE_IPC_PATH: ipcContainerPath!,
+              DUNE_CLAUDE_CODE_AVAILABLE: String(this.snapshot.codingEngines.some((e) => e.id === 'claude-code' && e.available)),
+              DUNE_CODEX_AVAILABLE: String(this.snapshot.codingEngines.some((e) => e.id === 'codex' && e.available)),
+            },
           },
         } : undefined,
         ...(mounts.length > 0 ? { mounts } : {}),
         name: record.agent.name,
+        onExternalInbound: (text, senderName) => {
+          this.handleExternalInboundMessage(agentId, text, senderName);
+        },
         onOutboundMessage: (chatJid, text) => {
           this.handleOutboundMessage(chatJid, text);
         },
@@ -1625,6 +1891,97 @@ export class AgentLiteHost implements AgentRuntime {
         await this.cleanupFailedAgentRuntime(record);
         throw error;
       }
+
+      // Subscribe to agent events for UI visibility.
+      const alAgent = duneAgent.agentLiteAgent;
+
+      alAgent.on('run.tool', (event) => {
+        console.log(`[dune] run.tool: ${event.toolName}`, event.input?.slice(0, 100));
+        this.pushActivityEvent(agentId, {
+          id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: 'tool',
+          label: event.toolName,
+          detail: event.input,
+          timestamp: Date.now(),
+        });
+      });
+
+      alAgent.on('run.subagent', (event) => {
+        console.log(`[dune] run.subagent: ${event.subtype} — ${event.description}`);
+        this.pushActivityEvent(agentId, {
+          id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: 'subagent',
+          label: `${event.subtype}: ${event.description}`,
+          detail: event.summary,
+          timestamp: Date.now(),
+        });
+      });
+
+      alAgent.on('run.status', (event) => {
+        console.log(`[dune] run.status: ${event.status}`);
+        this.pushActivityEvent(agentId, {
+          id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: 'status',
+          label: event.status,
+          timestamp: Date.now(),
+        });
+      });
+
+      alAgent.on('run.sdk_message', (event) => {
+        const msg = event.message;
+        const sdkType = event.sdkType;
+        const sdkSubtype = event.sdkSubtype;
+
+        // Tool result feedback (user messages contain tool results)
+        if (sdkType === 'user' && Array.isArray(msg?.message?.content)) {
+          for (const block of msg.message.content as Array<Record<string, unknown>>) {
+            if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+              const output = typeof block.content === 'string'
+                ? block.content
+                : Array.isArray(block.content)
+                  ? (block.content as Array<Record<string, unknown>>)
+                      .filter((c) => c.type === 'text')
+                      .map((c) => String(c.text ?? ''))
+                      .join('\n')
+                  : undefined;
+              if (output) {
+                this.pushActivityEvent(agentId, {
+                  id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  kind: 'tool',
+                  label: `result:${String(block.tool_use_id).slice(0, 8)}`,
+                  detail: output.slice(0, 2000),
+                  timestamp: Date.now(),
+                });
+              }
+            }
+          }
+        }
+
+        // Assistant text blocks (non-tool-use content)
+        if (sdkType === 'assistant' && Array.isArray(msg?.message?.content)) {
+          for (const block of msg.message.content as Array<Record<string, unknown>>) {
+            if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+              this.pushActivityEvent(agentId, {
+                id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                kind: 'status',
+                label: 'thinking',
+                detail: String(block.text).slice(0, 2000),
+                timestamp: Date.now(),
+              });
+            }
+          }
+        }
+
+        // System status messages
+        if (sdkType === 'system' && sdkSubtype === 'status' && msg?.status) {
+          this.pushActivityEvent(agentId, {
+            id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            kind: 'status',
+            label: String(msg.status),
+            timestamp: Date.now(),
+          });
+        }
+      });
 
       if (ipcHostPath && record.agent.projectId) {
         this.onIpcDirCreated?.(agentId, record.agent.name, record.agent.projectId, ipcHostPath);
@@ -1825,10 +2182,12 @@ export class AgentLiteHost implements AgentRuntime {
       if (record) {
         record.agent = {
           ...agent,
+          activityEvents: agent.activityEvents.map((event) => ({ ...event })),
           channel: {
             ...agent.channel,
             target: agent.channel.target ? { ...agent.channel.target } : null,
           },
+          codingEngineEvents: agent.codingEngineEvents.map((event) => ({ ...event })),
           contextCards: agent.contextCards.map((card) => ({ ...card })),
           messages: agent.messages.map((message) => ({
             ...message,

@@ -35,6 +35,7 @@ describe('ipcChannels', () => {
       'selectAgent',
       'sendAgentMessage',
       'startTelegramSetupSession',
+      'updateAgentChannel',
     ];
 
     for (const key of runtimeKeys) {

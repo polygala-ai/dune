@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Check, Copy, RefreshCw } from 'lucide-react';
 
 import { syncAgentRuntimeSnapshot } from '@/renderer/features/agents/runtime/agent-runtime';
 import type {
@@ -68,10 +68,12 @@ export function TelegramChannelSetupCard({
   const telegramSetupSessions = useAppStore((state) => state.telegramSetupSessions);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isSaving, setSaving] = useState(false);
+  const [isPairCommandCopied, setPairCommandCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [step, setStep] = useState<WizardStep>(() => deriveInitialStep(agent));
   const [telegramBotToken, setTelegramBotToken] = useState('');
+  const copyResetTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const ownedSessionIdRef = useRef<string | null>(null);
   const isInspector = agent?.channel.id === 'telegram';
   const activeSession = useMemo(() => {
@@ -127,7 +129,19 @@ export function TelegramChannelSetupCard({
   }, [activeSession?.pairingStatus]);
 
   useEffect(() => {
+    setPairCommandCopied(false);
+    if (copyResetTimeoutRef.current) {
+      globalThis.clearTimeout(copyResetTimeoutRef.current);
+      copyResetTimeoutRef.current = null;
+    }
+  }, [pairCommand]);
+
+  useEffect(() => {
     return () => {
+      if (copyResetTimeoutRef.current) {
+        globalThis.clearTimeout(copyResetTimeoutRef.current);
+      }
+
       const currentSessionId = ownedSessionIdRef.current;
 
       if (
@@ -240,6 +254,41 @@ export function TelegramChannelSetupCard({
     }
 
     window.open(BOTFATHER_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopyPairCommand = async () => {
+    if (!pairCommand) {
+      return;
+    }
+
+    setPairCommandCopied(true);
+    if (copyResetTimeoutRef.current) {
+      globalThis.clearTimeout(copyResetTimeoutRef.current);
+    }
+    copyResetTimeoutRef.current = globalThis.setTimeout(() => {
+      setPairCommandCopied(false);
+      copyResetTimeoutRef.current = null;
+    }, 2000);
+
+    try {
+      if (typeof window.duneDesktop?.copyText === 'function') {
+        await window.duneDesktop.copyText(pairCommand);
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(pairCommand);
+      } else {
+        throw new Error('Clipboard is unavailable.');
+      }
+    } catch (error) {
+      setPairCommandCopied(false);
+      if (copyResetTimeoutRef.current) {
+        globalThis.clearTimeout(copyResetTimeoutRef.current);
+        copyResetTimeoutRef.current = null;
+      }
+      setFeedback({
+        kind: 'error',
+        message: `Failed to copy pair command. ${String(error)}`,
+      });
+    }
   };
 
   return (
@@ -453,17 +502,39 @@ export function TelegramChannelSetupCard({
                   <p className="mt-2 text-sm leading-6 text-app-muted">
                     Send the exact command below from the Telegram chat you want to attach.
                   </p>
-                  <div className="mt-4 rounded-[16px] border border-app-border bg-app-card/70 px-4 py-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                      Pair command
-                    </div>
-                    <div className="mt-2 font-mono text-base font-semibold text-app-text">
-                      {pairCommand}
+                  <button
+                    className="focus-ring-app mt-4 block w-full rounded-[16px] border border-app-border bg-app-card/70 px-4 py-3 text-left transition-colors hover:bg-app-card"
+                    onClick={() => {
+                      void handleCopyPairCommand();
+                    }}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                          <span>Pair command</span>
+                          {isPairCommandCopied ? (
+                            <span className="text-emerald-600">Copied</span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 font-mono text-base font-semibold text-app-text">
+                          {pairCommand}
+                        </div>
+                      </div>
+                      {isPairCommandCopied ? (
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <Copy className="mt-0.5 h-4 w-4 shrink-0 text-app-muted" />
+                      )}
                     </div>
                     <p className="mt-2 text-xs leading-5 text-app-muted">
-                      {pairingCountdown ? `Expires in ${pairingCountdown}.` : 'Waiting for a Telegram chat to claim this code.'}
+                      {isPairCommandCopied
+                        ? 'Copied to clipboard.'
+                        : pairingCountdown
+                          ? `Expires in ${pairingCountdown}. Click to copy.`
+                          : 'Waiting for a Telegram chat to claim this code. Click to copy.'}
                     </p>
-                  </div>
+                  </button>
                   <div className="mt-4 space-y-2 text-sm leading-6 text-app-muted">
                     <p>The first Telegram chat that sends this exact pair command will be matched automatically.</p>
                   </div>

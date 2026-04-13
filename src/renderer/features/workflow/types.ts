@@ -96,8 +96,10 @@ export interface WorkflowSnapshot {
 export interface WorkflowItemSummary {
   brief: string;
   completedTaskCount: number;
+  currentTaskTitle: string | null;
   hasBlockedTasks: boolean;
   id: string;
+  isAgentWorking: boolean;
   primaryAgentId: string | null;
   primaryAgentName: string | null;
   specialStateLabel: string | null;

@@ -87,6 +87,10 @@ describe('preload bridge', () => {
     await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
+    await desktopBridge?.updateAgentChannel?.({
+      agentId: 'agent-1',
+      channelId: 'dune-chat',
+    });
 
     const listener = vi.fn();
     const unsubscribe = desktopBridge?.subscribe?.(listener);
@@ -138,6 +142,13 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.startTelegramSetupSession,
       { token: 'bot-token' },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.updateAgentChannel,
+      {
+        agentId: 'agent-1',
+        channelId: 'dune-chat',
+      },
     );
     expect(on).toHaveBeenCalledWith(
       ipcChannels.runtimeSnapshotUpdated,
@@ -202,6 +213,7 @@ describe('preload bridge', () => {
       'selectAgent',
       'sendAgentMessage',
       'startTelegramSetupSession',
+      'updateAgentChannel',
       'storageDelete',
       'storageGet',
       'storageKeys',

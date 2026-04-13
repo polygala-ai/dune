@@ -54,7 +54,7 @@ interface ReadyAssignmentInboxItem {
   projectId: string;
   projectName: string | null;
   sortOrder: number;
-  status: 'ready';
+  status: 'ready' | 'active';
   tasks: ReadyAssignmentInboxTask[];
   title: string;
   updatedAt: number;
@@ -215,7 +215,7 @@ export function syncReadyAssignmentInboxSnapshots(options: {
       projectName: project?.name ?? null,
     });
     const items = options.snapshot.items
-      .filter((item) => item.status === 'ready' && item.primaryAgentId === agent.id)
+      .filter((item) => (item.status === 'ready' || item.status === 'active') && item.primaryAgentId === agent.id)
       .sort(compareReadyItems)
       .map((item) => ({
         artifactPath: resolveMountedItemArtifactPath(
@@ -227,7 +227,7 @@ export function syncReadyAssignmentInboxSnapshots(options: {
         projectId: item.projectId,
         projectName: projectsById.get(item.projectId)?.name ?? null,
         sortOrder: item.sortOrder,
-        status: 'ready' as const,
+        status: item.status as 'ready' | 'active',
         tasks: item.tasks.map((task) => ({
           id: task.id,
           notes: task.notes,

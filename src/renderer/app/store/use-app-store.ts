@@ -42,6 +42,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
       agents: initialState.agents,
       agentCustomizations: initialState.agentCustomizations,
       agentDrafts: initialState.agentDrafts,
+      codingEngines: initialState.codingEngines,
       externalChannels: initialState.externalChannels,
       isStreaming: initialState.isStreaming,
       runtimeInfo: initialState.runtimeInfo,

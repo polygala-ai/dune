@@ -57,6 +57,22 @@ export const createAgentChannelOptions = [
   ...externalChannelOptions,
 ];
 
+export function getChannelBadgeLabel(channelId: AgentChannelId) {
+  if (channelId === builtInChannelOption.id) {
+    return 'Default';
+  }
+
+  if (channelId === 'telegram') {
+    return 'Setup';
+  }
+
+  return 'Soon';
+}
+
+export function isChannelSelectable(channelId: AgentChannelId) {
+  return channelId === 'dune-chat' || channelId === 'telegram';
+}
+
 export function createDefaultExternalChannelsState(): ExternalChannelsState {
   return {};
 }
