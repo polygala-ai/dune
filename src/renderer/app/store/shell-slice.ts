@@ -10,6 +10,7 @@ export function createInitialShellState(): ShellState {
     isContextPanelOpen: false,
     navigationBackStack: [],
     navigationForwardStack: [],
+    popoverAgentId: null,
     route: 'workflow',
   };
 }
@@ -22,6 +23,9 @@ export function createShellSlice(initialState: ShellState): AppStoreSlice<ShellS
     },
     setContextPanelOpen: (isContextPanelOpen) => {
       set({ isContextPanelOpen });
+    },
+    setPopoverAgentId: (popoverAgentId) => {
+      set({ popoverAgentId });
     },
     setRoute: (route) => {
       set({ route });

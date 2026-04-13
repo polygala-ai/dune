@@ -7,6 +7,7 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
 } from '@/renderer/features/agents/types';
+import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 import {
   AgentLiteHost,
   resolveAgentLiteRuntimeRoot,
@@ -102,8 +103,16 @@ export class DesktopRuntimeController {
     await this.activeRuntime.service.deleteAgent(agentId);
   }
 
-  async ensureProjectMainAgent(projectId: string, projectName: string) {
-    return this.activeRuntime.service.ensureProjectMainAgent(projectId, projectName);
+  async ensureProjectMainAgent(
+    projectId: string,
+    projectName: string,
+    projectRootPath?: string | null,
+  ) {
+    return this.activeRuntime.service.ensureProjectMainAgent(
+      projectId,
+      projectName,
+      projectRootPath,
+    );
   }
 
   async getTelegramSetupSession(sessionId: string) {
@@ -116,6 +125,10 @@ export class DesktopRuntimeController {
 
   async sendAgentMessage(agentId: string, text: string) {
     await this.activeRuntime.service.sendMessage(agentId, text);
+  }
+
+  async signalReadyAssignmentInbox(agentId: string, signal: ReadyAssignmentsInboxSignal) {
+    await this.activeRuntime.service.signalReadyAssignmentInbox(agentId, signal);
   }
 
   async startTelegramSetupSession(input: StartTelegramSetupSessionInput) {

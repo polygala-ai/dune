@@ -21,6 +21,7 @@ describe('DuneChannel', () => {
         }),
       },
       onOutboundMessage,
+      primaryJid: 'dune:agent:test',
     });
 
     await duneChannel.sendMessage('dune:agent:test', 'dune credentials ok');

@@ -20,8 +20,16 @@ import {
   type AgentStore,
   type TelegramSecretsStore,
 } from '@/electron/runtime-core/agentlite-host';
+import {
+  resolveAgentDuneDir,
+  resolveAgentIpcDir,
+  resolveAgentIpcMetadataPath,
+  resolveProjectDuneDir,
+} from '@/electron/shared/agent-ipc/ipc-directory';
 import type { DuneChannel } from '@/electron/runtime-core/dune-channel';
+import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
+import { createReadyAssignmentsInboxSignalMessage } from '@/shared/agents/ready-assignments';
 
 type AgentLiteModule = typeof import('@boxlite-ai/agentlite');
 
@@ -161,7 +169,7 @@ function createAgentLiteModuleHarness(
       removeChannel: vi.fn(),
       start: vi.fn(async () => {
         await harnessOptions.start?.();
-        const channels = options?.channels ?? {};
+        const channels = mockAgent._options.channels ?? {};
 
         for (const [key, factory] of Object.entries(channels)) {
           const config: ChannelDriverConfig = {
@@ -183,6 +191,30 @@ function createAgentLiteModuleHarness(
 
     agents.set(name, mockAgent);
     return mockAgent;
+  });
+  const getOrCreateAgent = vi.fn((name: string, options?: AgentOptions): MockAgent => {
+    const existing = agents.get(name);
+
+    if (!existing) {
+      return createAgent(name, options);
+    }
+
+    const mergedOptions: AgentOptions = {
+      ...existing._options,
+      ...(options ?? {}),
+      channels: {
+        ...(existing._options.channels ?? {}),
+        ...(options?.channels ?? {}),
+      },
+    };
+    const mergedCredentials = options?.credentials ?? existing._options.credentials;
+
+    if (mergedCredentials) {
+      mergedOptions.credentials = mergedCredentials;
+    }
+
+    existing._options = mergedOptions;
+    return existing;
   });
 
   return {
@@ -219,10 +251,12 @@ function createAgentLiteModuleHarness(
             agents: agents as unknown as ReadonlyMap<string, Agent>,
             createAgent: createAgent as unknown as AgentLite['createAgent'],
             deleteAgent,
+            getOrCreateAgent: getOrCreateAgent as unknown as AgentLite['getOrCreateAgent'],
             stop,
-          } as AgentLite;
+          } as unknown as AgentLite;
         },
       }) as unknown as AgentLiteModule),
+    getOrCreateAgent,
     mockAgent: (nameSubstring?: string): MockAgent => {
       const mockAgent = nameSubstring
         ? [...agents.values()].find((a) => a.name.includes(nameSubstring))
@@ -536,14 +570,112 @@ describe('AgentLiteHost', () => {
       projectId: 'project-1',
     });
 
-    expect(agentId).toMatch(/^dune:agent:/);
+    expect(agentId).toMatch(/^[A-Za-z0-9_-]{8}$/);
     expect(createAgentLiteCalls).toBe(2);
     expect(harness.mockAgent('molly').start).toHaveBeenCalledTimes(1);
   });
 
-  it('creates one project-main agent per project and keeps a stable Dune character name', async () => {
+  it('mounts the Dune IPC directory at the final in-container path and writes the simplified guide', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
+    const projectId = 'project / 1';
+    const projectName = 'Research Platform';
+    const projectRootPath = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-project-root-'));
+
+    tempDirs.push(homeDir);
+    tempDirs.push(projectRootPath);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveProjectName: async (candidateProjectId) =>
+        candidateProjectId === projectId ? projectName : null,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Test / Agent',
+      projectId,
+      projectRootPath,
+    });
+
+    const mockAgent = harness.mockAgent();
+    const registeredGroup = mockAgent.registeredGroups[toAgentChatJid(agentId)] as {
+      containerConfig?: {
+        additionalMounts?: Array<{ containerPath: string; hostPath: string }>;
+      };
+    };
+    const projectDir = resolveProjectDuneDir(homeDir, projectId, projectName);
+    const agentDir = resolveAgentDuneDir(homeDir, projectId, projectName, 'Test / Agent', agentId);
+    const ipcDir = resolveAgentIpcDir(homeDir, projectId, projectName, 'Test / Agent', agentId);
+    const projectClaudeMdPath = path.join(projectDir, 'CLAUDE.md');
+    const agentClaudeMdPath = path.join(agentDir, 'CLAUDE.md');
+    const projectClaudeMd = fs.readFileSync(projectClaudeMdPath, 'utf-8');
+    const agentClaudeMd = fs.readFileSync(agentClaudeMdPath, 'utf-8');
+    const metadata = JSON.parse(fs.readFileSync(resolveAgentIpcMetadataPath(ipcDir), 'utf-8')) as {
+      agentId: string;
+      projectId: string;
+      agentName: string;
+      projectName: string | null;
+    };
+    const relativeProjectGuidePath = path.relative(path.join(homeDir, '.dune', 'projs'), projectClaudeMdPath);
+    const relativeAgentGuidePath = path.relative(path.join(homeDir, '.dune', 'projs'), agentClaudeMdPath);
+    const relativeIpcPath = path.relative(path.join(homeDir, '.dune', 'projs'), ipcDir);
+
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[0]?.containerPath,
+    ).toBe('dune');
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[0]?.hostPath,
+    ).toBe(agentDir);
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[1]?.containerPath,
+    ).toBe('project');
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[1]?.hostPath,
+    ).toBe(projectRootPath);
+    expect(mockAgent._options.mountAllowlist?.allowedRoots).toEqual([
+      {
+        allowReadWrite: true,
+        path: agentDir,
+      },
+      {
+        allowReadWrite: true,
+        path: projectRootPath,
+      },
+    ]);
+    expect(relativeProjectGuidePath.split(path.sep)).toHaveLength(2);
+    expect(relativeAgentGuidePath.split(path.sep)).toHaveLength(4);
+    expect(relativeIpcPath.split(path.sep)).toHaveLength(4);
+    expect(projectClaudeMd).toContain('/workspace/extra/dune/agents/');
+    expect(projectClaudeMd).toContain('/workspace/extra/dune/');
+    expect(projectClaudeMd).toContain('/workspace/extra/project/');
+    expect(agentClaudeMd).toContain('/workspace/extra/dune/ipc/');
+    expect(agentClaudeMd).toContain('/workspace/extra/project/');
+    expect(agentClaudeMd).toContain('Call `tools/list` first to discover available tools.');
+    expect(agentClaudeMd).toContain('Coordinate through work items, tasks, assignments, and work products.');
+    expect(agentClaudeMd).not.toContain('/workspace/extra/ipc/');
+    expect(agentClaudeMd).not.toContain('get-board');
+    expect(agentClaudeMd).not.toContain('agents.send_message');
+    expect(agentClaudeMd).not.toContain('lookup, and messaging');
+    expect(metadata).toEqual({
+      version: 2,
+      agentId,
+      projectId,
+      agentName: 'Test / Agent',
+      projectName,
+    });
+  });
+
+  it('uses the provided project name for custom agent paths even when project lookup is not yet available', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const projectId = 'YipGrZE0';
+    const projectName = 'Polygala, Inc.';
 
     tempDirs.push(homeDir);
 
@@ -551,13 +683,97 @@ describe('AgentLiteHost', () => {
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveProjectName: async () => null,
       resolveModelCredentials: async () => ({}),
     });
 
     await host.start();
 
-    const initialAgentId = await host.service.ensureProjectMainAgent('project-1', 'Research Platform');
-    const renamedAgentId = await host.service.ensureProjectMainAgent('project-1', 'Studio Systems');
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Chani',
+      projectId,
+      projectName,
+    });
+
+    expect(
+      fs.existsSync(resolveProjectDuneDir(homeDir, projectId, projectName)),
+    ).toBe(true);
+    expect(
+      fs.existsSync(resolveAgentDuneDir(homeDir, projectId, projectName, 'Chani', agentId)),
+    ).toBe(true);
+  });
+
+  it('removes stale bare project-id Dune paths once the canonical project name is known', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const projectId = 'YipGrZE0';
+    const projectName = 'Polygala, Inc.';
+    const legacyProjectDir = resolveProjectDuneDir(homeDir, projectId, null);
+
+    fs.mkdirSync(path.join(legacyProjectDir, 'agents', 'legacy-agent', 'ipc', 'agent'), { recursive: true });
+    fs.writeFileSync(path.join(legacyProjectDir, 'CLAUDE.md'), '# legacy project\n');
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveProjectName: async (candidateProjectId) =>
+        candidateProjectId === projectId ? projectName : null,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Chani',
+      projectId,
+    });
+
+    expect(
+      fs.existsSync(resolveProjectDuneDir(homeDir, projectId, projectName)),
+    ).toBe(true);
+    expect(
+      fs.existsSync(resolveAgentDuneDir(homeDir, projectId, projectName, 'Chani', agentId)),
+    ).toBe(true);
+    expect(fs.existsSync(legacyProjectDir)).toBe(false);
+  });
+
+  it('creates one project-main agent per project and keeps a stable Dune character name', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const projectId = 'project-1';
+    const initialProjectName = 'Research Platform';
+    const renamedProjectName = 'Studio Systems';
+    const projectRootPath = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-project-root-'));
+
+    tempDirs.push(homeDir);
+    tempDirs.push(projectRootPath);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveProjectName: async (candidateProjectId) =>
+        candidateProjectId === projectId ? renamedProjectName : null,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+
+    const initialAgentId = await host.service.ensureProjectMainAgent(
+      projectId,
+      initialProjectName,
+      projectRootPath,
+    );
+    const renamedAgentId = await host.service.ensureProjectMainAgent(
+      projectId,
+      renamedProjectName,
+      projectRootPath,
+    );
 
     expect(renamedAgentId).toBe(initialAgentId);
     expect(harness.createAgent).toHaveBeenCalledTimes(1);
@@ -565,16 +781,43 @@ describe('AgentLiteHost', () => {
     const snapshotAgent = host.getSnapshot().agents.find((agent) => agent.id === initialAgentId);
 
     expect(snapshotAgent).toMatchObject({
-      name: createProjectMainAgentName('project-1'),
-      projectId: 'project-1',
+      name: createProjectMainAgentName(projectId),
+      projectId,
       role: 'project-main',
     });
 
     const mockAgent = harness.mockAgent();
+    const registeredGroup = mockAgent.registeredGroups[toAgentChatJid(initialAgentId)] as {
+      containerConfig?: {
+        additionalMounts?: Array<{ containerPath: string; hostPath: string }>;
+      };
+    };
 
     expect(mockAgent._options.channels).toBeDefined();
     expect(mockAgent._options.channels).toHaveProperty('dune');
     expect(mockAgent.start).toHaveBeenCalledTimes(1);
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[0]?.containerPath,
+    ).toBe('dune');
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[0]?.hostPath,
+    ).toBe(resolveProjectDuneDir(homeDir, projectId, renamedProjectName));
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[1]?.containerPath,
+    ).toBe('project');
+    expect(
+      registeredGroup.containerConfig?.additionalMounts?.[1]?.hostPath,
+    ).toBe(projectRootPath);
+    expect(mockAgent._options.mountAllowlist?.allowedRoots).toEqual([
+      {
+        allowReadWrite: true,
+        path: resolveProjectDuneDir(homeDir, projectId, renamedProjectName),
+      },
+      {
+        allowReadWrite: true,
+        path: projectRootPath,
+      },
+    ]);
   });
 
   it('waits for an in-flight project-main runtime start before sending the first message', async () => {
@@ -728,6 +971,70 @@ describe('AgentLiteHost', () => {
       name: 'Navigator',
       projectId: 'project-1',
     })).rejects.toThrow(/without project ownership/i);
+  });
+
+  it('prunes persisted agents whose projects no longer exist and removes their Dune paths on startup', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const projectId = 'project-KhA2L6JPWg7yTjX62WmPH';
+    const projectDir = resolveProjectDuneDir(homeDir, projectId, null);
+    const legacyAgentDir = path.join(
+      projectDir,
+      'agents',
+      'duncan-idaho-dune-agent-xwtmkq2tf8uqviiprel4o',
+    );
+    const store = createMemoryStore({
+      agents: [
+        {
+          agent: {
+            channel: {
+              canCompose: true,
+              id: 'dune-chat',
+              kind: 'built-in',
+              label: 'Dune chat',
+              status: 'ready',
+            },
+            contextCards: [],
+            id: 'dune:agent:xwTmkq2Tf8uQViIpreL4o',
+            messages: [],
+            name: 'Duncan Idaho',
+            note: 'Dune runtime agent',
+            preview: 'Ready for a first instruction.',
+            projectId,
+            role: 'project-main',
+            status: 'draft',
+            telegram: null,
+            updatedAt: 1,
+            workspace: 'AgentLite agent',
+          },
+          groupFolder: 'duncan-idaho-xwTmkq2T',
+        },
+      ],
+      selectedAgentId: 'dune:agent:xwTmkq2Tf8uQViIpreL4o',
+    });
+
+    fs.mkdirSync(path.join(legacyAgentDir, 'ipc'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'CLAUDE.md'), '# stale project\n');
+    fs.writeFileSync(path.join(legacyAgentDir, 'CLAUDE.md'), '# stale agent\n');
+    fs.writeFileSync(path.join(legacyAgentDir, 'ipc', 'dune-ipc.json'), '{}\n');
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: store,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveProjectName: async () => null,
+    });
+
+    await host.start();
+
+    expect(host.getSnapshot().agents).toEqual([]);
+    expect(host.getSnapshot().selectedAgentId).toBeNull();
+    expect(fs.existsSync(projectDir)).toBe(false);
+    expect(await store.get<unknown[]>('agents')).toEqual([]);
+    expect(await store.get<string | null>('selectedAgentId')).toBeNull();
   });
 
   it('normalizes persisted in-flight agent state during load', async () => {
@@ -905,6 +1212,55 @@ describe('AgentLiteHost', () => {
     expect(harness.createAgent).toHaveBeenCalledTimes(3);
   });
 
+  it('removes Dune project paths after the last project agent is deleted', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const projectId = 'project-cleanup';
+    const projectName = 'Cleanup Project';
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveProjectName: async (candidateProjectId) =>
+        candidateProjectId === projectId ? projectName : null,
+    });
+
+    await host.start();
+
+    const firstAgentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Alpha',
+      projectId,
+    });
+    const secondAgentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Beta',
+      projectId,
+    });
+
+    const projectDir = resolveProjectDuneDir(homeDir, projectId, projectName);
+    const firstAgentDir = resolveAgentDuneDir(homeDir, projectId, projectName, 'Alpha', firstAgentId);
+    const secondAgentDir = resolveAgentDuneDir(homeDir, projectId, projectName, 'Beta', secondAgentId);
+
+    expect(fs.existsSync(projectDir)).toBe(true);
+    expect(fs.existsSync(firstAgentDir)).toBe(true);
+    expect(fs.existsSync(secondAgentDir)).toBe(true);
+
+    await host.service.deleteAgent(firstAgentId);
+
+    expect(fs.existsSync(projectDir)).toBe(true);
+    expect(fs.existsSync(firstAgentDir)).toBe(false);
+    expect(fs.existsSync(secondAgentDir)).toBe(true);
+
+    await host.service.deleteAgent(secondAgentId);
+
+    expect(fs.existsSync(projectDir)).toBe(false);
+  });
+
   it('routes built-in Dune chat replies through the correct agent', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -934,8 +1290,8 @@ describe('AgentLiteHost', () => {
     const westChannel = harness.duneChannel('west');
     const eastChannel = harness.duneChannel('east');
 
-    await westChannel.sendMessage(westAgentId, 'West response');
-    await eastChannel.sendMessage(eastAgentId, 'East response');
+    await westChannel.sendMessage(toAgentChatJid(westAgentId), 'West response');
+    await eastChannel.sendMessage(toAgentChatJid(eastAgentId), 'East response');
 
     const westAgent = host.getSnapshot().agents.find((agent) => agent.id === westAgentId);
     const eastAgent = host.getSnapshot().agents.find((agent) => agent.id === eastAgentId);
@@ -990,8 +1346,8 @@ describe('AgentLiteHost', () => {
         'streaming',
       ]);
 
-      await harness.duneChannel('west').sendMessage(westAgentId, 'West response');
-      await harness.duneChannel('east').sendMessage(eastAgentId, 'East response');
+      await harness.duneChannel('west').sendMessage(toAgentChatJid(westAgentId), 'West response');
+      await harness.duneChannel('east').sendMessage(toAgentChatJid(eastAgentId), 'East response');
       await vi.advanceTimersByTimeAsync(400);
 
       const completedSnapshot = host.getSnapshot();
@@ -1049,6 +1405,135 @@ describe('AgentLiteHost', () => {
         status: 'streaming',
       },
     ]);
+  });
+
+  it('signals ready-assignment inbox updates without adding transcript messages', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentLiteHost({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Navigator',
+      projectId: 'project-1',
+    });
+    const duneChannel = harness.duneChannel();
+    const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
+
+    await host.service.signalReadyAssignmentInbox(agentId, {
+      generation: 1,
+      itemCount: 2,
+    });
+
+    expect(pushInboundMessage).toHaveBeenCalledWith(
+      toAgentChatJid(agentId),
+      createReadyAssignmentsInboxSignalMessage({ generation: 1, itemCount: 2 }),
+      'Dune Control',
+    );
+    expect(host.getSnapshot().agents.find((agent) => agent.id === agentId)?.messages).toEqual([]);
+  });
+
+  it('defers ready-assignment inbox signals until the current turn finishes', async () => {
+    vi.useFakeTimers();
+
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    try {
+      const host = new AgentLiteHost({
+        agentStore: createMemoryStore(),
+        homeDir,
+        loadAgentLiteModule: harness.loadAgentLiteModule,
+        resolveModelCredentials: async () => ({}),
+      });
+
+      await host.start();
+
+      const agentId = await host.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+        projectId: 'project-1',
+      });
+      const duneChannel = harness.duneChannel();
+      const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
+
+      await host.service.sendMessage(agentId, 'First pass.');
+      await host.service.signalReadyAssignmentInbox(agentId, {
+        generation: 2,
+        itemCount: 1,
+      });
+
+      expect(pushInboundMessage).toHaveBeenCalledTimes(1);
+
+      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Reply.');
+      await vi.advanceTimersByTimeAsync(400);
+
+      expect(pushInboundMessage).toHaveBeenCalledTimes(2);
+      expect(pushInboundMessage).toHaveBeenLastCalledWith(
+        toAgentChatJid(agentId),
+        createReadyAssignmentsInboxSignalMessage({ generation: 2, itemCount: 1 }),
+        'Dune Control',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears pending ready-assignment inbox signals when the queue becomes empty', async () => {
+    vi.useFakeTimers();
+
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    try {
+      const host = new AgentLiteHost({
+        agentStore: createMemoryStore(),
+        homeDir,
+        loadAgentLiteModule: harness.loadAgentLiteModule,
+        resolveModelCredentials: async () => ({}),
+      });
+
+      await host.start();
+
+      const agentId = await host.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+        projectId: 'project-1',
+      });
+      const duneChannel = harness.duneChannel();
+      const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
+
+      await host.service.sendMessage(agentId, 'First pass.');
+      await host.service.signalReadyAssignmentInbox(agentId, {
+        generation: 2,
+        itemCount: 1,
+      });
+      await host.service.signalReadyAssignmentInbox(agentId, {
+        generation: 3,
+        itemCount: 0,
+      });
+
+      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Reply.');
+      await vi.advanceTimersByTimeAsync(400);
+
+      expect(pushInboundMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('starts a Telegram setup session and matches the first chat that submits the pair code', async () => {
@@ -1321,7 +1806,7 @@ describe('AgentLiteHost', () => {
     expect(firstAgent?.messages[0]?.content).toBe('Need eyes on release');
     expect(secondAgent?.messages[0]?.content).toBe('Need eyes on release');
 
-    await harness.duneChannel('east').sendMessage(secondAgentId, 'Investigating now.');
+    await harness.duneChannel('east').sendMessage(toAgentChatJid(secondAgentId), 'Investigating now.');
     await vi.advanceTimersByTimeAsync(400);
 
     await host.service.deleteAgent(firstAgentId);
@@ -1512,8 +1997,8 @@ describe('AgentLiteHost', () => {
     });
     await flushMicrotasks();
 
-    await harness.duneChannel('west').sendMessage(westAgentId, 'Investigating west.');
-    await harness.duneChannel('east').sendMessage(eastAgentId, 'Investigating east.');
+    await harness.duneChannel('west').sendMessage(toAgentChatJid(westAgentId), 'Investigating west.');
+    await harness.duneChannel('east').sendMessage(toAgentChatJid(eastAgentId), 'Investigating east.');
     await vi.advanceTimersByTimeAsync(400);
 
     const westAgent = host.getSnapshot().agents.find((agent) => agent.id === westAgentId);

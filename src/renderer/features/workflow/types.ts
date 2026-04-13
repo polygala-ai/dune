@@ -32,7 +32,7 @@ export type WorkflowTaskStatus = (typeof workflowTaskStatuses)[number];
 export type WorkflowProjectView = (typeof workflowProjectViews)[number];
 export type WorkflowProjectFilter = (typeof workflowProjectFilters)[number];
 export type WorkflowProjectScreen = 'main' | 'settings';
-export type WorkflowEventKind = 'assignment' | 'item' | 'note' | 'task';
+export type WorkflowEventKind = 'assignment' | 'feedback' | 'item' | 'note' | 'task';
 
 export interface WorkflowProject {
   color: string;
@@ -40,6 +40,7 @@ export interface WorkflowProject {
   description: string;
   id: string;
   name: string;
+  rootPath: string | null;
   updatedAt: number;
 }
 
@@ -60,6 +61,7 @@ export interface WorkflowWorkProduct {
 }
 
 export interface WorkflowEvent {
+  actor?: string;
   createdAt: number;
   description: string;
   id: string;
@@ -67,6 +69,7 @@ export interface WorkflowEvent {
 }
 
 export interface WorkflowItem {
+  artifactFolderName: string;
   brief: string;
   createdAt: number;
   id: string;

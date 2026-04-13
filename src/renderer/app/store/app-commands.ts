@@ -298,6 +298,10 @@ export function setCommandOpen(isOpen: boolean) {
   useAppStore.getState().setCommandOpen(isOpen);
 }
 
+export function setPopoverAgentId(agentId: string | null) {
+  useAppStore.getState().setPopoverAgentId(agentId);
+}
+
 export function toggleInspector(force?: boolean) {
   const state = useAppStore.getState();
 
@@ -341,6 +345,7 @@ export function useAppCommands() {
     openWorkflow,
     setCommandOpen,
     setDraft,
+    setPopoverAgentId,
     setSettingsRoute,
     setThemePreference,
     toggleInspector,

@@ -4,6 +4,7 @@ import type {
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
 } from '@/renderer/features/agents/types';
+import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
@@ -14,10 +15,21 @@ export interface DesktopBridge {
   createAgent?: (input: CreateAgentInput) => Promise<string>;
   deleteLocalData?: () => Promise<void>;
   deleteAgent?: (agentId: string) => Promise<void>;
-  ensureProjectMainAgent?: (projectId: string, projectName: string) => Promise<string>;
+  ensureProjectArtifactFolder?: (rootPath: string, artifactFolderName: string) => Promise<string>;
+  ensureProjectMainAgent?: (
+    projectId: string,
+    projectName: string,
+    projectRootPath?: string | null,
+  ) => Promise<string>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
+  listProjectArtifactEntries?: (
+    rootPath: string,
+    artifactFolderName: string,
+  ) => Promise<ProjectArtifactEntry[]>;
   openExternal?: (url: string) => Promise<void>;
+  openPath?: (targetPath: string) => Promise<void>;
+  prepareProjectRootPath?: (rootPath: string, artifactFolderNames: string[]) => Promise<string>;
   reloadExternalChannels?: () => Promise<void>;
   resetRuntime?: () => Promise<void>;
   restartApp?: () => Promise<void>;
@@ -30,6 +42,7 @@ export interface DesktopBridge {
   storageGet?: (store: string, key: string) => Promise<unknown>;
   storageKeys?: (store: string) => Promise<string[]>;
   storageSet?: (store: string, key: string, value: unknown) => Promise<void>;
+  selectProjectDirectory?: () => Promise<string | null>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;
 }

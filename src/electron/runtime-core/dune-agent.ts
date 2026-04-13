@@ -2,7 +2,7 @@ import type {
   Agent as AgentLiteAgent,
   AgentLite,
   ChannelDriverFactory,
-  MountAllowlist,
+  McpServerConfig,
   RegisterGroupOptions,
 } from '@boxlite-ai/agentlite';
 
@@ -10,18 +10,26 @@ import { DuneChannel } from './dune-channel';
 
 export interface DuneAgentOptions {
   agentLite: AgentLite;
+  boundExternalJid?: string | undefined;
   credentials: () => Promise<Record<string, string>>;
-  extraChannels?: Record<string, ChannelDriverFactory>;
+  externalChannelFactory?: ChannelDriverFactory | undefined;
   groupFolder: string;
-  ipcHostPath?: string;
+  instructions?: string | undefined;
+  mcpServers?: Record<string, McpServerConfig> | undefined;
+  mounts?: Array<{
+    containerPath: string;
+    hostPath: string;
+    readonly?: boolean;
+  }>;
   name: string;
-  onOutboundMessage: (agentId: string, text: string) => void;
+  onOutboundMessage: (chatJid: string, text: string) => void;
   primaryChatJid: string;
+  skills?: string[] | undefined;
 }
 
 function createRegisteredMainGroup(
   name: string,
-  ipcHostPath?: string,
+  mounts: NonNullable<DuneAgentOptions['mounts']> = [],
 ): RegisterGroupOptions {
   const options: RegisterGroupOptions = {
     folder: 'main',
@@ -31,13 +39,13 @@ function createRegisteredMainGroup(
     trigger: `@${name}`,
   };
 
-  if (ipcHostPath) {
+  if (mounts.length > 0) {
     options.containerConfig = {
-      additionalMounts: [{
-        hostPath: ipcHostPath,
-        containerPath: 'ipc',
-        readonly: false,
-      }],
+      additionalMounts: mounts.map((mount) => ({
+        containerPath: mount.containerPath,
+        hostPath: mount.hostPath,
+        readonly: mount.readonly ?? false,
+      })),
     };
   }
 
@@ -64,41 +72,58 @@ export class DuneAgent {
     const channels: Record<string, ChannelDriverFactory> = {
       dune: (config) => {
         this.duneChannel = new DuneChannel({
+          boundExternalJid: options.boundExternalJid,
           config,
+          externalChannelFactory: options.externalChannelFactory,
           onOutboundMessage: (jid, text) => {
             options.onOutboundMessage(jid, text);
           },
+          primaryJid: options.primaryChatJid,
         });
         return this.duneChannel;
       },
-      ...options.extraChannels,
     };
+    const mounts = options.mounts ?? [];
 
-    this.agent = options.agentLite.createAgent(options.groupFolder, {
+    this.agent = options.agentLite.getOrCreateAgent(options.groupFolder, {
       channels,
       credentials: options.credentials,
-      ...(options.ipcHostPath ? {
+      ...(options.instructions ? { instructions: options.instructions } : {}),
+      ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
+      ...(mounts.length > 0 ? {
         mountAllowlist: {
-          allowedRoots: [{ path: options.ipcHostPath, allowReadWrite: true }],
+          allowedRoots: mounts.map((mount) => ({
+            allowReadWrite: !mount.readonly,
+            path: mount.hostPath,
+          })),
           blockedPatterns: [],
           nonMainReadOnly: false,
         },
       } : {}),
       name: options.name,
+      ...(options.skills && options.skills.length > 0 ? { skills: options.skills } : {}),
     });
 
     await this.agent.start();
     await this.registerPrimaryGroup();
   }
 
-  async pushUserMessage(agentId: string, text: string, senderName: string = 'You') {
-    await this.duneChannel.pushInboundMessage(agentId, text, senderName);
+  async pushUserMessage(chatJid: string, text: string, senderName: string = 'You') {
+    await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
+  }
+
+  async pushControlMessage(
+    chatJid: string,
+    text: string,
+    senderName: string = 'Dune Control',
+  ) {
+    await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
   }
 
   private async registerPrimaryGroup() {
     await this.agent.registerGroup(
       this.options.primaryChatJid,
-      createRegisteredMainGroup(this.options.name, this.options.ipcHostPath),
+      createRegisteredMainGroup(this.options.name, this.options.mounts),
     );
   }
 }

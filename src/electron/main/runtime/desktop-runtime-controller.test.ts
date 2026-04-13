@@ -85,4 +85,31 @@ describe('DesktopRuntimeController', () => {
     await expect(firstShutdown).resolves.toBeUndefined();
     await expect(secondShutdown).resolves.toBeUndefined();
   });
+
+  it('forwards ready-assignment inbox signals to the active runtime service', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
+    tempDirs.push(homeDir);
+    const signalReadyAssignmentInbox = vi.fn(async () => undefined);
+    const mockRuntime = createMockAgentRuntime();
+    mockRuntime.service.signalReadyAssignmentInbox = signalReadyAssignmentInbox;
+    const controller = new DesktopRuntimeController({
+      agentStore: { get: async () => null, set: async () => {} },
+      createRealRuntime: () => ({
+        ...mockRuntime,
+        start: async () => undefined,
+      }),
+      homeDir,
+    });
+
+    await controller.start();
+    await controller.signalReadyAssignmentInbox('agent-1', {
+      generation: 4,
+      itemCount: 2,
+    });
+
+    expect(signalReadyAssignmentInbox).toHaveBeenCalledWith('agent-1', {
+      generation: 4,
+      itemCount: 2,
+    });
+  });
 });

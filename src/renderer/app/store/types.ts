@@ -8,6 +8,7 @@ import type {
   PresentedAgent,
   TelegramSetupSession,
 } from '@/renderer/features/agents/types';
+import type { AgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
 import type {
   SettingsRoute,
@@ -37,6 +38,7 @@ export interface NavigationSnapshot {
 
 export interface AgentState {
   agents: Agent[];
+  agentCustomizations: Record<string, AgentCustomizationDraft>;
   agentDrafts: Record<string, string>;
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
@@ -46,8 +48,13 @@ export interface AgentState {
 }
 
 export interface AgentActions {
+  resetAgentCustomization: (agentId: string) => void;
   setAgentsSnapshot: (snapshot: AgentServiceSnapshot) => void;
   setDraft: (agentId: string | null, draft: string) => void;
+  upsertAgentCustomization: (
+    agentId: string,
+    customization: AgentCustomizationDraft,
+  ) => void;
 }
 
 export type AgentSlice = AgentState & AgentActions;
@@ -89,6 +96,7 @@ export interface WorkflowActions {
     input: {
       description: string;
       name: string;
+      rootPath: string | null;
     },
   ) => string | null;
   deleteProject: (projectId: string) => void;
@@ -102,7 +110,7 @@ export interface WorkflowActions {
   selectProjectView: (view: WorkflowProjectView) => void;
   updateProject: (
     projectId: string,
-    input: { description?: string; name?: string },
+    input: { description?: string; name?: string; rootPath?: string | null },
   ) => void;
   updateItem: (
     itemId: string,
@@ -122,12 +130,14 @@ export interface ShellState {
   isContextPanelOpen: boolean;
   navigationBackStack: NavigationSnapshot[];
   navigationForwardStack: NavigationSnapshot[];
+  popoverAgentId: string | null;
   route: AppRoute;
 }
 
 export interface ShellActions {
   setCommandOpen: (isOpen: boolean) => void;
   setContextPanelOpen: (isOpen: boolean) => void;
+  setPopoverAgentId: (agentId: string | null) => void;
   setRoute: (route: AppRoute) => void;
 }
 
@@ -143,6 +153,7 @@ export type AppStoreSlice<T> = StateCreator<AppStore, [], [], T>;
 
 export interface AgentSessionState {
   activeAgent: PresentedAgent | null;
+  activeAgentCustomization: AgentCustomizationDraft | null;
   agentSummaries: AgentSummary[];
   commandAgents: Array<AgentSummary & { projectId: string | null; workspace: string }>;
   draft: string;
@@ -155,6 +166,7 @@ export interface AgentSessionState {
 
 export interface WorkflowSessionState {
   activityEntries: Array<{
+    actor?: string;
     createdAt: number;
     createdAtLabel: string;
     description: string;

@@ -8,12 +8,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Menu,
+  Minimize2,
   PanelRight,
   SquarePen,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { AgentChatPopover } from '@/renderer/features/agents/components/AgentChatPopover';
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
+import { selectAgentById, presentAgent } from '@/renderer/features/agents/model/agent-presenters';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import { useAgentSubmit } from '@/renderer/app/hooks/use-agent-submit';
 import { useAgentShellController } from '@/renderer/app/hooks/use-agent-shell-controller';
@@ -68,6 +71,7 @@ export default function AppShell() {
   const commands = useAppCommands();
   const {
     activeAgent,
+    activeAgentCustomization,
     commandAgents,
     draft,
     externalChannels,
@@ -87,6 +91,7 @@ export default function AppShell() {
     canNavigateForward,
     isCommandOpen,
     isContextPanelOpen,
+    popoverAgentId,
     route,
   } = useShellState();
   const {
@@ -132,7 +137,7 @@ export default function AppShell() {
 
     void Promise.all(
       projects.map((project) =>
-        agentRuntime.service.ensureProjectMainAgent(project.id, project.name),
+        agentRuntime.service.ensureProjectMainAgent(project.id, project.name, project.rootPath),
       ),
     ).catch((error) => {
       console.error('Failed to reconcile project main agents.', error);
@@ -386,17 +391,38 @@ export default function AppShell() {
               data-testid={showNativeTitlebarInspectorToggle ? 'titlebar-inspector-toggle-slot' : 'titlebar-project-actions-slot'}
             >
               {showNativeTitlebarInspectorToggle ? (
-                <Button
-                  aria-label={isContextPanelOpen ? 'Hide inspector' : 'Show inspector'}
-                  className="app-no-drag shrink-0"
-                  data-testid="titlebar-inspector-toggle"
-                  onClick={controller.handleToggleContextPanel}
-                  size="icon"
-                  type="button"
-                  variant="quiet"
-                >
-                  <PanelRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {route === 'agent' && activeAgent ? (
+                    <Button
+                      aria-label="Minimize to popover"
+                      className="app-no-drag shrink-0"
+                      onClick={() => {
+                        commands.setPopoverAgentId(activeAgent.id);
+                        if (canNavigateBack) {
+                          commands.goBack();
+                        } else {
+                          commands.openWorkflow();
+                        }
+                      }}
+                      size="icon"
+                      type="button"
+                      variant="quiet"
+                    >
+                      <Minimize2 className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                  <Button
+                    aria-label={isContextPanelOpen ? 'Hide inspector' : 'Show inspector'}
+                    className="app-no-drag shrink-0"
+                    data-testid="titlebar-inspector-toggle"
+                    onClick={controller.handleToggleContextPanel}
+                    size="icon"
+                    type="button"
+                    variant="quiet"
+                  >
+                    <PanelRight className="h-4 w-4" />
+                  </Button>
+                </div>
               ) : (
                 <WorkflowProjectActionsMenu
                   className="app-no-drag shrink-0"
@@ -495,6 +521,7 @@ export default function AppShell() {
 
           <ContextPanelHost
             agent={activeAgent}
+            customization={activeAgentCustomization}
             inlineResizeHandleProps={contextPanelResizeHandleProps}
             isInlineResizing={isContextPanelResizing}
             mode={
@@ -553,6 +580,21 @@ export default function AppShell() {
           open={controller.isCreateAgentOpen}
           projects={projects}
         />
+
+        {popoverAgentId && (() => {
+          const agent = selectAgentById(agents, popoverAgentId);
+          if (!agent) return null;
+          return (
+            <AgentChatPopover
+              agent={presentAgent(agent)}
+              onClose={() => commands.setPopoverAgentId(null)}
+              onExpand={() => {
+                commands.setPopoverAgentId(null);
+                commands.openAgent(popoverAgentId);
+              }}
+            />
+          );
+        })()}
       </div>
     </TooltipProvider>
   );

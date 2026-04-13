@@ -72,13 +72,19 @@ describe('preload bridge', () => {
       channelId: 'dune-chat',
       name: 'Navigator',
       projectId: 'project-1',
+      projectRootPath: '/tmp/project-1',
     });
     await desktopBridge?.deleteLocalData?.();
-    await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha');
+    await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
+    await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
+    await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
+    await desktopBridge?.openPath?.('/tmp/project-1');
+    await desktopBridge?.prepareProjectRootPath?.('/tmp/project-1', ['homepage-copy-abcd1234']);
     await desktopBridge?.reloadExternalChannels?.();
     await desktopBridge?.restartApp?.();
+    await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
 
@@ -95,17 +101,36 @@ describe('preload bridge', () => {
       channelId: 'dune-chat',
       name: 'Navigator',
       projectId: 'project-1',
+      projectRootPath: '/tmp/project-1',
     });
     expect(invoke).toHaveBeenCalledWith(ipcChannels.deleteLocalData);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.ensureProjectMainAgent,
       'project-1',
       'Alpha',
+      '/tmp/project-1',
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.ensureProjectArtifactFolder,
+      '/tmp/project-1',
+      'homepage-copy-abcd1234',
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.listProjectArtifactEntries,
+      '/tmp/project-1',
+      'homepage-copy-abcd1234',
     );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.copyText, '@agentlite_test_bot');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.openExternal, 'https://t.me/BotFather');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.openPath, '/tmp/project-1');
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.prepareProjectRootPath,
+      '/tmp/project-1',
+      ['homepage-copy-abcd1234'],
+    );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.reloadExternalChannels);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.restartApp);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.selectProjectDirectory);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getTelegramSetupSession,
       'telegram-session-1',
@@ -162,13 +187,18 @@ describe('preload bridge', () => {
       'createAgent',
       'copyText',
       'deleteLocalData',
+      'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
+      'listProjectArtifactEntries',
       'openExternal',
+      'openPath',
+      'prepareProjectRootPath',
       'reloadExternalChannels',
       'resetRuntime',
       'restartApp',
+      'selectProjectDirectory',
       'selectAgent',
       'sendAgentMessage',
       'startTelegramSetupSession',

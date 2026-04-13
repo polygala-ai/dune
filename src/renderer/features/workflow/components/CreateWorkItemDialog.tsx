@@ -63,7 +63,7 @@ export function CreateWorkItemDialog({
         <DialogTitle>Create work item</DialogTitle>
         <DialogDescription className="mt-2 leading-6">
           Capture a single unit of work for the current project. Keep the card light;
-          add deeper notes and outputs later in the inspector.
+          add deeper notes and review generated artifacts later in the inspector.
         </DialogDescription>
 
         <div className="mt-6 space-y-4">

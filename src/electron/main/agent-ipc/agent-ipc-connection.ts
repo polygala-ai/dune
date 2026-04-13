@@ -30,7 +30,13 @@ export interface AgentIpcConnectionState {
   lastError: AgentIpcError | null;
 }
 
-export type BoardMessageHandler = (
+export interface ToolHandlerContext {
+  agentId: string;
+  agentName: string;
+  projectId: string;
+}
+
+export type ToolMessageHandler = (
   msg: IpcMessage,
   fileId: string,
   replyFn: (reply: IpcMessage) => void,
@@ -50,7 +56,7 @@ export class AgentIpcConnection {
     safetyTimer: ReturnType<typeof setTimeout>;
   } | null = null;
 
-  private boardMessageHandler: BoardMessageHandler | null = null;
+  private toolMessageHandler: ToolMessageHandler | null = null;
 
   constructor(
     private readonly agentDir: string,
@@ -58,8 +64,8 @@ export class AgentIpcConnection {
     private readonly onChange: () => void,
   ) {}
 
-  setBoardMessageHandler(handler: BoardMessageHandler): void {
-    this.boardMessageHandler = handler;
+  setToolMessageHandler(handler: ToolMessageHandler): void {
+    this.toolMessageHandler = handler;
   }
 
   start(): void {
@@ -178,10 +184,20 @@ export class AgentIpcConnection {
     const raw = this.safeReadFile(filePath);
     if (!raw) return;
 
-    const parsed = parseIpcMessage(raw);
-    if (!parsed) return;
-
     const fileId = filename.replace(/\.json$/, '');
+    const parsed = parseIpcMessage(raw);
+    if (!parsed) {
+      this.writeReply(fileId, {
+        type: 'error',
+        payload: {
+          code: 'invalid-message',
+          message: 'Invalid IPC message. Expected a JSON object with string `type` and `payload` fields.',
+        },
+      });
+      this.safeDeleteFile(filePath);
+      this.onChange();
+      return;
+    }
 
     if (parsed.type === 'message') {
       const payload = parsed.payload as { content: string };
@@ -203,9 +219,9 @@ export class AgentIpcConnection {
       };
       this.safeDeleteFile(filePath);
       this.onChange();
-    } else if (this.boardMessageHandler) {
-      // Board management messages — delegate to handler
-      this.boardMessageHandler(parsed, fileId, (reply) => {
+    } else if (this.toolMessageHandler) {
+      // Tool protocol messages — delegate to handler
+      this.toolMessageHandler(parsed, fileId, (reply) => {
         this.writeReply(fileId, reply);
       });
       this.safeDeleteFile(filePath);

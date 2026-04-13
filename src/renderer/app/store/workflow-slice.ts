@@ -18,7 +18,12 @@ import type {
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
 
-import { createId } from '@/shared/id';
+import { createId, createProjectId } from '@/shared/id';
+import { createDefaultTasks } from '@/shared/workflow/default-tasks';
+import {
+  createArtifactFolderName,
+  normalizeProjectRootPath,
+} from '@/shared/workflow/project-artifacts';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -413,10 +418,12 @@ export function createWorkflowSlice(
         }
 
         const itemId = createId('item');
+        const artifactFolderName = createArtifactFolderName(title, itemId);
         const updatedAt = Date.now();
 
         set((state) => {
           const nextItem: WorkflowItem = {
+            artifactFolderName,
             brief,
             createdAt: updatedAt,
             id: itemId,
@@ -427,7 +434,7 @@ export function createWorkflowSlice(
               input.projectId,
             ).length,
             status: input.status,
-            tasks: [],
+            tasks: createDefaultTasks(updatedAt),
             title,
             updatedAt,
             workProducts: [],
@@ -457,8 +464,9 @@ export function createWorkflowSlice(
           return null;
         }
 
-        const projectId = createId('project');
+        const projectId = createProjectId();
         const updatedAt = Date.now();
+        const rootPath = normalizeProjectRootPath(input.rootPath);
 
         set((state) => ({
           ...withSelection({
@@ -471,6 +479,7 @@ export function createWorkflowSlice(
                 description: input.description.trim(),
                 id: projectId,
                 name,
+                rootPath,
                 updatedAt,
               },
             ],
@@ -564,6 +573,10 @@ export function createWorkflowSlice(
             {
               ...item,
               status,
+              // Prepend fresh checklist when rejected from review back to active
+              ...(status === 'active' && item.status === 'review'
+                ? { tasks: [...createDefaultTasks(updatedAt), ...item.tasks] }
+                : {}),
             },
             'item',
             `Work item moved to ${describeItemStatus(status)}.`,
@@ -665,6 +678,7 @@ export function createWorkflowSlice(
           }
 
           const updatedAt = Date.now();
+          const nextRootPath = normalizeProjectRootPath(input.rootPath);
 
           return {
             projects: state.projects.map((project) => {
@@ -677,6 +691,9 @@ export function createWorkflowSlice(
                 ...(name ? { name } : {}),
                 ...(input.description !== undefined
                   ? { description: input.description.trim() }
+                  : {}),
+                ...(input.rootPath !== undefined && project.rootPath === null
+                  ? { rootPath: nextRootPath }
                   : {}),
                 updatedAt,
               };

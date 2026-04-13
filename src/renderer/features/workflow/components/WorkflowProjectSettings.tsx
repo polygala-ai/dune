@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import {
+  Copy,
+  FolderOpen,
+  Trash2,
+} from 'lucide-react';
 
 import type { WorkflowProject } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
@@ -11,7 +15,9 @@ interface WorkflowProjectSettingsProps {
   className?: string;
   onCancel: () => void;
   onDelete: () => void;
-  onSave: (input: { description: string; name: string }) => void;
+  onOpenPath: (targetPath: string) => Promise<void> | void;
+  onPickRootPath: () => Promise<string | null>;
+  onSave: (input: { description: string; name: string; rootPath?: string | null }) => Promise<void> | void;
   project: WorkflowProject;
 }
 
@@ -19,25 +25,73 @@ export function WorkflowProjectSettings({
   className,
   onCancel,
   onDelete,
+  onOpenPath,
+  onPickRootPath,
   onSave,
   project,
 }: WorkflowProjectSettingsProps) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
+  const [rootPath, setRootPath] = useState(project.rootPath ?? '');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPickingFolder, setIsPickingFolder] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setName(project.name);
     setDescription(project.description);
-  }, [project.description, project.id, project.name]);
+    setRootPath(project.rootPath ?? '');
+    setErrorMessage(null);
+    setIsPickingFolder(false);
+    setIsSaving(false);
+  }, [project.description, project.id, project.name, project.rootPath]);
 
   const isSaveDisabled = useMemo(() => {
     const trimmedName = name.trim();
+    const normalizedRootPath = rootPath.trim();
 
     return !trimmedName || (
       trimmedName === project.name &&
-      description.trim() === project.description
+      description.trim() === project.description &&
+      normalizedRootPath === (project.rootPath ?? '')
     );
-  }, [description, name, project.description, project.name]);
+  }, [description, name, project.description, project.name, project.rootPath, rootPath]);
+
+  const handlePickRootPath = async () => {
+    setErrorMessage(null);
+    setIsPickingFolder(true);
+
+    try {
+      const selectedRootPath = await onPickRootPath();
+
+      if (selectedRootPath) {
+        setRootPath(selectedRootPath);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsPickingFolder(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setErrorMessage(null);
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        description,
+        name,
+        ...(project.rootPath === null && rootPath.trim()
+          ? { rootPath: rootPath.trim() }
+          : {}),
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <aside
@@ -79,6 +133,63 @@ export function WorkflowProjectSettings({
             <div className="space-y-2">
               <label
                 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                htmlFor="workflow-project-settings-root-path"
+              >
+                Project folder
+              </label>
+              <div className="space-y-3">
+                <Input
+                  id="workflow-project-settings-root-path"
+                  readOnly
+                  value={rootPath}
+                />
+                {project.rootPath ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        void onOpenPath(project.rootPath!);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      Open folder
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        void window.duneDesktop?.copyText?.(project.rootPath!);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy path
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    disabled={isPickingFolder || isSaving}
+                    onClick={() => {
+                      void handlePickRootPath();
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Choose folder
+                  </Button>
+                )}
+                <p className="text-sm leading-6 text-app-muted">
+                  {project.rootPath
+                    ? 'This user-owned folder is fixed for this project.'
+                    : 'Choose an existing empty folder to enable on-disk project and work-item artifacts.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
                 htmlFor="workflow-project-settings-description"
               >
                 Description
@@ -91,6 +202,10 @@ export function WorkflowProjectSettings({
                 value={description}
               />
             </div>
+
+            {errorMessage ? (
+              <p className="text-sm leading-6 text-red-700">{errorMessage}</p>
+            ) : null}
           </section>
 
           <section className="rounded-[22px] border border-app-border bg-app-panel-strong/80 p-5">
@@ -123,16 +238,13 @@ export function WorkflowProjectSettings({
           Cancel
         </Button>
         <Button
-          disabled={isSaveDisabled}
+          disabled={isSaveDisabled || isSaving}
           onClick={() => {
-            onSave({
-              description,
-              name,
-            });
+            void handleSave();
           }}
           type="button"
         >
-          Save
+          {isSaving ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </aside>

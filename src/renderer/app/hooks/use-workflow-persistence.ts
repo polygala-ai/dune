@@ -13,6 +13,10 @@ import {
   type WorkflowTask,
   type WorkflowWorkProduct,
 } from '@/renderer/features/workflow/types';
+import {
+  createArtifactFolderName,
+  normalizeProjectRootPath,
+} from '@/shared/workflow/project-artifacts';
 
 const STORE_NAME = 'workflow';
 const STORE_KEY = 'snapshot';
@@ -107,51 +111,72 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
     return null;
   }
 
-  const projects = value.projects.filter((project) => (
-    isRecord(project) &&
-    typeof project.id === 'string' &&
-    typeof project.name === 'string' &&
-    typeof project.description === 'string' &&
-    typeof project.color === 'string' &&
-    typeof project.createdAt === 'number' &&
-    typeof project.updatedAt === 'number'
-  ));
+  const projects = value.projects.flatMap((project) => {
+    if (
+      !isRecord(project) ||
+      typeof project.id !== 'string' ||
+      typeof project.name !== 'string' ||
+      typeof project.description !== 'string' ||
+      typeof project.color !== 'string' ||
+      typeof project.createdAt !== 'number' ||
+      typeof project.updatedAt !== 'number' ||
+      (
+        project.rootPath !== undefined &&
+        project.rootPath !== null &&
+        typeof project.rootPath !== 'string'
+      )
+    ) {
+      return [];
+    }
 
-  if (projects.length !== value.projects.length) {
-    return null;
-  }
+    return [{
+      color: project.color,
+      createdAt: project.createdAt,
+      description: project.description,
+      id: project.id,
+      name: project.name,
+      rootPath: normalizeProjectRootPath(project.rootPath),
+      updatedAt: project.updatedAt,
+    }];
+  });
 
-  const items = value.items.map((item) => {
+  const projectIds = new Set(projects.map((project) => project.id));
+  const items = value.items.flatMap((item) => {
     if (
       !isRecord(item) ||
       typeof item.id !== 'string' ||
       typeof item.projectId !== 'string' ||
+      !projectIds.has(item.projectId) ||
       typeof item.title !== 'string' ||
       typeof item.brief !== 'string' ||
       typeof item.sortOrder !== 'number' ||
       typeof item.createdAt !== 'number' ||
       typeof item.updatedAt !== 'number' ||
-      !workflowItemStatuses.includes(item.status as (typeof workflowItemStatuses)[number]) ||
       !Array.isArray(item.tasks) ||
       !Array.isArray(item.workProducts) ||
       !Array.isArray(item.workflowEvents)
     ) {
-      return null;
+      return [];
     }
 
-    const tasks = item.tasks.map(normalizeTask);
-    const workProducts = item.workProducts.map(normalizeWorkProduct);
-    const workflowEvents = item.workflowEvents.map(normalizeEvent);
+    const tasks = item.tasks.flatMap((task) => {
+      const normalized = normalizeTask(task);
+      return normalized ? [normalized] : [];
+    });
+    const workProducts = item.workProducts.flatMap((product) => {
+      const normalized = normalizeWorkProduct(product);
+      return normalized ? [normalized] : [];
+    });
+    const workflowEvents = item.workflowEvents.flatMap((event) => {
+      const normalized = normalizeEvent(event);
+      return normalized ? [normalized] : [];
+    });
 
-    if (
-      tasks.some((task) => task === null) ||
-      workProducts.some((product) => product === null) ||
-      workflowEvents.some((event) => event === null)
-    ) {
-      return null;
-    }
-
-    return {
+    return [{
+      artifactFolderName:
+        typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
+          ? item.artifactFolderName.trim()
+          : createArtifactFolderName(item.title, item.id),
       brief: item.brief,
       createdAt: item.createdAt,
       id: item.id,
@@ -161,35 +186,37 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
           : null,
       projectId: item.projectId,
       sortOrder: item.sortOrder,
-      status: item.status,
-      tasks: tasks as WorkflowTask[],
+      status: workflowItemStatuses.includes(item.status as (typeof workflowItemStatuses)[number])
+        ? (item.status as WorkflowSnapshot['items'][number]['status'])
+        : 'inbox',
+      tasks,
       title: item.title,
       updatedAt: item.updatedAt,
-      workProducts: workProducts as WorkflowWorkProduct[],
-      workflowEvents: workflowEvents as WorkflowEvent[],
-    };
+      workProducts,
+      workflowEvents,
+    }];
   });
 
-  if (items.some((item) => item === null)) {
-    return null;
-  }
+  const itemIds = new Set(items.map((item) => item.id));
+  const selectedItemId =
+    typeof value.selectedItemId === 'string' && itemIds.has(value.selectedItemId)
+      ? value.selectedItemId
+      : null;
+  const selectedProjectId =
+    typeof value.selectedProjectId === 'string' && projectIds.has(value.selectedProjectId)
+      ? value.selectedProjectId
+      : null;
 
   return {
-    items: items as WorkflowSnapshot['items'],
+    items,
     projects,
-    selectedItemId:
-      typeof value.selectedItemId === 'string' || value.selectedItemId === null
-        ? value.selectedItemId
-        : null,
+    selectedItemId,
     selectedProjectFilter: workflowProjectFilters.includes(
       value.selectedProjectFilter as (typeof workflowProjectFilters)[number],
     )
       ? (value.selectedProjectFilter as WorkflowSnapshot['selectedProjectFilter'])
       : 'all',
-    selectedProjectId:
-      typeof value.selectedProjectId === 'string' || value.selectedProjectId === null
-        ? value.selectedProjectId
-        : null,
+    selectedProjectId,
     selectedProjectView: workflowProjectViews.includes(
       value.selectedProjectView as (typeof workflowProjectViews)[number],
     )
@@ -207,17 +234,31 @@ function migrateLegacySnapshot(value: unknown): WorkflowSnapshot | null {
     return null;
   }
 
-  const projects = value.projects.filter((project) => (
-    isRecord(project) &&
-    typeof project.id === 'string' &&
-    typeof project.name === 'string' &&
-    typeof project.description === 'string' &&
-    typeof project.color === 'string' &&
-    typeof project.createdAt === 'number' &&
-    typeof project.updatedAt === 'number'
-  ));
+  const projects = value.projects.map((project) => {
+    if (
+      !isRecord(project) ||
+      typeof project.id !== 'string' ||
+      typeof project.name !== 'string' ||
+      typeof project.description !== 'string' ||
+      typeof project.color !== 'string' ||
+      typeof project.createdAt !== 'number' ||
+      typeof project.updatedAt !== 'number'
+    ) {
+      return null;
+    }
 
-  if (projects.length !== value.projects.length) {
+    return {
+      color: project.color,
+      createdAt: project.createdAt,
+      description: project.description,
+      id: project.id,
+      name: project.name,
+      rootPath: null,
+      updatedAt: project.updatedAt,
+    };
+  });
+
+  if (projects.some((project) => project === null)) {
     return null;
   }
 
@@ -278,6 +319,7 @@ function migrateLegacySnapshot(value: unknown): WorkflowSnapshot | null {
     }
 
     return [{
+      artifactFolderName: createArtifactFolderName(mission.title, mission.id),
       brief: mission.brief,
       createdAt: mission.createdAt,
       id: mission.id,
@@ -295,7 +337,7 @@ function migrateLegacySnapshot(value: unknown): WorkflowSnapshot | null {
 
   return {
     items,
-    projects,
+    projects: projects as WorkflowSnapshot['projects'],
     selectedItemId:
       typeof value.selectedMissionId === 'string' || value.selectedMissionId === null
         ? value.selectedMissionId
@@ -340,8 +382,8 @@ export function useWorkflowPersistence() {
 
     const load = async () => {
       const rawSnapshot = await window.duneDesktop?.storageGet?.(STORE_NAME, STORE_KEY);
-      const snapshot = normalizeWorkflowSnapshot(rawSnapshot)
-        ?? createEmptyWorkflowSnapshot();
+      const normalizedSnapshot = normalizeWorkflowSnapshot(rawSnapshot);
+      const snapshot = normalizedSnapshot ?? createEmptyWorkflowSnapshot();
 
       if (isDisposed) {
         return;
@@ -349,7 +391,7 @@ export function useWorkflowPersistence() {
 
       hydrateWorkflow(snapshot);
 
-      if (!normalizeWorkflowSnapshot(rawSnapshot)) {
+      if (!normalizedSnapshot) {
         await window.duneDesktop?.storageSet?.(STORE_NAME, STORE_KEY, snapshot);
       }
     };

@@ -41,105 +41,36 @@ export interface ErrorPayload {
 export type ErrorMessage = IpcMessage<'error', ErrorPayload>;
 
 // ---------------------------------------------------------------------------
-// Agent → Host: Board Management  (written to agent/)
+// Tool discovery and invocation
 // ---------------------------------------------------------------------------
 
-export interface GetBoardPayload {
-  projectId: string;
+export interface ToolDefinition {
+  description: string;
+  inputSchema: Record<string, unknown>;
+  name: string;
 }
 
-export type GetBoardMessage = IpcMessage<'get-board', GetBoardPayload>;
+export type ToolsListMessage = IpcMessage<'tools/list', Record<string, never>>;
 
-export interface CreateItemPayload {
-  title: string;
-  brief?: string;
-  projectId: string;
-  status?: 'inbox' | 'ready' | 'active' | 'review' | 'done';
+export interface ToolCallPayload {
+  arguments?: Record<string, unknown>;
+  name: string;
 }
 
-export type CreateItemMessage = IpcMessage<'create-item', CreateItemPayload>;
+export type ToolCallMessage = IpcMessage<'tools/call', ToolCallPayload>;
 
-export interface UpdateItemPayload {
-  itemId: string;
-  title?: string;
-  brief?: string;
+export interface ToolsListResultPayload {
+  tools: ToolDefinition[];
 }
 
-export type UpdateItemMessage = IpcMessage<'update-item', UpdateItemPayload>;
+export type ToolsListResultMessage = IpcMessage<'tools/list-result', ToolsListResultPayload>;
 
-export interface MoveItemPayload {
-  itemId: string;
-  status: 'inbox' | 'ready' | 'active' | 'review' | 'done';
+export interface ToolCallResultPayload {
+  name: string;
+  result: unknown;
 }
 
-export type MoveItemMessage = IpcMessage<'move-item', MoveItemPayload>;
-
-export interface AddTaskPayload {
-  itemId: string;
-  title: string;
-}
-
-export type AddTaskMessage = IpcMessage<'add-task', AddTaskPayload>;
-
-export interface UpdateTaskPayload {
-  itemId: string;
-  taskId: string;
-  title?: string;
-  notes?: string;
-  status?: 'todo' | 'doing' | 'blocked' | 'review' | 'done';
-}
-
-export type UpdateTaskMessage = IpcMessage<'update-task', UpdateTaskPayload>;
-
-export interface AddWorkProductPayload {
-  itemId: string;
-  title: string;
-  body: string;
-}
-
-export type AddWorkProductMessage = IpcMessage<'add-work-product', AddWorkProductPayload>;
-
-// ---------------------------------------------------------------------------
-// Host → Agent: Board Responses  (written to host/ as replies)
-// ---------------------------------------------------------------------------
-
-export interface BoardDataPayload {
-  items: Array<{
-    id: string;
-    title: string;
-    brief: string;
-    status: string;
-    primaryAgentId: string | null;
-    tasks: Array<{ id: string; title: string; status: string; notes: string }>;
-    workProducts: Array<{ id: string; title: string; body: string }>;
-  }>;
-}
-
-export type BoardDataMessage = IpcMessage<'board-data', BoardDataPayload>;
-
-export interface ItemCreatedPayload {
-  itemId: string;
-}
-
-export type ItemCreatedMessage = IpcMessage<'item-created', ItemCreatedPayload>;
-
-export interface TaskCreatedPayload {
-  taskId: string;
-}
-
-export type TaskCreatedMessage = IpcMessage<'task-created', TaskCreatedPayload>;
-
-export interface WorkProductCreatedPayload {
-  workProductId: string;
-}
-
-export type WorkProductCreatedMessage = IpcMessage<'work-product-created', WorkProductCreatedPayload>;
-
-export interface AckPayload {
-  success: boolean;
-}
-
-export type AckMessage = IpcMessage<'ack', AckPayload>;
+export type ToolCallResultMessage = IpcMessage<'tools/call-result', ToolCallResultPayload>;
 
 // ---------------------------------------------------------------------------
 // Union helpers
@@ -147,24 +78,17 @@ export type AckMessage = IpcMessage<'ack', AckPayload>;
 
 export type HostToAgentMessage =
   | UserMessage
-  | BoardDataMessage
-  | ItemCreatedMessage
-  | TaskCreatedMessage
-  | WorkProductCreatedMessage
-  | AckMessage;
+  | ErrorMessage
+  | ToolsListResultMessage
+  | ToolCallResultMessage;
 
 export type AgentToHostMessage =
   | ReplyMessage
   | ReplyDoneMessage
   | IpcAgentMessage
   | ErrorMessage
-  | GetBoardMessage
-  | CreateItemMessage
-  | UpdateItemMessage
-  | MoveItemMessage
-  | AddTaskMessage
-  | UpdateTaskMessage
-  | AddWorkProductMessage;
+  | ToolsListMessage
+  | ToolCallMessage;
 
 // ---------------------------------------------------------------------------
 // Utilities

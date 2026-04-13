@@ -64,10 +64,11 @@ export function useAgentShellController({
   });
 
   const handleCreateAgent = useEffectEvent(async (input: CreateAgentInput) => {
-    await commands.createAgent(input);
+    const agentId = await commands.createAgent(input);
     setCreateAgentOpen(false);
     setSidebarDrawerOpen(false);
     focusComposer();
+    return agentId;
   });
 
   const handleOpenSettings = useEffectEvent(() => {

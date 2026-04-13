@@ -1,4 +1,5 @@
 import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import { cloneAgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type {
   AgentState,
   AppStoreSlice,
@@ -8,6 +9,7 @@ import type {
 export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentState {
   return {
     agents: snapshot.agents,
+    agentCustomizations: {},
     agentDrafts: {},
     externalChannels: snapshot.externalChannels,
     isStreaming: snapshot.isStreaming,
@@ -30,11 +32,15 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
     }) => {
       set((state) => {
         const nextAgentIds = new Set(agents.map((agent) => agent.id));
+        const nextAgentCustomizations = Object.fromEntries(
+          Object.entries(state.agentCustomizations).filter(([agentId]) => nextAgentIds.has(agentId)),
+        );
         const nextAgentDrafts = Object.fromEntries(
           Object.entries(state.agentDrafts).filter(([agentId]) => nextAgentIds.has(agentId)),
         );
 
         return {
+          agentCustomizations: nextAgentCustomizations,
           agentDrafts: nextAgentDrafts,
           agents,
           externalChannels,
@@ -64,6 +70,38 @@ export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentS
         }
 
         return { agentDrafts: nextAgentDrafts };
+      });
+    },
+    upsertAgentCustomization: (agentId, customization) => {
+      if (!agentId) {
+        return;
+      }
+
+      set((state) => {
+        return {
+          agentCustomizations: {
+            ...state.agentCustomizations,
+            [agentId]: cloneAgentCustomizationDraft(customization),
+          },
+        };
+      });
+    },
+    resetAgentCustomization: (agentId) => {
+      if (!agentId) {
+        return;
+      }
+
+      set((state) => {
+        if (!state.agentCustomizations[agentId]) {
+          return {};
+        }
+
+        const nextAgentCustomizations = { ...state.agentCustomizations };
+        delete nextAgentCustomizations[agentId];
+
+        return {
+          agentCustomizations: nextAgentCustomizations,
+        };
       });
     },
   });

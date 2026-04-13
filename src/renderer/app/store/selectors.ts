@@ -17,6 +17,7 @@ import {
 
 export function useAgentSession() {
   const {
+    agentCustomizations,
     agentDrafts,
     agents,
     externalChannels,
@@ -26,6 +27,7 @@ export function useAgentSession() {
     telegramSetupSessions,
   } = useAppStore(
     useShallow((state) => ({
+      agentCustomizations: state.agentCustomizations,
       agentDrafts: state.agentDrafts,
       agents: state.agents,
       externalChannels: state.externalChannels,
@@ -45,6 +47,9 @@ export function useAgentSession() {
   return {
     activeAgent: activeAgent
       ? presentAgent(activeAgent)
+      : null,
+    activeAgentCustomization: selectedAgentId && agentCustomizations[selectedAgentId]
+      ? agentCustomizations[selectedAgentId]
       : null,
     commandAgents: agents.map((agent) => ({
       ...presentAgentSummary(agent),
@@ -67,6 +72,7 @@ export function useShellState() {
       canNavigateForward: state.navigationForwardStack.length > 0,
       isCommandOpen: state.isCommandOpen,
       isContextPanelOpen: state.isContextPanelOpen,
+      popoverAgentId: state.popoverAgentId,
       route: state.route,
     })),
   );
@@ -136,6 +142,7 @@ export function useWorkflowSession() {
     activityEntries: projectItems
       .flatMap((item) =>
         item.workflowEvents.map((event) => ({
+          actor: event.actor,
           createdAt: event.createdAt,
           createdAtLabel: presentWorkflowEventTimestamp(event.createdAt),
           description: event.description,

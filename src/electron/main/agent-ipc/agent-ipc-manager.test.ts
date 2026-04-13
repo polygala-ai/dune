@@ -3,6 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  createAgentIpcDirectoryMetadata,
+  resolveAgentIpcDir,
+  resolveAgentIpcMetadataPath,
+} from '@/electron/shared/agent-ipc/ipc-directory';
 import { AgentIpcManager } from './agent-ipc-manager';
 
 function createTempHome() {
@@ -13,6 +18,27 @@ function setupIpcDir(homeDir: string, projectId: string, agentName: string) {
   const ipcDir = path.join(homeDir, '.dune', 'projs', projectId, 'agents', agentName, 'ipc');
   fs.mkdirSync(path.join(ipcDir, 'agent'), { recursive: true });
   fs.mkdirSync(path.join(ipcDir, 'host'), { recursive: true });
+  return ipcDir;
+}
+
+function setupSanitizedIpcDir(
+  homeDir: string,
+  projectId: string,
+  projectName: string,
+  agentId: string,
+  agentName: string,
+) {
+  const ipcDir = resolveAgentIpcDir(homeDir, projectId, projectName, agentName, agentId);
+  fs.mkdirSync(path.join(ipcDir, 'agent'), { recursive: true });
+  fs.mkdirSync(path.join(ipcDir, 'host'), { recursive: true });
+  fs.writeFileSync(
+    resolveAgentIpcMetadataPath(ipcDir),
+    `${JSON.stringify(
+      createAgentIpcDirectoryMetadata(projectId, agentId, agentName, projectName),
+      null,
+      2,
+    )}\n`,
+  );
   return ipcDir;
 }
 
@@ -49,6 +75,27 @@ describe('AgentIpcManager', () => {
     manager.start();
 
     expect(manager.toSnapshotAgents()).toEqual([]);
+  });
+
+  it('discovers sanitized IPC directories using metadata', () => {
+    setupSanitizedIpcDir(
+      homeDir,
+      'project / 1',
+      'Research Platform',
+      'dune:agent:test-a',
+      'agent / a',
+    );
+
+    manager = new AgentIpcManager(homeDir);
+    manager.start();
+
+    expect(manager.toSnapshotAgents()).toEqual([
+      expect.objectContaining({
+        id: 'ipc:project / 1:agent / a',
+        name: 'agent / a',
+        projectId: 'project / 1',
+      }),
+    ]);
   });
 
   it('delivers a message to the correct agent', () => {
@@ -89,6 +136,34 @@ describe('AgentIpcManager', () => {
     expect(files).toHaveLength(1);
   });
 
+  it('replaces a scanned legacy connection when the runtime registers the same agent', () => {
+    setupIpcDir(homeDir, 'project-2', 'dynamic-agent');
+
+    manager = new AgentIpcManager(homeDir);
+    manager.start();
+    expect(manager.toSnapshotAgents()).toHaveLength(1);
+
+    const sanitizedIpcDir = setupSanitizedIpcDir(
+      homeDir,
+      'project-2',
+      'Dynamic Project',
+      'dune:agent:dynamic-agent',
+      'dynamic-agent',
+    );
+    manager.addConnection('dune:agent:runtime', 'dynamic-agent', 'project-2', sanitizedIpcDir);
+
+    expect(manager.toSnapshotAgents()).toEqual([
+      expect.objectContaining({
+        id: 'dune:agent:runtime',
+        name: 'dynamic-agent',
+        projectId: 'project-2',
+      }),
+    ]);
+
+    manager.sendMessage('dune:agent:runtime', 'hello runtime');
+    expect(fs.readdirSync(path.join(sanitizedIpcDir, 'host'))).toHaveLength(1);
+  });
+
   it('addConnection starts watching the agent dir', () => {
     const ipcDir = setupIpcDir(homeDir, 'project-3', 'new-agent');
     manager = new AgentIpcManager(homeDir);
@@ -114,23 +189,29 @@ describe('AgentIpcManager', () => {
     }));
   });
 
-  it('propagates board message handler to connections', () => {
+  it('propagates tool message handler factories to connections', () => {
     const ipcDir = setupIpcDir(homeDir, 'project-1', 'board-agent');
     manager = new AgentIpcManager(homeDir);
 
-    const boardHandler = vi.fn((_msg, _fileId, replyFn) => {
-      replyFn({ type: 'ack', payload: { success: true } });
-    });
-    manager.setBoardMessageHandler(boardHandler);
+    const toolHandlerFactory = vi.fn(() => vi.fn((_msg, _fileId, replyFn) => {
+      replyFn({ type: 'tools/list-result', payload: { tools: [] } });
+    }));
+    manager.setToolMessageHandler(toolHandlerFactory);
     manager.start();
 
-    // Write a board message directly
+    expect(toolHandlerFactory).toHaveBeenCalledWith({
+      agentId: 'ipc:project-1:board-agent',
+      agentName: 'board-agent',
+      projectId: 'project-1',
+    });
+
+    // Write a tool message directly.
     fs.writeFileSync(
       path.join(ipcDir, 'agent', `${Date.now()}-cmd.json`),
-      JSON.stringify({ type: 'move-item', payload: { itemId: 'item-1', status: 'done' } }),
+      JSON.stringify({ type: 'tools/list', payload: {} }),
     );
 
-    // Trigger scan via fs.watch or manually — for reliability, just verify handler is set
-    expect(boardHandler).not.toHaveBeenCalled(); // not called yet, needs fs.watch event
+    const replyFiles = fs.readdirSync(path.join(ipcDir, 'host'));
+    expect(replyFiles).toEqual([]);
   });
 });
