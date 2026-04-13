@@ -45,10 +45,23 @@ You have Dune workflow tools available as MCP tools (prefixed `mcp__dune__`). Ke
 
 ### Coding engines (if available)
 
-- `mcp__dune__coding_engine_claude_code` — delegate a coding task to Claude Code. Use for file edits, refactoring, debugging, code analysis.
-- `mcp__dune__coding_engine_codex` — delegate a coding task to Codex. Use for sandboxed execution, testing, code generation.
+Coding engines use an **async job pattern** — they return immediately with a `jobId`, then you poll for results. This means you're free to do other work while the engine runs.
 
-When you or an assigned agent needs to make code changes, use these tools. Be specific in the prompt — include file paths, what to change, and why.
+- `mcp__dune__coding_engine_claude_code` — start a coding task with Claude Code. Returns `{ jobId, status: "running" }`.
+  - `prompt` (required): what to do — be specific about file paths, what to change, and why.
+  - `args` (optional): additional CLI arguments, e.g. `["--model", "sonnet"]`.
+- `mcp__dune__coding_engine_codex` — start a coding task with Codex. Same pattern.
+  - `prompt` (required), `args` (optional).
+- `mcp__dune__coding_engine_poll` — check a running job's progress.
+  - `jobId` (required): the ID returned by the start tool.
+  - Returns `{ status, engineId, steps, result?, error? }`.
+
+**Workflow:**
+1. Start: call `coding_engine_claude_code` or `coding_engine_codex` → get `jobId`.
+2. Do other work (triage items, check on agents, create tasks, etc.).
+3. Poll: call `coding_engine_poll` with the `jobId`.
+4. If `status` is `"running"`, continue other work and poll again later.
+5. If `status` is `"completed"`, read the `result`. If `"error"`, read the `error`.
 
 See the `/dune` skill for the full tool reference.
 

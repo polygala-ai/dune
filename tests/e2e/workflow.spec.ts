@@ -7,8 +7,11 @@ import {
   createProject,
   createTempHome,
   dispatchPrimaryShortcut,
+  expectBoundingBoxWithin,
   launchApp,
   navigateToWorkflow,
+  resizeWindow,
+  seedWorkflowStore,
 } from './helpers';
 
 test.describe('Workflow persistence', () => {
@@ -49,6 +52,68 @@ test.describe('Workflow persistence', () => {
       ).toBeVisible();
     } finally {
       await closeElectronApp(app2);
+    }
+  });
+
+  test('compact project settings drawer keeps the form and footer visible at minimum window size', async () => {
+    const seededProjectId = 'compact-project-settings';
+
+    seedWorkflowStore(runtimeHome, {
+      items: [],
+      projects: [
+        {
+          color: '#2563EB',
+          createdAt: Date.parse('2026-04-13T08:00:00.000Z'),
+          description: 'Coordinate the calmer workflow shell.',
+          id: seededProjectId,
+          name: 'Workflow Studio',
+          rootPath: '/tmp/workflow-studio',
+          updatedAt: Date.parse('2026-04-13T08:00:00.000Z'),
+        },
+      ],
+      selectedItemId: null,
+      selectedProjectFilter: 'all',
+      selectedProjectId: seededProjectId,
+      selectedProjectView: 'board',
+    });
+
+    const app = await launchApp(runtimeHome);
+
+    try {
+      const page = await app.firstWindow();
+      await resizeWindow(app, 960, 720);
+      await page.waitForFunction(() => window.innerWidth < 1240);
+
+      await navigateToWorkflow(page);
+      await page.getByTestId('project-actions-button').click();
+
+      const dialog = page.getByRole('dialog', { name: 'Project settings' });
+      const scrollRegion = page.getByTestId('workflow-project-settings-scroll-region');
+      const descriptionField = dialog.getByLabel('Description');
+      const footer = page.getByTestId('workflow-project-settings-footer');
+
+      await expect(dialog).toBeVisible();
+      await expect(scrollRegion).toBeVisible();
+      await expectBoundingBoxWithin(dialog, descriptionField);
+      await expectBoundingBoxWithin(dialog, footer);
+
+      await scrollRegion.evaluate((node) => {
+        const viewport = node.querySelector('[data-radix-scroll-area-viewport]');
+
+        if (!(viewport instanceof HTMLElement)) {
+          throw new Error('Workflow project settings scroll viewport was not found.');
+        }
+
+        viewport.scrollTop = viewport.scrollHeight;
+      });
+
+      const dangerZone = dialog.getByText('Danger zone');
+      const deleteButton = dialog.getByRole('button', { name: /^Delete project$/i });
+
+      await expectBoundingBoxWithin(dialog, dangerZone);
+      await expectBoundingBoxWithin(dialog, deleteButton);
+    } finally {
+      await closeElectronApp(app);
     }
   });
 

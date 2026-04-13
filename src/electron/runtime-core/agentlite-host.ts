@@ -1896,7 +1896,6 @@ export class AgentLiteHost implements AgentRuntime {
       const alAgent = duneAgent.agentLiteAgent;
 
       alAgent.on('run.tool', (event) => {
-        console.log(`[dune] run.tool: ${event.toolName}`, event.input?.slice(0, 100));
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           kind: 'tool',
@@ -1907,7 +1906,6 @@ export class AgentLiteHost implements AgentRuntime {
       });
 
       alAgent.on('run.subagent', (event) => {
-        console.log(`[dune] run.subagent: ${event.subtype} — ${event.description}`);
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           kind: 'subagent',
@@ -1918,7 +1916,6 @@ export class AgentLiteHost implements AgentRuntime {
       });
 
       alAgent.on('run.status', (event) => {
-        console.log(`[dune] run.status: ${event.status}`);
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           kind: 'status',

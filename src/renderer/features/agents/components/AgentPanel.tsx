@@ -27,12 +27,17 @@ type TimelineItem =
 function buildTimeline(agent: PresentedAgent): TimelineItem[] {
   const items: TimelineItem[] = [];
 
+  // Pre-build engine runs keyed by start timestamp so we can attach them
+  // right after the assistant message whose turn spawned them.
+  const engineRuns = groupEngineRuns(agent.codingEngineEvents);
+
   // Build message pairs: find each assistant message and the activity events
   // that happened during its turn (between the preceding user message and the
-  // next user message). Render: user → activity pills → assistant.
+  // next user message). Render: user → activity pills → assistant → engine cards.
   const messages = agent.messages;
   const activities = agent.activityEvents;
   let activityIdx = 0;
+  let engineIdx = 0;
 
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i]!;
@@ -60,6 +65,18 @@ function buildTimeline(agent: PresentedAgent): TimelineItem[] {
 
     // Add assistant message after its activity events
     items.push({ type: 'message', message, timestamp: message.createdAt });
+
+    // Attach any engine runs that started during this assistant's turn
+    while (engineIdx < engineRuns.length) {
+      const run = engineRuns[engineIdx]!;
+      const startTs = run.events[0]?.timestamp ?? 0;
+      if (startTs < nextMessageTs) {
+        items.push({ type: 'engine', run, timestamp: startTs });
+        engineIdx++;
+      } else {
+        break;
+      }
+    }
   }
 
   // Any remaining activity events (current turn, not yet finalized)
@@ -69,12 +86,12 @@ function buildTimeline(agent: PresentedAgent): TimelineItem[] {
     activityIdx++;
   }
 
-  // Add coding engine runs at the end (sorted by start time)
-  for (const run of groupEngineRuns(agent.codingEngineEvents)) {
-    const startEvent = run.events[0];
-    if (startEvent) {
-      items.push({ type: 'engine', run, timestamp: startEvent.timestamp });
-    }
+  // Any remaining engine runs (started during the current unfinalized turn)
+  while (engineIdx < engineRuns.length) {
+    const run = engineRuns[engineIdx]!;
+    const startTs = run.events[0]?.timestamp ?? 0;
+    items.push({ type: 'engine', run, timestamp: startTs });
+    engineIdx++;
   }
 
   return items;

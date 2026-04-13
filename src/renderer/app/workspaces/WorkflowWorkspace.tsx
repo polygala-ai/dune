@@ -214,7 +214,7 @@ export function WorkflowWorkspace({
       className={
         isCompactShell
           ? 'app-no-drag h-full'
-          : 'h-full rounded-[28px] border border-app-border bg-app-panel/90'
+          : 'h-full border-l border-app-border'
       }
       onCancel={closeProjectSettings}
       onDelete={() => setDeleteProjectOpen(true)}
@@ -239,6 +239,7 @@ export function WorkflowWorkspace({
         );
         closeProjectSettings();
       }}
+      presentation={isCompactShell ? 'drawer' : 'inline'}
       project={selectedProject}
     />
   ) : null;
