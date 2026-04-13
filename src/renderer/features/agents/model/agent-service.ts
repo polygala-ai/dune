@@ -1,15 +1,18 @@
 import type {
   Agent,
+  CodingEngineStatus,
   ExternalChannelsState,
   AgentRuntimeInfo,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
+  UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 export interface AgentServiceSnapshot {
   agents: Agent[];
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
   runtimeInfo: AgentRuntimeInfo;
@@ -39,4 +42,5 @@ export interface AgentService {
   ) => Promise<void>;
   startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
   subscribe: (listener: AgentServiceListener) => () => void;
+  updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
 }

@@ -33,6 +33,7 @@ function createItemEvent(
   createdAt: number,
 ) {
   return {
+    actor: 'You',
     createdAt,
     description,
     id: createId('event'),

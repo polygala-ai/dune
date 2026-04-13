@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
@@ -16,6 +17,8 @@ function createAgent(
       label: 'Dune chat',
       status: 'ready',
     },
+    activityEvents: [],
+    codingEngineEvents: [],
     contextCards: [
       {
         body: 'This agent now runs through AgentLite from the Dune runtime root under ~/.dune/agentlite.',
@@ -174,5 +177,121 @@ describe('AgentContextPanel', () => {
     expect(screen.getByText('Saved locally in renderer memory for this session.')).toBeInTheDocument();
     expect(screen.getByText('Added')).toBeInTheDocument();
     expect(screen.getAllByText('1')).toHaveLength(2);
+  });
+
+  it('lets the inspector switch a Telegram agent back to Dune chat', async () => {
+    const user = userEvent.setup();
+    const onUpdateChannel = vi.fn(async () => undefined);
+
+    render(
+      <AgentContextPanel
+        agent={createAgent({
+          channel: {
+            canCompose: false,
+            id: 'telegram',
+            kind: 'external',
+            label: 'Telegram',
+            status: 'connected',
+            target: {
+              channelId: 'telegram',
+              jid: 'tg:123',
+              kind: 'group',
+              name: 'Product QA',
+            },
+          },
+          telegram: {
+            botUsername: 'agentlite_test_bot',
+            boundChat: {
+              channelId: 'telegram',
+              jid: 'tg:123',
+              kind: 'group',
+              name: 'Product QA',
+            },
+            errorMessage: null,
+            pairCode: null,
+            pairExpiresAt: null,
+            pairingStatus: 'idle',
+            status: 'connected',
+          },
+        })}
+        onClose={vi.fn()}
+        onUpdateChannel={onUpdateChannel}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText('Change channel'),
+      'dune-chat',
+    );
+    await user.click(screen.getByRole('button', { name: /Save channel/i }));
+
+    expect(onUpdateChannel).toHaveBeenCalledWith({
+      channelId: 'dune-chat',
+    });
+  });
+
+  it('opens Telegram setup in a popup when Telegram is selected', async () => {
+    const user = userEvent.setup();
+    const onOpenTelegramSetup = vi.fn();
+
+    render(
+      <AgentContextPanel
+        agent={createAgent()}
+        onClose={vi.fn()}
+        onOpenTelegramSetup={onOpenTelegramSetup}
+        onUpdateChannel={vi.fn(async () => undefined)}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText('Change channel'),
+      'telegram',
+    );
+
+    expect(onOpenTelegramSetup).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText(/Open Telegram setup in a popup/i),
+    ).toBeInTheDocument();
+  });
+
+  it('saves a paired Telegram channel from the inspector', async () => {
+    const user = userEvent.setup();
+    const onUpdateChannel = vi.fn(async () => undefined);
+
+    render(
+      <AgentContextPanel
+        agent={createAgent()}
+        onClose={vi.fn()}
+        onOpenTelegramSetup={vi.fn()}
+        onUpdateChannel={onUpdateChannel}
+        telegramSetupSession={{
+          agentId: 'agent-1',
+          botUsername: 'agentlite_test_bot',
+          errorMessage: null,
+          id: 'telegram-session-1',
+          matchedChat: {
+            channelId: 'telegram',
+            jid: 'tg:123',
+            kind: 'group',
+            name: 'Product QA',
+          },
+          pairCode: null,
+          pairExpiresAt: null,
+          pairingStatus: 'matched',
+          status: 'connected',
+        }}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText('Change channel'),
+      'telegram',
+    );
+    await user.click(screen.getByRole('button', { name: /Save Telegram channel/i }));
+
+    expect(onUpdateChannel).toHaveBeenCalledWith({
+      channelId: 'telegram',
+      telegramSetupSessionId: 'telegram-session-1',
+    });
   });
 });

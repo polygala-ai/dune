@@ -13,6 +13,7 @@ function createSnapshot(
 ): AgentServiceSnapshot {
   return {
     agents: [],
+    codingEngines: [],
     externalChannels: createDefaultExternalChannelsState(),
     isStreaming: false,
     runtimeInfo: {
@@ -41,6 +42,7 @@ describe('TelegramChannelSetupCard', () => {
 
   it('runs the create flow from BotFather to pair code without the old chat picker surfaces', async () => {
     const user = userEvent.setup();
+    const copyText = vi.fn(async () => undefined);
     const openExternal = vi.fn(async () => undefined);
     const startTelegramSetupSession = vi.fn(async () => {
       const session: TelegramSetupSession = {
@@ -66,6 +68,7 @@ describe('TelegramChannelSetupCard', () => {
 
     window.duneDesktop = {
       ...window.duneDesktop,
+      copyText,
       getRuntimeSnapshot: vi.fn(async () => createSnapshot({
         telegramSetupSessions: useAppStore.getState().telegramSetupSessions,
       })),
@@ -94,6 +97,19 @@ describe('TelegramChannelSetupCard', () => {
     expect(screen.getByText('/pair PAIR42')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Open bot/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Copy bot/i })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /\/pair PAIR42/i }));
+    });
+    await waitFor(() => {
+      expect(copyText).toHaveBeenCalledWith('/pair PAIR42');
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/^Copied$/i)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Copied to clipboard\./i)).toBeInTheDocument();
+    });
   });
 
 });

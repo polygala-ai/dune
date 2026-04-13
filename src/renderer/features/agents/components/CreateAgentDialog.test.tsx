@@ -16,6 +16,7 @@ function createSnapshot(
 ): AgentServiceSnapshot {
   return {
     agents: [],
+    codingEngines: [],
     externalChannels: createDefaultExternalChannelsState(),
     isStreaming: false,
     runtimeInfo: {

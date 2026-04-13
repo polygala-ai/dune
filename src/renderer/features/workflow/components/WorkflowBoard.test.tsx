@@ -11,8 +11,10 @@ const baseItem = (
 ): WorkflowItemSummary => ({
   brief: `Brief for ${title}`,
   completedTaskCount: 0,
+  currentTaskTitle: null,
   hasBlockedTasks: false,
   id,
+  isAgentWorking: false,
   primaryAgentId: null,
   primaryAgentName: null,
   specialStateLabel: status === 'review' ? 'Review' : null,

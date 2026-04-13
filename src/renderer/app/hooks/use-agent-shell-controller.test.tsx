@@ -16,6 +16,8 @@ function createPresentedAgent(): PresentedAgent {
       label: 'Dune chat',
       status: 'ready',
     },
+    activityEvents: [],
+    codingEngineEvents: [],
     contextCards: [],
     id: 'agent-1',
     messages: [],

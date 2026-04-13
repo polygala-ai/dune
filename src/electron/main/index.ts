@@ -61,11 +61,25 @@ async function nudgeIdleMainAgents(
   try {
     const workflow = await store.get<{
       agents: Array<{ id: string; projectId: string | null; role: string; status: string }>;
-      items: Array<{ projectId: string; status: string; title: string }>;
+      items: Array<{
+        id: string;
+        primaryAgentId: string | null;
+        projectId: string;
+        status: string;
+        tasks: Array<{ id: string; status: string; title: string }>;
+        title: string;
+      }>;
       projects: Array<{ id: string }>;
     }>('snapshot') as {
       agents?: Array<{ id: string; projectId: string | null; role: string; status: string }>;
-      items: Array<{ projectId: string; status: string; title: string }>;
+      items: Array<{
+        id: string;
+        primaryAgentId: string | null;
+        projectId: string;
+        status: string;
+        tasks: Array<{ id: string; status: string; title: string }>;
+        title: string;
+      }>;
       projects: Array<{ id: string }>;
     } | null;
     if (!workflow) return;
@@ -140,6 +154,10 @@ async function nudgeIdleMainAgents(
         }
       }
     }
+
+    // Active items are now included in the ready-assignment inbox snapshot.
+    // The sync mechanism (syncReadyAssignmentInboxes) handles signaling
+    // agents about their active assignments automatically.
   } catch {
     // ignore — controller may not be ready
   }
@@ -225,6 +243,7 @@ const createWindow = () => {
 function createInitialRuntimeSnapshot() {
   return {
     agents: [],
+    codingEngines: [],
     externalChannels: {},
     isStreaming: false,
     runtimeInfo: {
@@ -353,6 +372,10 @@ void app.whenReady().then(async () => {
               void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
             }, 10_000);
           }
+        },
+        onCodingEngineEvent: (agentId, event) => {
+          const ctrl = requireRuntimeController();
+          ctrl.pushCodingEngineEvent(agentId, event);
         },
         workflowStore,
       }));
@@ -533,6 +556,10 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.selectAgent, async (_event, agentId: string) => {
     await ensureRuntime();
     requireRuntimeController().selectAgent(agentId);
+  });
+  ipcMain.handle(ipcChannels.updateAgentChannel, async (_event, input) => {
+    await ensureRuntime();
+    return requireRuntimeController().updateAgentChannel(input);
   });
   ipcMain.handle(ipcChannels.sendAgentMessage, async (
     _event,

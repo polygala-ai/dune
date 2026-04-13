@@ -1,4 +1,8 @@
-import { type ReactNode, useState } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useState,
+} from 'react';
 import {
   PanelRight,
   Trash2,
@@ -11,9 +15,19 @@ import {
   type AgentCustomizationDraft,
   hasAgentCustomization,
 } from '@/renderer/features/agents/model/agent-customization';
-import { formatChannelStatus } from '@/renderer/features/agents/model/channels';
-import { TelegramChannelSetupCard } from '@/renderer/features/agents/components/TelegramChannelSetupCard';
-import type { PresentedAgent } from '@/renderer/features/agents/types';
+import {
+  createAgentChannelOptions,
+  formatChannelStatus,
+  getChannelBadgeLabel,
+  getChannelOption,
+  isChannelSelectable,
+} from '@/renderer/features/agents/model/channels';
+import type {
+  CodingEngineStatus,
+  PresentedAgent,
+  TelegramSetupSession,
+  UpdateAgentChannelInput,
+} from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import {
@@ -29,11 +43,17 @@ import type { AgentContextCard } from '@/renderer/features/agents/types';
 interface AgentContextPanelProps {
   agent: PresentedAgent;
   className?: string;
+  codingEngines?: CodingEngineStatus[];
   customization?: AgentCustomizationDraft | null;
   onClose: () => void;
   onDeleteAgent?: () => Promise<void> | void;
   onEditCustomization?: () => void;
   showCloseButton?: boolean;
+  onOpenTelegramSetup?: () => void;
+  telegramSetupSession?: TelegramSetupSession | null;
+  onUpdateChannel?: (
+    input: Pick<UpdateAgentChannelInput, 'channelId' | 'telegramSetupSessionId'>,
+  ) => Promise<void> | void;
 }
 
 function isSuppressedContextCard(card: AgentContextCard) {
@@ -152,12 +172,19 @@ function CustomizationMetricRow({
 export function AgentContextPanel({
   agent,
   className,
+  codingEngines = [],
   customization = null,
   onClose,
   onDeleteAgent,
   onEditCustomization,
   showCloseButton = true,
+  onOpenTelegramSetup,
+  telegramSetupSession = null,
+  onUpdateChannel,
 }: AgentContextPanelProps) {
+  const [channelDraftId, setChannelDraftId] = useState(agent.channel.id);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const [isUpdatingChannel, setUpdatingChannel] = useState(false);
   const [isDeleteAgentOpen, setDeleteAgentOpen] = useState(false);
   const [isDeletingAgent, setDeletingAgent] = useState(false);
   const channelStatusLabel = formatChannelStatus(agent.channel.status);
@@ -170,6 +197,25 @@ export function AgentContextPanel({
   const skillCount = customization ? countConfiguredSkills(customization.skills) : 0;
   const mcpCount = customization ? countConfiguredMcpServers(customization.mcpServers) : 0;
   const instructionsLabel = customization?.additionalInstructions.trim() ? 'Added' : 'Inherited';
+  const selectedChannel = getChannelOption(channelDraftId);
+  const hasPendingChannelChange = channelDraftId !== agent.channel.id;
+  const isTelegramDraftSelected = channelDraftId === 'telegram';
+  const matchedTelegramChat = telegramSetupSession?.matchedChat ?? null;
+  const canSaveChannel = Boolean(
+    onUpdateChannel
+    && hasPendingChannelChange
+    && !isUpdatingChannel
+    && (
+      channelDraftId !== 'telegram'
+      || matchedTelegramChat
+    ),
+  );
+
+  useEffect(() => {
+    setChannelDraftId(agent.channel.id);
+    setChannelError(null);
+    setUpdatingChannel(false);
+  }, [agent.channel.id, agent.id]);
 
   const handleDeleteAgent = async () => {
     if (!onDeleteAgent || isDeletingAgent) {
@@ -183,6 +229,32 @@ export function AgentContextPanel({
       setDeleteAgentOpen(false);
     } finally {
       setDeletingAgent(false);
+    }
+  };
+
+  const handleSaveChannel = async () => {
+    if (!onUpdateChannel || !hasPendingChannelChange || isUpdatingChannel) {
+      return;
+    }
+
+    if (channelDraftId === 'telegram' && !matchedTelegramChat) {
+      return;
+    }
+
+    setUpdatingChannel(true);
+    setChannelError(null);
+
+    try {
+      await onUpdateChannel({
+        channelId: channelDraftId,
+        ...(channelDraftId === 'telegram' && telegramSetupSession
+          ? { telegramSetupSessionId: telegramSetupSession.id }
+          : {}),
+      });
+    } catch (error) {
+      setChannelError(String(error));
+    } finally {
+      setUpdatingChannel(false);
     }
   };
 
@@ -259,15 +331,118 @@ export function AgentContextPanel({
                     ) : null}
                     <Separator className="my-3" />
                     <InspectorRow label="Status" value={channelStatusLabel} />
+
+                    {onUpdateChannel ? (
+                      <>
+                        <Separator className="my-3" />
+                        <div className="space-y-2">
+                          <label
+                            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                            htmlFor={`agent-channel-select-${agent.id}`}
+                          >
+                            Change channel
+                          </label>
+                          <select
+                            className="focus-ring-app h-11 w-full rounded-[14px] border border-app-border bg-app-panel px-3 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+                            disabled={isUpdatingChannel}
+                            id={`agent-channel-select-${agent.id}`}
+                            onChange={(event) => {
+                              const nextChannelId = event.target.value as typeof channelDraftId;
+                              setChannelDraftId(nextChannelId);
+                              setChannelError(null);
+                              if (
+                                nextChannelId === 'telegram'
+                                && !matchedTelegramChat
+                              ) {
+                                onOpenTelegramSetup?.();
+                              }
+                            }}
+                            value={channelDraftId}
+                          >
+                            {createAgentChannelOptions.map((channel) => (
+                              <option
+                                disabled={!isChannelSelectable(channel.id)}
+                                key={channel.id}
+                                value={channel.id}
+                              >
+                                {`${channel.label} · ${getChannelBadgeLabel(channel.id)}`}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs leading-5 text-app-muted">
+                            {hasPendingChannelChange
+                              ? channelDraftId === 'telegram'
+                                ? matchedTelegramChat
+                                  ? `Telegram is paired with ${matchedTelegramChat.name}. Save it from the popup.`
+                                  : `Open ${selectedChannel.label} setup in a popup to finish pairing and save there.`
+                                : `Save to move this agent back into ${selectedChannel.label}.`
+                              : agent.channel.id === 'telegram'
+                                ? 'Use the popup to re-pair or update this Telegram binding.'
+                                : 'Channel changes apply to the live agent workspace.'}
+                          </p>
+                          {isTelegramDraftSelected && matchedTelegramChat ? (
+                            <p className="text-xs leading-5 text-app-text">
+                              Matched chat ready: {matchedTelegramChat.name}
+                            </p>
+                          ) : null}
+                          {channelError ? (
+                            <p className="text-xs leading-5 text-red-600">
+                              {channelError}
+                            </p>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : null}
                   </InspectorInset>
+
+                  {onOpenTelegramSetup && (isTelegramDraftSelected || agent.channel.id === 'telegram') ? (
+                    <Button
+                      className="mt-3 w-full"
+                      onClick={onOpenTelegramSetup}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {isTelegramDraftSelected
+                        ? matchedTelegramChat
+                          ? 'Review Telegram setup'
+                          : 'Open Telegram setup'
+                        : 'Manage Telegram setup'}
+                    </Button>
+                  ) : null}
+
+                  {onUpdateChannel && hasPendingChannelChange ? (
+                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        disabled={isUpdatingChannel}
+                        onClick={() => {
+                          setChannelDraftId(agent.channel.id);
+                          setChannelError(null);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="quiet"
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        disabled={!canSaveChannel}
+                        onClick={() => {
+                          void handleSaveChannel();
+                        }}
+                        size="sm"
+                        type="button"
+                      >
+                        {isUpdatingChannel
+                          ? 'Saving…'
+                          : channelDraftId === 'telegram'
+                            ? 'Save Telegram channel'
+                            : 'Save channel'}
+                      </Button>
+                    </div>
+                  ) : null}
                 </InspectorCard>
               </section>
-
-              {agent.channel.id === 'telegram' ? (
-                <InspectorSection eyebrow="Telegram">
-                  <TelegramChannelSetupCard agent={agent} />
-                </InspectorSection>
-              ) : null}
 
               <section>
                 <InspectorCard>
@@ -316,6 +491,26 @@ export function AgentContextPanel({
                   ) : null}
                 </InspectorCard>
               </section>
+
+              {codingEngines.length > 0 ? (
+                <section>
+                  <InspectorCard>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                      Coding Engines
+                    </div>
+
+                    <InspectorInset className="space-y-2.5">
+                      {codingEngines.map((engine) => (
+                        <CustomizationMetricRow
+                          key={engine.id}
+                          label={engine.label}
+                          value={engine.available ? (engine.version ?? 'found') : 'Not found'}
+                        />
+                      ))}
+                    </InspectorInset>
+                  </InspectorCard>
+                </section>
+              ) : null}
 
               {visibleContextCards.map((card) => (
                 <InspectorSection eyebrow={card.eyebrow} key={card.id}>

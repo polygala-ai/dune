@@ -94,7 +94,13 @@ function ItemCard({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-app-muted">
-        <span className="truncate">
+        <span className="flex items-center gap-1.5 truncate">
+          {item.isAgentWorking ? (
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+          ) : null}
           {item.primaryAgentName ?? 'No agent'}
         </span>
         <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em]">
@@ -103,6 +109,12 @@ function ItemCard({
             : `${item.completedTaskCount}/${item.totalTaskCount}`}
         </span>
       </div>
+
+      {item.isAgentWorking && item.currentTaskTitle ? (
+        <p className="mt-2 truncate text-[11px] text-emerald-500/80">
+          ↳ {item.currentTaskTitle.split('—')[0]?.trim()}
+        </p>
+      ) : null}
 
       {item.specialStateLabel ? (
         <div className="mt-3">

@@ -117,6 +117,8 @@ export function presentWorkflowItemSummary(
   const primaryAgent = item.primaryAgentId
     ? agentsById.get(item.primaryAgentId) ?? null
     : null;
+  const isAgentWorking = primaryAgent?.status === 'live';
+  const currentTask = item.tasks.find((task) => task.status === 'doing') ?? null;
   const specialStateLabel = hasBlockedTasks
     ? 'Blocked'
     : item.status === 'review'
@@ -126,8 +128,10 @@ export function presentWorkflowItemSummary(
   return {
     brief: item.brief,
     completedTaskCount,
+    currentTaskTitle: currentTask?.title ?? null,
     hasBlockedTasks,
     id: item.id,
+    isAgentWorking,
     primaryAgentId: item.primaryAgentId,
     primaryAgentName: primaryAgent?.name ?? null,
     specialStateLabel,

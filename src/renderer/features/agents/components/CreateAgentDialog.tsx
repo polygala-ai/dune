@@ -15,7 +15,9 @@ import { AgentCustomizationEditor } from '@/renderer/features/agents/components/
 import {
   builtInChannelOption,
   createAgentChannelOptions,
+  getChannelBadgeLabel,
   getChannelOption,
+  isChannelSelectable,
 } from '@/renderer/features/agents/model/channels';
 import {
   createEmptyAgentCustomizationDraft,
@@ -54,32 +56,6 @@ interface CreateAgentDialogProps {
   onOpenChange: (open: boolean) => void;
   open: boolean;
   projects: WorkflowProject[];
-}
-
-function getChannelBadgeLabel(
-  channelId: CreateAgentInput['channelId'],
-) {
-  if (channelId === builtInChannelOption.id) {
-    return 'Default';
-  }
-
-  if (channelId === 'telegram') {
-    return 'Setup';
-  }
-
-  return 'Soon';
-}
-
-function isChannelDisabled(channelId: CreateAgentInput['channelId']) {
-  if (channelId === builtInChannelOption.id) {
-    return false;
-  }
-
-  if (channelId === 'telegram') {
-    return false;
-  }
-
-  return true;
 }
 
 export function CreateAgentDialog({
@@ -319,7 +295,7 @@ export function CreateAgentDialog({
                   <div className="space-y-1">
                     {createAgentChannelOptions.map((channel) => {
                       const isSelected = channel.id === selectedChannelId;
-                      const isDisabled = isChannelDisabled(channel.id);
+                      const isDisabled = !isChannelSelectable(channel.id);
 
                       return (
                         <button

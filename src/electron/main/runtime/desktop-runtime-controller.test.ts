@@ -37,6 +37,7 @@ describe('DesktopRuntimeController', () => {
 
     expect(controller.getSnapshot()).toEqual({
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {

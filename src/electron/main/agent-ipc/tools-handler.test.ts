@@ -36,6 +36,8 @@ function createRuntimeControllerMock() {
           status: 'ready',
           target: null,
         },
+        activityEvents: [],
+        codingEngineEvents: [],
         contextCards: [
           {
             body: 'Hidden context',
@@ -80,6 +82,8 @@ function createRuntimeControllerMock() {
             name: 'Ops',
           },
         },
+        activityEvents: [],
+        codingEngineEvents: [],
         contextCards: [],
         id: 'agent-2',
         messages: [

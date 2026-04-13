@@ -10,6 +10,7 @@ describe('app store desktop runtime reconciliation', () => {
   it('hydrates the store from a live desktop runtime snapshot', async () => {
     const liveSnapshot: AgentServiceSnapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: {},
       isStreaming: false,
       runtimeInfo: {

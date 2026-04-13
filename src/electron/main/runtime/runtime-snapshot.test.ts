@@ -15,6 +15,7 @@ describe('runtime snapshot helpers', () => {
     });
     const liveSnapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
@@ -28,6 +29,7 @@ describe('runtime snapshot helpers', () => {
     const snapshot = await getBootstrappedRuntimeSnapshot({
       createInitialRuntimeSnapshot: () => ({
         agents: [],
+        codingEngines: [],
         externalChannels: createDefaultExternalChannelsState(),
         isStreaming: false,
         runtimeInfo: {
@@ -59,6 +61,7 @@ describe('runtime snapshot helpers', () => {
       {
         getSnapshot: () => ({
           agents: [],
+          codingEngines: [],
           externalChannels: createDefaultExternalChannelsState(),
           isStreaming: false,
           runtimeInfo: {

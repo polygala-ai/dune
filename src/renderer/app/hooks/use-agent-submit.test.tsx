@@ -15,6 +15,8 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
       label: 'Dune chat',
       status: 'ready',
     },
+    activityEvents: [],
+    codingEngineEvents: [],
     contextCards: [],
     id: 'agent-1',
     messages: [],

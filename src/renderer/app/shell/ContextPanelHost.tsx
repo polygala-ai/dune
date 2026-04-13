@@ -12,6 +12,7 @@ import {
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { AgentCustomizationEditor } from '@/renderer/features/agents/components/AgentCustomizationEditor';
 import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
+import { TelegramChannelSetupCard } from '@/renderer/features/agents/components/TelegramChannelSetupCard';
 import {
   cloneAgentCustomizationDraft,
   createEmptyAgentCustomizationDraft,
@@ -19,6 +20,10 @@ import {
   hasAgentCustomization,
   type AgentCustomizationDraft,
 } from '@/renderer/features/agents/model/agent-customization';
+import {
+  agentRuntime,
+  syncAgentRuntimeSnapshot,
+} from '@/renderer/features/agents/runtime/agent-runtime';
 import {
   Dialog,
   DialogClose,
@@ -29,7 +34,11 @@ import {
 import { Button } from '@/renderer/shared/ui/button';
 import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 
-import type { PresentedAgent } from '@/renderer/features/agents/types';
+import type {
+  AgentExternalTarget,
+  PresentedAgent,
+  TelegramSetupSession,
+} from '@/renderer/features/agents/types';
 
 interface ContextPanelHostProps {
   agent: PresentedAgent | null;
@@ -50,6 +59,17 @@ interface CustomizationSurfaceProps {
   onChange: (value: AgentCustomizationDraft) => void;
   onReset: () => void;
   onSave: () => void;
+}
+
+interface TelegramSetupSurfaceProps {
+  agent: PresentedAgent;
+  errorMessage?: string | null;
+  isApplying: boolean;
+  matchedChat: AgentExternalTarget | null;
+  onApply: () => Promise<void>;
+  onCancel: () => void;
+  onSessionChange: (session: TelegramSetupSession | null) => void;
+  session: TelegramSetupSession | null;
 }
 
 function AgentCustomizationSurface({
@@ -134,6 +154,81 @@ function AgentCustomizationSurface({
   );
 }
 
+function TelegramSetupSurface({
+  agent,
+  errorMessage = null,
+  isApplying,
+  matchedChat,
+  onApply,
+  onCancel,
+  onSessionChange,
+}: TelegramSetupSurfaceProps) {
+  const canApply = Boolean(matchedChat && !isApplying);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-start justify-between gap-4 border-b border-app-border px-6 py-5">
+        <div className="min-w-0">
+          <div className="surface-eyebrow">Connection</div>
+          <DialogTitle className="mt-2 text-[1.15rem] font-semibold tracking-[-0.04em] text-app-text">
+            Telegram setup
+          </DialogTitle>
+          <DialogDescription className="mt-2 max-w-[32rem] text-sm leading-6 text-app-muted">
+            Pair a Telegram chat here, then save the channel change from this popup.
+          </DialogDescription>
+        </div>
+        <Button
+          aria-label="Close Telegram setup"
+          className="shrink-0"
+          disabled={isApplying}
+          onClick={onCancel}
+          size="icon"
+          type="button"
+          variant="quiet"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1" contentWidth="fill">
+        <div className="px-6 py-6">
+          <TelegramChannelSetupCard
+            agent={agent}
+            onSessionChange={onSessionChange}
+          />
+        </div>
+      </ScrollArea>
+
+      <div className="flex flex-col gap-3 border-t border-app-border bg-app-panel/35 px-6 py-4">
+        <div className="min-w-0 text-xs leading-5 text-app-muted">
+          {matchedChat
+            ? `Matched chat ready: ${matchedChat.name}`
+            : 'Complete Telegram pairing to enable saving.'}
+        </div>
+        {errorMessage ? (
+          <div className="min-w-0 text-xs leading-5 text-red-600">
+            {errorMessage}
+          </div>
+        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button disabled={isApplying} onClick={onCancel} type="button" variant="quiet">
+            Close
+          </Button>
+          <Button
+            disabled={!canApply}
+            onClick={() => {
+              void onApply();
+            }}
+            type="button"
+          >
+            {isApplying ? 'Saving…' : 'Save Telegram channel'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ContextPanelHost({
   agent,
   customization,
@@ -146,14 +241,30 @@ export function ContextPanelHost({
   const resetAgentCustomization = useAppStore((state) => state.resetAgentCustomization);
   const upsertAgentCustomization = useAppStore((state) => state.upsertAgentCustomization);
   const artifactsPath = useAppStore((state) => state.runtimeInfo.artifactsPath);
+  const codingEngines = useAppStore((state) => state.codingEngines);
   const deleteAgentProps = onDeleteAgent ? { onDeleteAgent } : {};
   const [isEditingCustomization, setEditingCustomization] = useState(false);
+  const [isApplyingTelegramChannel, setApplyingTelegramChannel] = useState(false);
+  const [isTelegramSetupOpen, setTelegramSetupOpen] = useState(false);
+  const [telegramSetupError, setTelegramSetupError] = useState<string | null>(null);
+  const [telegramSetupSession, setTelegramSetupSession] = useState<TelegramSetupSession | null>(null);
+  const [telegramSetupSessionId, setTelegramSetupSessionId] = useState<string | null>(null);
+  const [telegramMatchedChat, setTelegramMatchedChat] = useState<AgentExternalTarget | null>(null);
   const [draft, setDraft] = useState(createEmptyAgentCustomizationDraft);
 
   useEffect(() => {
     setEditingCustomization(false);
     setDraft(cloneAgentCustomizationDraft(customization));
   }, [agent?.id, customization, mode]);
+
+  useEffect(() => {
+    setTelegramSetupOpen(false);
+    setApplyingTelegramChannel(false);
+    setTelegramSetupError(null);
+    setTelegramSetupSession(null);
+    setTelegramSetupSessionId(null);
+    setTelegramMatchedChat(null);
+  }, [agent?.id, agent?.channel.id, mode]);
 
   const openCustomizationEditor = () => {
     setDraft(cloneAgentCustomizationDraft(customization));
@@ -189,6 +300,58 @@ export function ContextPanelHost({
     setEditingCustomization(false);
   };
 
+  const closeTelegramSetup = () => {
+    setTelegramSetupOpen(false);
+    setApplyingTelegramChannel(false);
+    setTelegramSetupError(null);
+    setTelegramSetupSession(null);
+    setTelegramSetupSessionId(null);
+    setTelegramMatchedChat(null);
+  };
+
+  const handleTelegramSetupSessionChange = (session: TelegramSetupSession | null) => {
+    setTelegramSetupSession(session);
+    setTelegramSetupError(null);
+
+    if (session?.id) {
+      setTelegramSetupSessionId(session.id);
+    }
+
+    if (session?.matchedChat) {
+      setTelegramMatchedChat(session.matchedChat);
+      return;
+    }
+
+    if (session) {
+      setTelegramMatchedChat(null);
+    }
+  };
+
+  const handleApplyTelegramChannel = async () => {
+    const setupSessionId = telegramSetupSession?.id ?? telegramSetupSessionId;
+
+    if (!agent || !setupSessionId || !telegramMatchedChat) {
+      return;
+    }
+
+    setApplyingTelegramChannel(true);
+    setTelegramSetupError(null);
+
+    try {
+      await agentRuntime.service.updateAgentChannel({
+        agentId: agent.id,
+        channelId: 'telegram',
+        telegramSetupSessionId: setupSessionId,
+      });
+      await syncAgentRuntimeSnapshot('agent-context-telegram-channel-save');
+      setTelegramSetupOpen(false);
+    } catch (error) {
+      setTelegramSetupError(`Failed to save Telegram channel. ${String(error)}`);
+    } finally {
+      setApplyingTelegramChannel(false);
+    }
+  };
+
   if (mode === 'hidden' || !agent) {
     return null;
   }
@@ -206,9 +369,21 @@ export function ContextPanelHost({
         <AgentContextPanel
           agent={agent}
           className="h-full border-l border-app-border"
+          codingEngines={codingEngines}
           customization={customization}
           onClose={onClose}
           onEditCustomization={openCustomizationEditor}
+          onOpenTelegramSetup={() => {
+            setTelegramSetupError(null);
+            setTelegramSetupOpen(true);
+          }}
+          telegramSetupSession={telegramSetupSession}
+          onUpdateChannel={async (input) => {
+            await agentRuntime.service.updateAgentChannel({
+              agentId: agent.id,
+              ...input,
+            });
+          }}
           {...deleteAgentProps}
         />
         <Dialog
@@ -228,6 +403,27 @@ export function ContextPanelHost({
               onChange={setDraft}
               onReset={handleResetCustomization}
               onSave={handleSaveCustomization}
+            />
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open && !isApplyingTelegramChannel) {
+              closeTelegramSetup();
+            }
+          }}
+          open={isTelegramSetupOpen}
+        >
+          <DialogContent className="flex h-[min(90vh,780px)] w-[min(94vw,720px)] flex-col overflow-hidden p-0">
+            <TelegramSetupSurface
+              agent={agent}
+              errorMessage={telegramSetupError}
+              isApplying={isApplyingTelegramChannel}
+              matchedChat={telegramMatchedChat}
+              onApply={handleApplyTelegramChannel}
+              onCancel={closeTelegramSetup}
+              onSessionChange={handleTelegramSetupSessionChange}
+              session={telegramSetupSession}
             />
           </DialogContent>
         </Dialog>
@@ -283,15 +479,48 @@ export function ContextPanelHost({
             <AgentContextPanel
               agent={agent}
               className="app-no-drag h-full"
+              codingEngines={codingEngines}
               customization={customization}
               onClose={onClose}
               onEditCustomization={openCustomizationEditor}
+              onOpenTelegramSetup={() => {
+                setTelegramSetupError(null);
+                setTelegramSetupOpen(true);
+              }}
+              telegramSetupSession={telegramSetupSession}
+              onUpdateChannel={async (input) => {
+                await agentRuntime.service.updateAgentChannel({
+                  agentId: agent.id,
+                  ...input,
+                });
+              }}
               showCloseButton={false}
               {...deleteAgentProps}
             />
           </>
         )}
       </DialogContent>
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open && !isApplyingTelegramChannel) {
+            closeTelegramSetup();
+          }
+        }}
+        open={isTelegramSetupOpen}
+      >
+        <DialogContent className="flex h-[min(90vh,780px)] w-[min(94vw,720px)] flex-col overflow-hidden p-0">
+          <TelegramSetupSurface
+            agent={agent}
+            errorMessage={telegramSetupError}
+            isApplying={isApplyingTelegramChannel}
+            matchedChat={telegramMatchedChat}
+            onApply={handleApplyTelegramChannel}
+            onCancel={closeTelegramSetup}
+            onSessionChange={handleTelegramSetupSessionChange}
+            session={telegramSetupSession}
+          />
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

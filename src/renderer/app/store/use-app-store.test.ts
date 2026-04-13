@@ -41,6 +41,7 @@ describe('app store agent runtime sync', () => {
     expect(useAppStore.getState().agentDrafts).toEqual({});
     expect(agentRuntime.getSnapshot()).toEqual({
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {

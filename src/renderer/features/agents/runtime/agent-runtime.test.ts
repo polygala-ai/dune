@@ -140,6 +140,7 @@ describe('agent runtime', () => {
 
     expect(runtime.getSnapshot()).toEqual({
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: {
@@ -155,6 +156,7 @@ describe('agent runtime', () => {
   it('reconciles a stale desktop snapshot with the live runtime state', async () => {
     const liveSnapshot: AgentServiceSnapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: {},
       isStreaming: false,
       runtimeInfo: {

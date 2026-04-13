@@ -4,8 +4,10 @@ import type {
 } from '@/renderer/features/agents/model/agent-service';
 import { createMockAgentRuntime, type AgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
+  CodingEngineEvent,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
+  UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 import {
@@ -84,6 +86,14 @@ export class DesktopRuntimeController {
     return this.activeRuntime.getSnapshot();
   }
 
+  pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
+    const runtime = this.activeRuntime;
+
+    if (runtime instanceof AgentLiteHost) {
+      runtime.pushCodingEngineEvent(agentId, event);
+    }
+  }
+
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
     return () => {
@@ -133,6 +143,10 @@ export class DesktopRuntimeController {
 
   async startTelegramSetupSession(input: StartTelegramSetupSessionInput) {
     return this.activeRuntime.service.startTelegramSetupSession(input);
+  }
+
+  async updateAgentChannel(input: UpdateAgentChannelInput) {
+    await this.activeRuntime.service.updateAgentChannel(input);
   }
 
   selectAgent(agentId: string) {

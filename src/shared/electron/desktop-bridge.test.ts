@@ -21,6 +21,7 @@ describe('DesktopBridge', () => {
     const reloadExternalChannels = () => Promise.resolve(undefined);
     const restartApp = () => Promise.resolve(undefined);
     const storageGet = () => Promise.resolve({ key: 'value' });
+    const updateAgentChannel = () => Promise.resolve(undefined);
 
     const bridge: DesktopBridge = {
       applyNetworkSettings,
@@ -32,6 +33,7 @@ describe('DesktopBridge', () => {
       reloadExternalChannels,
       restartApp,
       storageGet,
+      updateAgentChannel,
     };
 
     await expect(bridge.applyNetworkSettings?.()).resolves.toBeUndefined();
@@ -42,5 +44,6 @@ describe('DesktopBridge', () => {
     await expect(bridge.reloadExternalChannels?.()).resolves.toBeUndefined();
     await expect(bridge.restartApp?.()).resolves.toBeUndefined();
     expect(await bridge.storageGet?.('settings', 'key')).toEqual({ key: 'value' });
+    await expect(bridge.updateAgentChannel?.({ agentId: 'agent-1', channelId: 'dune-chat' })).resolves.toBeUndefined();
   });
 });

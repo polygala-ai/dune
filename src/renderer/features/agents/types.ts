@@ -1,6 +1,9 @@
 export type MessageRole = 'assistant' | 'system' | 'user';
 export type MessageStatus = 'complete' | 'streaming';
 export type MessageFormat = 'markdown' | 'plain';
+export type CodingEngineId = 'claude-code' | 'codex';
+export type CodingEngineEventKind = 'completed' | 'error' | 'started' | 'step';
+export type AgentActivityKind = 'subagent' | 'status' | 'tool';
 export type AgentStatus = 'draft' | 'live' | 'ready';
 export type AgentRole = 'custom' | 'project-main';
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
@@ -91,6 +94,12 @@ export interface CreateAgentInput {
   telegramSetupSessionId?: string | null;
 }
 
+export interface UpdateAgentChannelInput {
+  agentId: string;
+  channelId: AgentChannelId;
+  telegramSetupSessionId?: string | null;
+}
+
 export interface StartTelegramSetupSessionInput {
   agentId?: string | null;
   token?: string | null;
@@ -115,6 +124,14 @@ export interface AgentMessage {
   status: MessageStatus;
 }
 
+export interface AgentActivityEvent {
+  id: string;
+  kind: AgentActivityKind;
+  label: string;
+  detail?: string | undefined;
+  timestamp: number;
+}
+
 export interface AgentContextCard {
   id: string;
   title: string;
@@ -135,7 +152,9 @@ export interface AgentSummary {
 }
 
 export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
+  activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
+  codingEngineEvents: CodingEngineEvent[];
   note: string;
   projectId: string | null;
   role: AgentRole;
@@ -148,7 +167,9 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
 }
 
 export interface PresentedAgent extends AgentSummary {
+  activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
+  codingEngineEvents: CodingEngineEvent[];
   id: string;
   note: string;
   projectId: string | null;
@@ -159,4 +180,22 @@ export interface PresentedAgent extends AgentSummary {
   workspace: string;
   contextCards: AgentContextCard[];
   messages: PresentedAgentMessage[];
+}
+
+export interface CodingEngineStatus {
+  id: CodingEngineId;
+  label: string;
+  available: boolean;
+  version: string | null;
+}
+
+export interface CodingEngineEvent {
+  id: string;
+  engineId: CodingEngineId;
+  kind: CodingEngineEventKind;
+  prompt?: string;
+  stepLabel?: string;
+  result?: string;
+  error?: string;
+  timestamp: number;
 }

@@ -12,6 +12,7 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
+  UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
@@ -41,6 +42,13 @@ function createMessageId(role: AgentMessage['role'], now: number) {
 
 function summarizePreview(content: string) {
   return summarizeMessagePreview(content);
+}
+
+function createExternalAgentCopy(attachedLabel: string) {
+  return {
+    note: `This prototype agent mirrors ${attachedLabel} through Telegram. Real channel wiring lands in the AgentLite phase.`,
+    preview: `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
+  };
 }
 
 function createDraftAgent(
@@ -80,6 +88,8 @@ function createDraftAgent(
       ? 'Ready for a first instruction.'
       : `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
     projectId,
+    activityEvents: [],
+    codingEngineEvents: [],
     role,
     telegram: telegramState,
     updatedAt: now,
@@ -171,6 +181,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
     })),
     externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
     isStreaming: snapshot.isStreaming,
+    codingEngines: snapshot.codingEngines.map((e) => ({ ...e })),
     runtimeInfo: { ...snapshot.runtimeInfo },
     selectedAgentId: snapshot.selectedAgentId,
     telegramSetupSessions: snapshot.telegramSetupSessions.map(cloneTelegramSetupSession),
@@ -211,6 +222,7 @@ class MockAgentService implements AgentService {
   constructor(runtimeInfo?: AgentRuntimeInfo) {
     this.snapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: runtimeInfo ?? createDefaultRuntimeInfo(),
@@ -413,6 +425,87 @@ class MockAgentService implements AgentService {
     return Promise.resolve(sessionId);
   }
 
+  updateAgentChannel(input: UpdateAgentChannelInput) {
+    const agentId = input.agentId.trim();
+    const channelId = input.channelId;
+    const agent = this.snapshot.agents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      throw new Error(`Agent "${input.agentId}" was not found.`);
+    }
+
+    if (channelId === 'telegram') {
+      const setupSessionId = input.telegramSetupSessionId?.trim() ?? '';
+      const setupSession = setupSessionId
+        ? this.telegramSetupSessions.get(setupSessionId) ?? null
+        : null;
+
+      if (!setupSession?.matchedChat) {
+        throw new Error('Telegram pairing must finish before changing the channel.');
+      }
+
+      const telegramState = createDefaultTelegramAgentRuntimeState({
+        botUsername: setupSession.botUsername,
+        boundChat: setupSession.matchedChat,
+        errorMessage: setupSession.errorMessage,
+        pairingStatus: 'matched',
+        status: setupSession.status,
+      });
+      const copy = createExternalAgentCopy(setupSession.matchedChat.name);
+
+      this.telegramSetupSessions.delete(setupSession.id);
+      this.snapshot = {
+        ...this.snapshot,
+        agents: this.snapshot.agents.map((item) =>
+          item.id === agentId
+            ? {
+                ...item,
+                channel: createChannelBinding('telegram', {
+                  target: setupSession.matchedChat,
+                  telegram: telegramState,
+                }),
+                note: copy.note,
+                preview: copy.preview,
+                telegram: telegramState,
+              }
+            : item
+        ),
+      };
+      this.syncTelegramSetupSessionsSnapshot();
+      this.emit();
+      return Promise.resolve();
+    }
+
+    if (channelId !== 'dune-chat') {
+      throw new Error(`${channelId} is not available yet.`);
+    }
+
+    for (const session of [...this.telegramSetupSessions.values()]) {
+      if (session.agentId === agentId) {
+        this.telegramSetupSessions.delete(session.id);
+      }
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((item) =>
+        item.id === agentId
+          ? {
+              ...item,
+              channel: createChannelBinding('dune-chat'),
+              note: 'This prototype agent stays inside Dune while the app is open. AgentLite runtime wiring lands in the next phase.',
+              preview: 'Ready for a first instruction.',
+              telegram: null,
+            }
+          : item
+      ),
+    };
+    this.syncTelegramSetupSessionsSnapshot();
+    this.emit();
+
+    return Promise.resolve();
+  }
+
   deleteAgent(agentId: string) {
     const agentExists = this.snapshot.agents.some((agent) => agent.id === agentId);
 
@@ -558,6 +651,7 @@ class MockAgentService implements AgentService {
     this.streamingAgentIds.clear();
     this.snapshot = {
       agents: [],
+      codingEngines: [],
       externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),
       isStreaming: false,
       runtimeInfo: { ...this.snapshot.runtimeInfo },

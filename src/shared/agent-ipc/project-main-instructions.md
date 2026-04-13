@@ -43,6 +43,13 @@ You have Dune workflow tools available as MCP tools (prefixed `mcp__dune__`). Ke
 - `mcp__dune__agents_list` — list agents
 - `mcp__dune__agents_create` — create a new agent
 
+### Coding engines (if available)
+
+- `mcp__dune__coding_engine_claude_code` — delegate a coding task to Claude Code. Use for file edits, refactoring, debugging, code analysis.
+- `mcp__dune__coding_engine_codex` — delegate a coding task to Codex. Use for sandboxed execution, testing, code generation.
+
+When you or an assigned agent needs to make code changes, use these tools. Be specific in the prompt — include file paths, what to change, and why.
+
 See the `/dune` skill for the full tool reference.
 
 ## Review protocol

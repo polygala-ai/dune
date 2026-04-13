@@ -242,6 +242,8 @@ function toAgent(
       status: 'ready',
       canCompose: true,
     },
+    activityEvents: [],
+    codingEngineEvents: [],
     note: '',
     projectId,
     role: 'custom',

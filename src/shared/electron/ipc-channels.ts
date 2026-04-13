@@ -23,6 +23,7 @@ export const ipcChannels = {
   startAgentIpc: 'dune:runtime:start-agent-ipc',
   stopAgentIpc: 'dune:runtime:stop-agent-ipc',
   selectProjectDirectory: 'dune:runtime:select-project-directory',
+  updateAgentChannel: 'dune:runtime:update-agent-channel',
   workflowChanged: 'dune:runtime:workflow-changed',
   storageDelete: 'dune:storage:delete',
   storageGet: 'dune:storage:get',
