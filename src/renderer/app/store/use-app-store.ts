@@ -40,6 +40,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
   return {
     ...createAgentSlice({
       agents: initialState.agents,
+      agentCustomizations: initialState.agentCustomizations,
       agentDrafts: initialState.agentDrafts,
       externalChannels: initialState.externalChannels,
       isStreaming: initialState.isStreaming,
@@ -52,6 +53,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
       isContextPanelOpen: initialState.isContextPanelOpen,
       navigationBackStack: initialState.navigationBackStack,
       navigationForwardStack: initialState.navigationForwardStack,
+      popoverAgentId: initialState.popoverAgentId ?? null,
       route: initialState.route,
     })(set, get, store),
     ...createSettingsSlice({

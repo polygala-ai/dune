@@ -1,5 +1,6 @@
 interface WorkflowProjectActivityProps {
   entries: Array<{
+    actor?: string | undefined;
     createdAtLabel: string;
     description: string;
     id: string;
@@ -34,7 +35,10 @@ export function WorkflowProjectActivity({
                 >
                   {entry.itemTitle}
                 </button>
-                <p className="mt-3 text-sm leading-6 text-app-text">{entry.description}</p>
+                {entry.actor ? (
+                  <p className="mt-2 text-xs font-medium text-app-accent">{entry.actor}</p>
+                ) : null}
+                <p className={`${entry.actor ? 'mt-1' : 'mt-3'} text-sm leading-6 text-app-text`}>{entry.description}</p>
               </div>
               <span className="pill-key border-transparent bg-app-panel">
                 {entry.createdAtLabel}

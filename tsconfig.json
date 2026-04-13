@@ -40,5 +40,8 @@
     "forge.config.ts",
     "forge.env.d.ts",
     "tests"
+  ],
+  "exclude": [
+    "src/shared/agent-ipc/dune-mcp-server"
   ]
 }

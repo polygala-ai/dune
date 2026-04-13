@@ -18,6 +18,8 @@ import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/compone
 import { WorkflowProjectAgents } from '@/renderer/features/workflow/components/WorkflowProjectAgents';
 import { WorkflowProjectSettings } from '@/renderer/features/workflow/components/WorkflowProjectSettings';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
+import { createAgentAssignmentMessage } from '@/shared/agents/assignment-message';
+import { resolveMountedItemArtifactPath } from '@/shared/workflow/project-artifacts';
 import {
   Dialog,
   DialogClose,
@@ -67,7 +69,6 @@ export function WorkflowWorkspace({
   const [isDeleteProjectOpen, setDeleteProjectOpen] = useState(false);
   const {
     addTask,
-    addWorkProduct,
     assignPrimaryAgent,
     clearAgentAssignments,
     closeProjectSettings,
@@ -82,7 +83,6 @@ export function WorkflowWorkspace({
   } = useAppStore(
     useShallow((state) => ({
       addTask: state.addTask,
-      addWorkProduct: state.addWorkProduct,
       assignPrimaryAgent: state.assignPrimaryAgent,
       clearAgentAssignments: state.clearAgentAssignments,
       closeProjectSettings: state.closeProjectSettings,
@@ -133,10 +133,45 @@ export function WorkflowWorkspace({
     );
   }
 
+  const handleAssignPrimaryAgent = async (
+    itemId: string,
+    input: { agentId: string | null; agentName?: string | null },
+  ) => {
+    const state = useAppStore.getState();
+    const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
+    const previousAgentId = item?.primaryAgentId ?? null;
+
+    assignPrimaryAgent(itemId, input);
+
+    if (!item || !input.agentId || previousAgentId === input.agentId) {
+      return;
+    }
+
+    const projectName = state.projects.find((project) => project.id === item.projectId)?.name ?? null;
+    const projectRootPath = state.projects.find((project) => project.id === item.projectId)?.rootPath ?? null;
+    const assignmentMessage = createAgentAssignmentMessage({
+      agentName: input.agentName ?? null,
+      artifactPath: resolveMountedItemArtifactPath(projectRootPath, item.artifactFolderName),
+      itemBrief: item.brief,
+      itemStatus: item.status,
+      itemTitle: item.title,
+      projectName,
+      tasks: item.tasks.map((task) => ({
+        status: task.status,
+        title: task.title,
+      })),
+    });
+
+    try {
+      await agentRuntime.service.sendMessage(input.agentId, assignmentMessage);
+    } catch (error) {
+      console.error(`Failed to create an assignment task for agent "${input.agentId}".`, error);
+    }
+  };
+
   const handleCreateAgentForItem = async (itemId: string) => {
-    const item = selectedItem?.id === itemId
-      ? selectedItem
-      : null;
+    const state = useAppStore.getState();
+    const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
 
     if (!item || !selectedProjectId) {
       return;
@@ -149,11 +184,13 @@ export function WorkflowWorkspace({
         channelId: 'dune-chat',
         name: suggestedName,
         projectId: selectedProjectId,
+        projectName: selectedProject?.name ?? null,
+        projectRootPath: selectedProject?.rootPath ?? null,
       },
       { openRoute: false },
     );
 
-    assignPrimaryAgent(itemId, {
+    await handleAssignPrimaryAgent(itemId, {
       agentId,
       agentName: suggestedName,
     });
@@ -181,11 +218,24 @@ export function WorkflowWorkspace({
       }
       onCancel={closeProjectSettings}
       onDelete={() => setDeleteProjectOpen(true)}
-      onSave={(input) => {
+      onOpenPath={(targetPath) => window.duneDesktop?.openPath?.(targetPath)}
+      onPickRootPath={() => window.duneDesktop?.selectProjectDirectory?.() ?? Promise.resolve(null)}
+      onSave={async (input) => {
+        if (input.rootPath) {
+          const artifactFolderNames = useAppStore
+            .getState()
+            .items
+            .filter((item) => item.projectId === selectedProject.id)
+            .map((item) => item.artifactFolderName);
+
+          await window.duneDesktop?.prepareProjectRootPath?.(input.rootPath, artifactFolderNames);
+        }
+
         updateProject(selectedProject.id, input);
-        void agentRuntime.service.ensureProjectMainAgent(
+        await agentRuntime.service.ensureProjectMainAgent(
           selectedProject.id,
           input.name ?? selectedProject.name,
+          input.rootPath ?? selectedProject.rootPath,
         );
         closeProjectSettings();
       }}
@@ -228,14 +278,13 @@ export function WorkflowWorkspace({
                 onAddTask={(itemId, title) => {
                   addTask(itemId, title);
                 }}
-                onAddWorkProduct={(itemId, input) => {
-                  addWorkProduct(itemId, input);
+                onAssignPrimaryAgent={(itemId, input) => {
+                  void handleAssignPrimaryAgent(itemId, input);
                 }}
-                onAssignPrimaryAgent={assignPrimaryAgent}
                 onCreateAgent={(itemId) => {
                   void handleCreateAgentForItem(itemId);
                 }}
-                onOpenAgent={(agentId) => commands.openAgent(agentId)}
+                onOpenAgent={(agentId) => commands.setPopoverAgentId(agentId)}
                 onUpdateItem={updateItem}
                 onUpdateItemStatus={(itemId, status) =>
                   moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
@@ -260,14 +309,13 @@ export function WorkflowWorkspace({
       onAddTask={(itemId, title) => {
         addTask(itemId, title);
       }}
-      onAddWorkProduct={(itemId, input) => {
-        addWorkProduct(itemId, input);
+      onAssignPrimaryAgent={(itemId, input) => {
+        void handleAssignPrimaryAgent(itemId, input);
       }}
-      onAssignPrimaryAgent={assignPrimaryAgent}
       onCreateAgent={(itemId) => {
         void handleCreateAgentForItem(itemId);
       }}
-      onOpenAgent={(agentId) => commands.openAgent(agentId)}
+      onOpenAgent={(agentId) => commands.setPopoverAgentId(agentId)}
       onUpdateItem={updateItem}
       onUpdateItemStatus={(itemId, status) =>
         moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
@@ -399,7 +447,7 @@ export function WorkflowWorkspace({
                 ) : selectedProjectView === 'agents' ? (
                   <WorkflowProjectAgents
                     agents={projectAgents}
-                    onOpenAgent={commands.openAgent}
+                    onOpenAgent={commands.setPopoverAgentId}
                     onOpenItem={(itemId) => {
                       commands.openItem(itemId);
                     }}
@@ -509,23 +557,54 @@ export function WorkflowWorkspace({
       </Dialog>
 
       <CreateProjectDialog
-        onCreateProject={(input) => {
+        onCreateProject={async (input) => {
+          await window.duneDesktop?.prepareProjectRootPath?.(input.rootPath, []);
           const projectId = createProject(input);
 
           if (projectId) {
-            void agentRuntime.service.ensureProjectMainAgent(projectId, input.name);
+            const mainAgentId = await agentRuntime.service.ensureProjectMainAgent(
+              projectId,
+              input.name,
+              input.rootPath,
+            );
+
+            // Open popover with the project-main agent and trigger kickoff
+            commands.setPopoverAgentId(mainAgentId);
+            try {
+              await agentRuntime.service.sendMessage(
+                mainAgentId,
+                'Project created. Run /dune-project-kickoff to introduce yourself and help the user get started.',
+              );
+            } catch {
+              // Agent may not be ready yet — popover still opens for manual interaction
+            }
           }
 
           onCreateProjectOpenChange(false);
         }}
         onOpenChange={onCreateProjectOpenChange}
+        onSelectProjectDirectory={() => window.duneDesktop?.selectProjectDirectory?.() ?? Promise.resolve(null)}
         open={isCreateProjectOpen}
       />
 
       <CreateWorkItemDialog
         initialProjectId={selectedProjectId}
         onCreateItem={(input) => {
-          createItem(input);
+          const itemId = createItem(input);
+
+          if (itemId) {
+            const state = useAppStore.getState();
+            const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
+            const project = state.projects.find((candidate) => candidate.id === input.projectId) ?? null;
+
+            if (item?.artifactFolderName && project?.rootPath) {
+              void window.duneDesktop?.ensureProjectArtifactFolder?.(
+                project.rootPath,
+                item.artifactFolderName,
+              );
+            }
+          }
+
           onCreateWorkItemOpenChange(false);
         }}
         onOpenChange={onCreateWorkItemOpenChange}

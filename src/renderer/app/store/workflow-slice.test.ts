@@ -17,9 +17,11 @@ describe('workflow slice', () => {
     const nextProjectId = state.createProject({
       description: 'Support the next project pass for the docs team.',
       name: 'Docs Ops',
+      rootPath: null,
     });
 
     expect(nextProjectId).toBeTruthy();
+    expect(nextProjectId).toMatch(/^[A-Za-z0-9_-]{8}$/);
     expect(useAppStore.getState().selectedProjectId).toBe(nextProjectId);
 
     const nextItemId = useAppStore.getState().createItem({
@@ -37,10 +39,15 @@ describe('workflow slice', () => {
     expect(
       useAppStore.getState().items.find((item) => item.id === nextItemId),
     ).toMatchObject({
+      artifactFolderName: expect.stringMatching(/^tighten-the-launch-copy-/),
       projectId: nextProjectId,
       status: 'inbox',
       title: 'Tighten the launch copy',
     });
+  });
+
+  it('seeds the initial project with an 8-character nanoid', () => {
+    expect(useAppStore.getState().projects[0]?.id).toMatch(/^[A-Za-z0-9_-]{8}$/);
   });
 
   it('moves work items, updates tasks, and assigns primary agents', () => {
@@ -125,6 +132,7 @@ describe('workflow slice', () => {
     const secondProjectId = state.createProject({
       description: 'Coordinate the follow-up workflow pass.',
       name: 'Studio Ops',
+      rootPath: null,
     });
 
     if (!firstProjectId || !secondProjectId) {

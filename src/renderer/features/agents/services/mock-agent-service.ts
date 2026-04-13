@@ -23,6 +23,7 @@ import {
 } from '@/renderer/features/agents/model/channels';
 import { summarizeMessagePreview } from '@/shared/agents/message-content';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
+import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 function createAgentId(name: string, now: number) {
   const slug = name
@@ -312,7 +313,11 @@ class MockAgentService implements AgentService {
     return Promise.resolve(nextAgent.id);
   }
 
-  ensureProjectMainAgent(projectId: string, projectName: string) {
+  ensureProjectMainAgent(
+    projectId: string,
+    projectName: string,
+    _projectRootPath?: string | null,
+  ) {
     const trimmedProjectId = projectId.trim();
     const trimmedProjectName = projectName.trim();
 
@@ -542,6 +547,10 @@ class MockAgentService implements AgentService {
       isStreaming: this.streamingAgentIds.size > 0,
     };
     this.emit();
+  }
+
+  signalReadyAssignmentInbox(_agentId: string, _signal: ReadyAssignmentsInboxSignal) {
+    return Promise.resolve();
   }
 
   reset() {

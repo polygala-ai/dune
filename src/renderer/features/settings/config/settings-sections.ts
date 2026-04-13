@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
+import { ArtifactsSettings } from '@/renderer/features/settings/components/ArtifactsSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
@@ -47,6 +48,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Network',
     description: 'Proxy and transport path',
     Component: NetworkSettings,
+  },
+  {
+    id: 'artifacts',
+    title: 'Artifacts',
+    description: 'Agent templates and prompts',
+    Component: ArtifactsSettings,
   },
   {
     id: 'shortcuts',

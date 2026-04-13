@@ -8,7 +8,7 @@ import {
 } from 'react';
 
 export const CONTEXT_PANEL_WIDTH_STORAGE_KEY = 'dune.shell.contextPanelWidth';
-export const CONTEXT_PANEL_WIDTH_DEFAULT = 300;
+export const CONTEXT_PANEL_WIDTH_DEFAULT = 340;
 export const CONTEXT_PANEL_WIDTH_MIN = 260;
 export const CONTEXT_PANEL_WIDTH_MAX = 420;
 

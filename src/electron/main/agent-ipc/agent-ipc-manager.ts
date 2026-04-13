@@ -1,15 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {
+  parseAgentIpcDirectoryMetadata,
+  resolveAgentIpcMetadataPath,
+} from '@/electron/shared/agent-ipc/ipc-directory';
 import type { Agent, AgentMessage } from '@/renderer/features/agents/types';
 
 import {
   AgentIpcConnection,
   type AgentIpcConnectionState,
-  type BoardMessageHandler,
+  type ToolHandlerContext,
+  type ToolMessageHandler,
 } from './agent-ipc-connection';
 
 export type AgentIpcManagerListener = () => void;
+export type ToolMessageHandlerFactory = (context: ToolHandlerContext) => ToolMessageHandler;
 
 interface ManagedAgent {
   agentId: string;
@@ -23,14 +29,16 @@ export class AgentIpcManager {
 
   private listeners = new Set<AgentIpcManagerListener>();
 
-  private boardMessageHandler: BoardMessageHandler | null = null;
+  private toolMessageHandlerFactory: ToolMessageHandlerFactory | null = null;
 
   constructor(private readonly duneHome: string) {}
 
-  setBoardMessageHandler(handler: BoardMessageHandler): void {
-    this.boardMessageHandler = handler;
+  setToolMessageHandler(handlerFactory: ToolMessageHandlerFactory): void {
+    this.toolMessageHandlerFactory = handlerFactory;
     for (const managed of this.managedAgents.values()) {
-      managed.connection.setBoardMessageHandler(handler);
+      managed.connection.setToolMessageHandler(
+        handlerFactory(createToolHandlerContext(managed)),
+      );
     }
   }
 
@@ -40,20 +48,18 @@ export class AgentIpcManager {
 
   /** Register a new IPC connection for a dynamically created agent. */
   addConnection(agentId: string, agentName: string, projectId: string, ipcHostPath: string): void {
-    if (this.managedAgents.has(agentId)) return;
+    const existing = this.findManagedAgent(projectId, agentName);
 
-    const agentSubDir = path.join(ipcHostPath, 'agent');
-    const hostSubDir = path.join(ipcHostPath, 'host');
+    if (existing) {
+      if (existing.agentId === agentId) return;
 
-    const connection = new AgentIpcConnection(
-      agentSubDir,
-      hostSubDir,
-      () => this.emit(),
-    );
-    if (this.boardMessageHandler) {
-      connection.setBoardMessageHandler(this.boardMessageHandler);
+      existing.connection.stop();
+      this.managedAgents.delete(existing.agentId);
+    } else if (this.managedAgents.has(agentId)) {
+      return;
     }
-    connection.start();
+
+    const connection = this.createConnection(agentId, agentName, projectId, ipcHostPath);
     connection.scan();
 
     this.managedAgents.set(agentId, {
@@ -131,26 +137,23 @@ export class AgentIpcManager {
         const ipcDir = path.join(agentsDir, agentName, 'ipc');
         if (!fs.existsSync(ipcDir)) continue;
 
-        const agentId = `ipc:${projName}:${agentName}`;
+        const identity = resolveAgentIdentity(ipcDir, projName, agentName);
+        if (this.findManagedAgent(identity.projectId, identity.agentName)) continue;
+
+        const agentId = `ipc:${identity.projectId}:${identity.agentName}`;
         if (this.managedAgents.has(agentId)) continue;
 
-        const agentSubDir = path.join(ipcDir, 'agent');
-        const hostSubDir = path.join(ipcDir, 'host');
-
-        const connection = new AgentIpcConnection(
-          agentSubDir,
-          hostSubDir,
-          () => this.emit(),
+        const connection = this.createConnection(
+          agentId,
+          identity.agentName,
+          identity.projectId,
+          ipcDir,
         );
-        if (this.boardMessageHandler) {
-          connection.setBoardMessageHandler(this.boardMessageHandler);
-        }
-        connection.start();
 
         this.managedAgents.set(agentId, {
           agentId,
-          agentName,
-          projectId: projName,
+          agentName: identity.agentName,
+          projectId: identity.projectId,
           connection,
         });
       }
@@ -162,6 +165,52 @@ export class AgentIpcManager {
       listener();
     }
   }
+
+  private createConnection(
+    agentId: string,
+    agentName: string,
+    projectId: string,
+    ipcHostPath: string,
+  ): AgentIpcConnection {
+    const agentSubDir = path.join(ipcHostPath, 'agent');
+    const hostSubDir = path.join(ipcHostPath, 'host');
+    const connection = new AgentIpcConnection(
+      agentSubDir,
+      hostSubDir,
+      () => this.emit(),
+    );
+
+    if (this.toolMessageHandlerFactory) {
+      connection.setToolMessageHandler(
+        this.toolMessageHandlerFactory({
+          agentId,
+          agentName,
+          projectId,
+        }),
+      );
+    }
+
+    connection.start();
+    return connection;
+  }
+
+  private findManagedAgent(projectId: string, agentName: string): ManagedAgent | null {
+    for (const managed of this.managedAgents.values()) {
+      if (managed.projectId === projectId && managed.agentName === agentName) {
+        return managed;
+      }
+    }
+
+    return null;
+  }
+}
+
+function createToolHandlerContext(managed: ManagedAgent): ToolHandlerContext {
+  return {
+    agentId: managed.agentId,
+    agentName: managed.agentName,
+    projectId: managed.projectId,
+  };
 }
 
 function toAgent(
@@ -202,5 +251,30 @@ function toAgent(
     workspace: '',
     contextCards: [],
     messages,
+  };
+}
+
+function resolveAgentIdentity(
+  ipcDir: string,
+  fallbackProjectId: string,
+  fallbackAgentName: string,
+) {
+  try {
+    const rawMetadata = fs.readFileSync(resolveAgentIpcMetadataPath(ipcDir), 'utf-8');
+    const metadata = parseAgentIpcDirectoryMetadata(rawMetadata);
+
+    if (metadata) {
+      return {
+        projectId: metadata.projectId,
+        agentName: metadata.agentName,
+      };
+    }
+  } catch {
+    // Fall back to legacy unsanitized folder names.
+  }
+
+  return {
+    projectId: fallbackProjectId,
+    agentName: fallbackAgentName,
   };
 }

@@ -64,6 +64,7 @@ export interface TelegramSetupSession {
 export type ExternalChannelsState = Record<string, never>;
 
 export interface AgentRuntimeInfo {
+  artifactsPath?: string;
   mode: AgentRuntimeMode;
   status: AgentRuntimeStatus;
   message?: string;
@@ -85,6 +86,8 @@ export interface CreateAgentInput {
   model?: { providerId: string; modelId: string };
   name: string;
   projectId?: string | null;
+  projectName?: string | null;
+  projectRootPath?: string | null;
   telegramSetupSessionId?: string | null;
 }
 

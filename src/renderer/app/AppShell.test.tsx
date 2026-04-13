@@ -180,6 +180,49 @@ describe('AppShell', () => {
     expect(screen.queryByTestId('workflow-board')).not.toBeInTheDocument();
   });
 
+  it('repairs persisted work items with invalid statuses instead of clearing the workflow', async () => {
+    const snapshot = createSeedWorkflowSnapshot(1_700_000_000_000);
+    const storageSet = vi.fn(async () => undefined);
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      storageGet: vi.fn(async () => ({
+        ...snapshot,
+        items: snapshot.items.map((item, index) =>
+          index === 0
+            ? { ...item, status: 'archived' }
+            : item,
+        ),
+      })),
+      storageSet,
+    };
+
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workflow-board')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Research Platform' })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(storageSet).toHaveBeenCalledWith(
+        'workflow',
+        'snapshot',
+        expect.objectContaining({
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              status: 'inbox',
+              title: 'Capture new research angles',
+            }),
+          ]),
+          projects: expect.arrayContaining([
+            expect.objectContaining({ name: 'Research Platform' }),
+          ]),
+        }),
+      );
+    });
+  });
+
   it('launches on the project board and opens settings and the command palette through shortcuts', async () => {
     const user = userEvent.setup();
 
@@ -323,6 +366,7 @@ describe('AppShell', () => {
       useAppStore.getState().createProject({
         description: 'Support the follow-up shell pass.',
         name: 'Studio Ops',
+        rootPath: null,
       });
     });
 
@@ -1035,8 +1079,11 @@ describe('AppShell', () => {
     expectContextPanelWidth(CONTEXT_PANEL_WIDTH_DEFAULT);
 
     fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
-    expect(resizeHandle).toHaveAttribute('aria-valuenow', '316');
-    expectContextPanelWidth(316);
+    expect(resizeHandle).toHaveAttribute(
+      'aria-valuenow',
+      String(CONTEXT_PANEL_WIDTH_DEFAULT + 16),
+    );
+    expectContextPanelWidth(CONTEXT_PANEL_WIDTH_DEFAULT + 16);
 
     fireEvent.keyDown(resizeHandle, { key: 'End' });
     expect(resizeHandle).toHaveAttribute(
@@ -1151,6 +1198,7 @@ describe('AppShell', () => {
       screen.getByLabelText('Description'),
       'Support the next workflow design pass.',
     );
+    await user.click(screen.getByRole('button', { name: /choose folder/i }));
     await user.click(screen.getByRole('button', { name: /^Create project$/i }));
 
     await waitFor(() => {
@@ -1284,6 +1332,7 @@ describe('AppShell', () => {
       useAppStore.getState().createProject({
         description: 'Support the calm project shell.',
         name: 'Studio Ops',
+        rootPath: null,
       });
     });
 
@@ -1376,6 +1425,37 @@ describe('AppShell', () => {
           name: 'Homepage copy rewrite agent',
         }),
       ).toBeInTheDocument();
+    });
+  });
+
+  it('creates an assignment task message when an item agent is created from the inspector', async () => {
+    const user = userEvent.setup();
+
+    render(<AppShell />);
+
+    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: /^Open Homepage copy rewrite$/i }),
+    );
+    await user.click(
+      within(screen.getByTestId('workflow-item-inspector')).getByRole('button', {
+        name: /^Create agent$/i,
+      }),
+    );
+
+    await waitFor(() => {
+      const agent = agentRuntime.service.getSnapshot().agents.find(
+        (candidate) => candidate.name === 'Homepage copy rewrite agent',
+      );
+
+      expect(
+        agent?.messages.some((message) =>
+          message.role === 'user'
+          && message.content.includes(
+            'You have been assigned as the primary agent for "Homepage copy rewrite".',
+          ),
+        ),
+      ).toBe(true);
     });
   });
 

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
+import { createEmptyAgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 
 function createAgent(
@@ -65,7 +66,7 @@ function createAgent(
 }
 
 describe('AgentContextPanel', () => {
-  it('hides runtime and mock setup cards while preserving connection details and other cards', () => {
+  it('surfaces agent identity while preserving connection details and filtered cards', () => {
     render(
       <AgentContextPanel
         agent={createAgent()}
@@ -73,15 +74,24 @@ describe('AgentContextPanel', () => {
       />,
     );
 
+    expect(screen.getByText('Inspector')).toBeInTheDocument();
+    expect(screen.getByText('Agent name')).toBeInTheDocument();
+    expect(screen.getByText('Navigator')).toBeInTheDocument();
+    expect(screen.getByText('Agent ID')).toBeInTheDocument();
+    expect(screen.getByText('agent-1')).toBeInTheDocument();
     expect(screen.getByText('Connection')).toBeInTheDocument();
     expect(screen.getByText('Channel')).toBeInTheDocument();
     expect(screen.getByText('Dune chat')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.getAllByText('Ready').length).toBeGreaterThan(0);
     expect(screen.getByText('Pinned workspace context')).toBeInTheDocument();
     expect(
       screen.getByText('The project brief stays pinned here for handoff context.'),
     ).toBeInTheDocument();
+    expect(screen.queryByText('Prototype agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Now')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agent brief')).not.toBeInTheDocument();
+    expect(screen.queryByText('A durable agent workspace.')).not.toBeInTheDocument();
     expect(screen.queryByText('AgentLite is driving this workspace')).not.toBeInTheDocument();
     expect(screen.queryByText('Desktop-managed runtime')).not.toBeInTheDocument();
     expect(screen.queryByText('Dune chat is attached by default')).not.toBeInTheDocument();
@@ -108,5 +118,61 @@ describe('AgentContextPanel', () => {
     );
 
     expect(screen.queryByRole('button', { name: /^Delete agent$/i })).not.toBeInTheDocument();
+  });
+
+  it('shows inherited customization defaults when no local draft exists', () => {
+    render(
+      <AgentContextPanel
+        agent={createAgent()}
+        customization={null}
+        onClose={vi.fn()}
+        onEditCustomization={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Customization')).toBeInTheDocument();
+    expect(screen.getByText('Inherited defaults')).toBeInTheDocument();
+    expect(screen.getByText('No local draft is attached to this agent yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Edit customization/i })).toBeInTheDocument();
+    expect(screen.getByText('Instructions')).toBeInTheDocument();
+    expect(screen.getByText('Inherited')).toBeInTheDocument();
+  });
+
+  it('summarizes local customization drafts', () => {
+    render(
+      <AgentContextPanel
+        agent={createAgent()}
+        customization={{
+          ...createEmptyAgentCustomizationDraft(),
+          additionalInstructions: 'Stay concise.',
+          mcpServers: [
+            {
+              args: '',
+              command: 'node',
+              enabled: true,
+              env: [],
+              id: 'mcp-1',
+              name: 'repo_tools',
+              source: '/tmp/repo-tools',
+            },
+          ],
+          skills: [
+            {
+              id: 'skill-1',
+              isDiscovered: false,
+              name: 'Release notes',
+              origin: 'manual',
+              path: '/tmp/release-notes',
+            },
+          ],
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Session draft active')).toBeInTheDocument();
+    expect(screen.getByText('Saved locally in renderer memory for this session.')).toBeInTheDocument();
+    expect(screen.getByText('Added')).toBeInTheDocument();
+    expect(screen.getAllByText('1')).toHaveLength(2);
   });
 });

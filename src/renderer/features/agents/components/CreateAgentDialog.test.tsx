@@ -37,6 +37,7 @@ describe('CreateAgentDialog', () => {
       description: 'Project workspace',
       id: 'project-1',
       name: 'Research Platform',
+      rootPath: null,
       updatedAt: 1,
     },
   ];
@@ -50,14 +51,14 @@ describe('CreateAgentDialog', () => {
   });
 
   function renderDialog(options: {
-    onCreateAgent?: (input: CreateAgentInput) => Promise<void>;
+    onCreateAgent?: (input: CreateAgentInput) => Promise<string>;
   } = {}) {
     render(
       <CreateAgentDialog
         defaultProjectId="project-1"
         existingAgents={[]}
         externalChannels={createDefaultExternalChannelsState()}
-        onCreateAgent={options.onCreateAgent ?? vi.fn().mockResolvedValue(undefined)}
+        onCreateAgent={options.onCreateAgent ?? vi.fn().mockResolvedValue('agent-1')}
         onOpenChange={vi.fn()}
         open
         projects={projects}
@@ -87,7 +88,7 @@ describe('CreateAgentDialog', () => {
 
   it('preserves the default channel and submits structured dune-chat agent input', async () => {
     const user = userEvent.setup();
-    const onCreateAgent = vi.fn().mockResolvedValue(undefined);
+    const onCreateAgent = vi.fn().mockResolvedValue('agent-1');
 
     renderDialog({ onCreateAgent });
 
@@ -99,8 +100,66 @@ describe('CreateAgentDialog', () => {
         channelId: 'dune-chat',
         name: 'Navigator',
         projectId: 'project-1',
+        projectName: 'Research Platform',
+        projectRootPath: null,
       });
     });
+  });
+
+  it('stores customization drafts locally without changing the create payload', async () => {
+    const user = userEvent.setup();
+    const onCreateAgent = vi.fn().mockResolvedValue('agent-7');
+
+    renderDialog({ onCreateAgent });
+
+    await user.type(screen.getByLabelText('Agent name'), 'Navigator');
+    await user.click(screen.getByRole('button', { name: /No customizations/i }));
+
+    await user.type(
+      screen.getByLabelText('Additive instructions'),
+      'Flag release blockers before proposing workarounds.',
+    );
+    await user.click(screen.getByRole('button', { name: /^Add folder$/i }));
+    await user.type(screen.getByLabelText('Skill name'), 'Release notes');
+    await user.type(
+      screen.getByLabelText('Folder path'),
+      '/Users/test/.codex/skills/release-notes',
+    );
+    await user.click(screen.getByRole('button', { name: /^Add MCP server$/i }));
+    await user.type(screen.getByLabelText('Server name'), 'repo_tools');
+    await user.type(screen.getByLabelText('Source folder'), '/Users/test/dev/repo-tools');
+    await user.type(screen.getByLabelText('Command'), 'node');
+
+    await user.click(screen.getByRole('button', { name: /^Create agent$/i }));
+
+    await waitFor(() => {
+      expect(onCreateAgent).toHaveBeenCalledWith({
+        channelId: 'dune-chat',
+        name: 'Navigator',
+        projectId: 'project-1',
+        projectName: 'Research Platform',
+        projectRootPath: null,
+      });
+    });
+
+    expect(useAppStore.getState().agentCustomizations['agent-7']).toEqual(
+      expect.objectContaining({
+        additionalInstructions: 'Flag release blockers before proposing workarounds.',
+        skills: [
+          expect.objectContaining({
+            name: 'Release notes',
+            path: '/Users/test/.codex/skills/release-notes',
+          }),
+        ],
+        mcpServers: [
+          expect.objectContaining({
+            command: 'node',
+            name: 'repo_tools',
+            source: '/Users/test/dev/repo-tools',
+          }),
+        ],
+      }),
+    );
   });
 
   it('shows the inline Telegram wizard and keeps create disabled until a setup session is matched', async () => {
@@ -155,7 +214,7 @@ describe('CreateAgentDialog', () => {
 
   it('submits the matched Telegram setup session after pairing succeeds', async () => {
     const user = userEvent.setup();
-    const onCreateAgent = vi.fn().mockResolvedValue(undefined);
+    const onCreateAgent = vi.fn().mockResolvedValue('agent-1');
 
     window.duneDesktop = {
       ...window.duneDesktop,
@@ -209,6 +268,8 @@ describe('CreateAgentDialog', () => {
         channelId: 'telegram',
         name: 'Release triage',
         projectId: 'project-1',
+        projectName: 'Research Platform',
+        projectRootPath: null,
         telegramSetupSessionId: 'telegram-session-1',
       });
     });

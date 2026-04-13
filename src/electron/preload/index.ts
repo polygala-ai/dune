@@ -15,12 +15,24 @@ const bridge: DesktopBridge = {
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
   deleteLocalData: () => ipcRenderer.invoke(ipcChannels.deleteLocalData),
   deleteAgent: (agentId) => ipcRenderer.invoke(ipcChannels.deleteAgent, agentId),
-  ensureProjectMainAgent: (projectId, projectName) =>
-    ipcRenderer.invoke(ipcChannels.ensureProjectMainAgent, projectId, projectName),
+  ensureProjectArtifactFolder: (rootPath, artifactFolderName) =>
+    ipcRenderer.invoke(ipcChannels.ensureProjectArtifactFolder, rootPath, artifactFolderName),
+  ensureProjectMainAgent: (projectId, projectName, projectRootPath) =>
+    ipcRenderer.invoke(
+      ipcChannels.ensureProjectMainAgent,
+      projectId,
+      projectName,
+      projectRootPath,
+    ),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
+  listProjectArtifactEntries: (rootPath, artifactFolderName) =>
+    ipcRenderer.invoke(ipcChannels.listProjectArtifactEntries, rootPath, artifactFolderName),
   openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),
+  openPath: (targetPath) => ipcRenderer.invoke(ipcChannels.openPath, targetPath),
+  prepareProjectRootPath: (rootPath, artifactFolderNames) =>
+    ipcRenderer.invoke(ipcChannels.prepareProjectRootPath, rootPath, artifactFolderNames),
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
@@ -35,6 +47,7 @@ const bridge: DesktopBridge = {
   storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
+  selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
   subscribe: (listener) => {
     const handleSnapshot = (
       _event: Electron.IpcRendererEvent,

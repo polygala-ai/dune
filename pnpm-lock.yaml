@@ -13,7 +13,7 @@ importers:
     dependencies:
       '@boxlite-ai/agentlite':
         specifier: github:boxlite-ai/agentlite
-        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/a2a762997a4696b04a26244184767805921eb6d5(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
+        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b0f1ef2ef48f230d9697d55caddb466af9c27b2d(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -307,8 +307,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/a2a762997a4696b04a26244184767805921eb6d5':
-    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/a2a762997a4696b04a26244184767805921eb6d5}
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b0f1ef2ef48f230d9697d55caddb466af9c27b2d':
+    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b0f1ef2ef48f230d9697d55caddb466af9c27b2d}
     version: 1.2.25
     engines: {node: '>=20'}
     hasBin: true
@@ -1879,6 +1879,9 @@ packages:
 
   brace-expansion@2.0.3:
     resolution: {integrity: sha512-MCV/fYJEbqx68aE58kv2cA/kiky1G8vux3OR6/jbS+jIMe/6fJWa0DTzJU7dqijOWYwHi1t29FlfYI9uytqlpA==}
+
+  brace-expansion@2.1.0:
+    resolution: {integrity: sha512-TN1kCZAgdgweJhWWpgKYrQaMNHcDULHkWwQIspdtjV4Y5aurRdZpjAqn6yX3FPqTA9ngHCc4hJxMAMgGfve85w==}
 
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
@@ -5063,12 +5066,13 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/a2a762997a4696b04a26244184767805921eb6d5(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b0f1ef2ef48f230d9697d55caddb466af9c27b2d(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
     dependencies:
       '@boxlite-ai/boxlite': 0.4.3(playwright-core@1.58.2)
       better-sqlite3: 12.8.0
       cron-parser: 5.5.0
       grammy: 1.42.0(encoding@0.1.13)
+      nanoid: 3.3.11
       pino: 9.14.0
       pino-pretty: 13.1.3
       yaml: 2.8.3
@@ -6880,6 +6884,10 @@ snapshots:
       concat-map: 0.0.1
 
   brace-expansion@2.0.3:
+    dependencies:
+      balanced-match: 1.0.2
+
+  brace-expansion@2.1.0:
     dependencies:
       balanced-match: 1.0.2
 
@@ -8880,7 +8888,7 @@ snapshots:
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 2.0.3
+      brace-expansion: 2.1.0
 
   minimatch@9.0.9:
     dependencies:

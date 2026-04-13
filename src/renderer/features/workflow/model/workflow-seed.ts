@@ -1,5 +1,6 @@
-import { createId } from '@/shared/id';
+import { createId, createProjectId } from '@/shared/id';
 import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
+import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
 
 export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   return {
@@ -13,7 +14,7 @@ export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
 }
 
 export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSnapshot {
-  const projectId = createId('project');
+  const projectId = createProjectId();
 
   const inboxItemId = createId('item');
   const readyItemId = createId('item');
@@ -24,6 +25,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
   return {
     items: [
       {
+        artifactFolderName: createArtifactFolderName('Capture new research angles', inboxItemId),
         brief:
           'Capture incoming ideas before deciding whether they need an agent or a heavier execution pass.',
         createdAt: now - 1000 * 60 * 160,
@@ -55,6 +57,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
+        artifactFolderName: createArtifactFolderName('Draft the launch brief', readyItemId),
         brief:
           'Shape the next brief so an agent can pick it up cleanly once the direction is approved.',
         createdAt: now - 1000 * 60 * 230,
@@ -94,6 +97,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
+        artifactFolderName: createArtifactFolderName('Homepage copy rewrite', activeItemId),
         brief:
           'Rewrite the landing story so the positioning and CTA rhythm are easier to understand in one pass.',
         createdAt: now - 1000 * 60 * 360,
@@ -149,6 +153,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
+        artifactFolderName: createArtifactFolderName('Review the proof points', reviewItemId),
         brief:
           'Resolve the unanswered questions and the blocked evidence before the piece can be signed off.',
         createdAt: now - 1000 * 60 * 520,
@@ -188,6 +193,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
+        artifactFolderName: createArtifactFolderName('Capture the launch position', doneItemId),
         brief:
           'Keep one completed item around so the board shows the end state without feeling empty on first launch.',
         createdAt: now - 1000 * 60 * 700,
@@ -234,6 +240,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         description: 'Clarify strategy, ship writing, and coordinate agents from one project page.',
         id: projectId,
         name: 'Research Platform',
+        rootPath: null,
         updatedAt: now - 1000 * 60 * 44,
       },
     ],

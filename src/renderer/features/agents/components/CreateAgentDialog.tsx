@@ -10,11 +10,18 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
+import { useAppStore } from '@/renderer/app/store/use-app-store';
+import { AgentCustomizationEditor } from '@/renderer/features/agents/components/AgentCustomizationEditor';
 import {
   builtInChannelOption,
   createAgentChannelOptions,
   getChannelOption,
 } from '@/renderer/features/agents/model/channels';
+import {
+  createEmptyAgentCustomizationDraft,
+  getAgentCustomizationSummary,
+  hasAgentCustomization,
+} from '@/renderer/features/agents/model/agent-customization';
 import type {
   Agent,
   CreateAgentInput,
@@ -37,12 +44,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/renderer/shared/ui/popover';
+import { Separator } from '@/renderer/shared/ui/separator';
 
 interface CreateAgentDialogProps {
   defaultProjectId: string | null;
   existingAgents: Agent[];
   externalChannels: ExternalChannelsState;
-  onCreateAgent: (input: CreateAgentInput) => Promise<void>;
+  onCreateAgent: (input: CreateAgentInput) => Promise<string>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   projects: WorkflowProject[];
@@ -83,11 +91,16 @@ export function CreateAgentDialog({
   open,
   projects,
 }: CreateAgentDialogProps) {
+  const upsertAgentCustomization = useAppStore((state) => state.upsertAgentCustomization);
+  const artifactsPath = useAppStore((state) => state.runtimeInfo.artifactsPath);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const channelListRef = useRef<HTMLDivElement | null>(null);
   const [isChannelPickerOpen, setChannelPickerOpen] = useState(false);
+  const [isCustomizationOpen, setCustomizationOpen] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
   const [projectId, setProjectId] = useState(defaultProjectId ?? projects[0]?.id ?? '');
   const [value, setValue] = useState('');
+  const [customizationDraft, setCustomizationDraft] = useState(createEmptyAgentCustomizationDraft);
   const [selectedChannelId, setSelectedChannelId] = useState<CreateAgentInput['channelId']>(
     builtInChannelOption.id,
   );
@@ -95,6 +108,7 @@ export function CreateAgentDialog({
   const selectedChannel = getChannelOption(selectedChannelId);
   const matchedTelegramChat = telegramSetupSession?.matchedChat ?? null;
   const hasTelegramSelection = selectedChannelId !== 'telegram' || matchedTelegramChat !== null;
+  const customizationSummary = getAgentCustomizationSummary(customizationDraft);
 
   useEffect(() => {
     if (!open) {
@@ -102,6 +116,9 @@ export function CreateAgentDialog({
       setProjectId(defaultProjectId ?? projects[0]?.id ?? '');
       setSelectedChannelId(builtInChannelOption.id);
       setChannelPickerOpen(false);
+      setCustomizationOpen(false);
+      setCustomizationDraft(createEmptyAgentCustomizationDraft());
+      setSubmitting(false);
       setTelegramSetupSession(null);
     }
   }, [defaultProjectId, open, projects]);
@@ -157,32 +174,46 @@ export function CreateAgentDialog({
     }
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedValue = value.trim();
 
-    if (!trimmedValue || !hasTelegramSelection) {
+    if (!trimmedValue || !hasTelegramSelection || isSubmitting) {
       return;
     }
 
-    void onCreateAgent({
-      channelId: selectedChannelId,
-      ...(selectedChannelId === 'telegram' && telegramSetupSession
-        ? {
-            telegramSetupSessionId: telegramSetupSession.id,
-          }
-        : {}),
-      name: trimmedValue,
-      projectId: projectId || null,
-    }).then(() => {
+    setSubmitting(true);
+
+    try {
+      const agentId = await onCreateAgent({
+        channelId: selectedChannelId,
+        ...(selectedChannelId === 'telegram' && telegramSetupSession
+          ? {
+              telegramSetupSessionId: telegramSetupSession.id,
+            }
+          : {}),
+        name: trimmedValue,
+        projectId: projectId || null,
+        projectName: projects.find((project) => project.id === projectId)?.name ?? null,
+        projectRootPath: projects.find((project) => project.id === projectId)?.rootPath ?? null,
+      });
+
+      if (hasAgentCustomization(customizationDraft)) {
+        upsertAgentCustomization(agentId, customizationDraft);
+      }
+
       setValue('');
-    });
+      setCustomizationDraft(createEmptyAgentCustomizationDraft());
+      setCustomizationOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="flex max-h-[min(86vh,720px)] w-[min(92vw,520px)] flex-col"
+        className="flex max-h-[min(88vh,760px)] w-[min(92vw,640px)] flex-col"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           inputRef.current?.focus();
@@ -340,6 +371,50 @@ export function CreateAgentDialog({
                 onSessionChange={setTelegramSetupSession}
               />
             ) : null}
+
+            <div className="rounded-[22px] border border-app-border bg-app-panel/35 px-4 py-4 sm:px-5">
+              <button
+                aria-expanded={isCustomizationOpen}
+                className="focus-ring-app flex w-full items-start justify-between gap-4 rounded-[18px] text-left transition-colors hover:bg-app-card/35 focus-visible:outline-none focus-visible:ring-2"
+                onClick={() => setCustomizationOpen((current) => !current)}
+                type="button"
+              >
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                    Customize agent
+                  </div>
+                  <h3 className="mt-2 text-base font-semibold tracking-[-0.03em] text-app-text">
+                    Instructions, skills, and MCP
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-app-muted">
+                    Tune the draft instructions, skill folders, and MCP setup here. Nothing in this panel reaches the runtime yet.
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-app-border bg-app-card/60 px-3 py-1.5 font-mono text-[11px] text-app-muted">
+                    {customizationSummary}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'mt-0.5 h-4 w-4 text-app-muted transition-transform',
+                      isCustomizationOpen ? 'rotate-180' : 'rotate-0',
+                    )}
+                  />
+                </div>
+              </button>
+
+              {isCustomizationOpen ? (
+                <>
+                  <Separator className="my-4" />
+                  <AgentCustomizationEditor
+                    agentRole="custom"
+                    artifactsPath={artifactsPath}
+                    value={customizationDraft}
+                    onChange={setCustomizationDraft}
+                  />
+                </>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-app-border pt-4">
@@ -354,8 +429,11 @@ export function CreateAgentDialog({
               <Button onClick={() => onOpenChange(false)} type="button" variant="quiet">
                 Cancel
               </Button>
-              <Button disabled={!value.trim() || !projectId || !hasTelegramSelection} type="submit">
-                Create agent
+              <Button
+                disabled={!value.trim() || !projectId || !hasTelegramSelection || isSubmitting}
+                type="submit"
+              >
+                {isSubmitting ? 'Creating...' : 'Create agent'}
               </Button>
             </div>
           </div>

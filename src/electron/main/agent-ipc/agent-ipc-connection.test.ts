@@ -84,6 +84,29 @@ describe('AgentIpcConnection', () => {
     }));
   });
 
+  it('replies with an error for malformed IPC messages', () => {
+    const fileId = `${Date.now()}-bad-tools-list`;
+    fs.writeFileSync(
+      path.join(dirs.agentDir, `${fileId}.json`),
+      JSON.stringify({ type: 'tools/list', id: 'req-001' }),
+    );
+
+    connection.scan();
+
+    const replyPath = path.join(dirs.hostDir, `${fileId}-reply.json`);
+    expect(fs.existsSync(replyPath)).toBe(true);
+    expect(fs.existsSync(path.join(dirs.agentDir, `${fileId}.json`))).toBe(false);
+
+    const reply = JSON.parse(fs.readFileSync(replyPath, 'utf-8'));
+    expect(reply).toEqual({
+      type: 'error',
+      payload: {
+        code: 'invalid-message',
+        message: 'Invalid IPC message. Expected a JSON object with string `type` and `payload` fields.',
+      },
+    });
+  });
+
   it('handles streaming reply chunks', () => {
     const fileId = `${Date.now()}-stream`;
 
@@ -121,26 +144,26 @@ describe('AgentIpcConnection', () => {
     expect(msg?.content).toBe('Complete');
   });
 
-  it('delegates board messages to the handler and writes reply', () => {
-    const boardHandler = vi.fn((msg, _fileId, replyFn) => {
-      if (msg.type === 'get-board') {
-        replyFn({ type: 'board-data', payload: { items: [] } });
+  it('delegates tool protocol messages to the handler and writes reply', () => {
+    const toolHandler = vi.fn((msg, _fileId, replyFn) => {
+      if (msg.type === 'tools/list') {
+        replyFn({ type: 'tools/list-result', payload: { tools: [] } });
       }
     });
-    connection.setBoardMessageHandler(boardHandler);
+    connection.setToolMessageHandler(toolHandler);
 
-    const fileId = `${Date.now()}-board`;
+    const fileId = `${Date.now()}-tools`;
     fs.writeFileSync(
       path.join(dirs.agentDir, `${fileId}.json`),
-      JSON.stringify({ type: 'get-board', payload: { projectId: 'proj-1' } }),
+      JSON.stringify({ type: 'tools/list', payload: {} }),
     );
     connection.scan();
 
-    expect(boardHandler).toHaveBeenCalled();
+    expect(toolHandler).toHaveBeenCalled();
     const replyPath = path.join(dirs.hostDir, `${fileId}-reply.json`);
     expect(fs.existsSync(replyPath)).toBe(true);
     const reply = JSON.parse(fs.readFileSync(replyPath, 'utf-8'));
-    expect(reply.type).toBe('board-data');
+    expect(reply.type).toBe('tools/list-result');
   });
 
   it('ignores non-json/done files', () => {

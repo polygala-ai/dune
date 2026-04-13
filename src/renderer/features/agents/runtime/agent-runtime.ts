@@ -17,6 +17,7 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
 } from '@/renderer/features/agents/types';
+import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   return {
@@ -99,8 +100,12 @@ class BridgeAgentRuntime implements AgentRuntime {
     deleteAgent: async (agentId: string) => {
       await this.bridge.deleteAgent(agentId);
     },
-    ensureProjectMainAgent: async (projectId: string, projectName: string) => {
-      return this.bridge.ensureProjectMainAgent(projectId, projectName);
+    ensureProjectMainAgent: async (
+      projectId: string,
+      projectName: string,
+      projectRootPath?: string | null,
+    ) => {
+      return this.bridge.ensureProjectMainAgent(projectId, projectName, projectRootPath);
     },
     getTelegramSetupSession: async (sessionId: string) => {
       return this.bridge.getTelegramSetupSession(sessionId);
@@ -113,6 +118,10 @@ class BridgeAgentRuntime implements AgentRuntime {
     sendMessage: async (agentId: string, text: string) => {
       await this.bridge.sendAgentMessage(agentId, text);
     },
+    signalReadyAssignmentInbox: async (
+      _agentId: string,
+      _signal: ReadyAssignmentsInboxSignal,
+    ) => undefined,
     startTelegramSetupSession: async (input: StartTelegramSetupSessionInput) => {
       return this.bridge.startTelegramSetupSession(input);
     },
