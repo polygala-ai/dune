@@ -383,6 +383,7 @@ void app.whenReady().then(async () => {
       runtimeController = new DesktopRuntimeController({
         agentIpcManager,
         agentStore: stores.agents,
+        bundledAgentIpcDir: path.join(app.getAppPath(), 'src', 'shared', 'agent-ipc'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
