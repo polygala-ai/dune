@@ -21,7 +21,7 @@ if (app.isPackaged) {
 }
 
 import { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
-import { createToolHandler } from '@/electron/main/agent-ipc/tools-handler';
+import { createToolHandler } from '@/electron/main/agent-ipc/tools';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import {
@@ -29,7 +29,7 @@ import {
   pushCurrentRuntimeSnapshot,
 } from '@/electron/main/runtime/runtime-snapshot';
 import { resetLocalData } from '@/electron/main/reset-local-data';
-import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/main/runtime/agent-runtime';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
 import type {
   CreateAgentInput,
@@ -50,7 +50,7 @@ import {
   listProjectArtifactEntries,
   prepareProjectRootPath,
 } from '@/electron/main/workflow/project-artifacts';
-import { createMainWindowOptions } from '../window/create-main-window-options';
+import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';
 
 if (started) {
   app.quit();
@@ -392,7 +392,7 @@ void app.whenReady().then(async () => {
       runtimeController = new DesktopRuntimeController({
         agentIpcManager,
         agentStore: stores.agents,
-        bundledAgentIpcDir: path.join(app.getAppPath(), 'src', 'shared', 'agent-ipc'),
+        bundledAgentDir: path.join(app.getAppPath(), 'agent'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);

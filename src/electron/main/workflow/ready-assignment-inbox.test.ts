@@ -13,7 +13,7 @@ import {
 import {
   resolveAgentDuneDir,
   resolveProjectDuneDir,
-} from '@/electron/shared/agent-ipc/ipc-directory';
+} from '@/electron/main/agent-ipc/ipc-directory';
 
 const tempDirs: string[] = [];
 

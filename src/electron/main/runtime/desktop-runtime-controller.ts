@@ -1,8 +1,9 @@
 import type {
+  AgentRuntimeContract,
   AgentServiceListener,
   AgentServiceSnapshot,
-} from '@/renderer/features/agents/model/agent-service';
-import { createMockAgentRuntime, type AgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
+} from '@/shared/agents/agent-runtime';
+import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   CodingEngineEvent,
   CreateAgentInput,
@@ -11,13 +12,13 @@ import type {
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 import {
-  AgentLiteHost,
+  AgentRuntime,
   resolveAgentLiteRuntimeRoot,
-  type AgentLiteHostOptions,
-} from '@/electron/runtime-core/agentlite-host';
+  type AgentRuntimeOptions,
+} from './agent-runtime';
 import type { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 
-type ActiveRuntime = AgentRuntime & {
+type ActiveRuntime = AgentRuntimeContract & {
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -27,7 +28,7 @@ type RealRuntime = ActiveRuntime & {
 };
 
 export interface DesktopRuntimeControllerOptions
-  extends AgentLiteHostOptions {
+  extends AgentRuntimeOptions {
   agentIpcManager?: AgentIpcManager;
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
 }
@@ -55,7 +56,7 @@ export class DesktopRuntimeController {
     this.agentIpcManager = options.agentIpcManager ?? null;
     this.createRealRuntime =
       options.createRealRuntime ??
-      ((runtimeOptions) => new AgentLiteHost(runtimeOptions));
+      ((runtimeOptions) => new AgentRuntime(runtimeOptions));
     this.activeRuntime = createMockAgentRuntime({
       message: 'Starting Dune runtime.',
       mode: 'mock-fallback',
@@ -89,7 +90,7 @@ export class DesktopRuntimeController {
   pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
     const runtime = this.activeRuntime;
 
-    if (runtime instanceof AgentLiteHost) {
+    if (runtime instanceof AgentRuntime) {
       runtime.pushCodingEngineEvent(agentId, event);
     }
   }

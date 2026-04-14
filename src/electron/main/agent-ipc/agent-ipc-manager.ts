@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   parseAgentIpcDirectoryMetadata,
   resolveAgentIpcMetadataPath,
-} from '@/electron/shared/agent-ipc/ipc-directory';
+} from './ipc-directory';
 import type { Agent, AgentMessage } from '@/renderer/features/agents/types';
 
 import {

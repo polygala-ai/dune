@@ -1,15 +1,20 @@
 import type {
   Agent,
-  CodingEngineStatus,
-  ExternalChannelsState,
   AgentRuntimeInfo,
+  CodingEngineStatus,
   CreateAgentInput,
+  ExternalChannelsState,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
+/**
+ * The full read-model of the agent runtime. Whatever process owns the
+ * canonical state (today: the desktop main process) computes this and
+ * fans it out to every subscriber.
+ */
 export interface AgentServiceSnapshot {
   agents: Agent[];
   codingEngines: CodingEngineStatus[];
@@ -22,6 +27,11 @@ export interface AgentServiceSnapshot {
 
 export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
 
+/**
+ * The set of operations the runtime exposes to callers. Both the real
+ * main-process implementation and the renderer-side bridge that proxies
+ * to it satisfy this contract.
+ */
 export interface AgentService {
   cancelTelegramSetupSession: (sessionId: string) => Promise<void>;
   createAgent: (input: CreateAgentInput) => Promise<string>;
@@ -43,4 +53,21 @@ export interface AgentService {
   startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
   subscribe: (listener: AgentServiceListener) => () => void;
   updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
+}
+
+/**
+ * Top-level contract that wraps an AgentService with snapshot access
+ * and reset semantics. Multiple implementations satisfy this contract:
+ *   - The real main-process AgentRuntime class
+ *   - The mock used by tests and during boot fallback
+ *   - The renderer-side bridge that proxies to the real runtime via IPC
+ *
+ * The contract is named "Contract" rather than just "AgentRuntime" so
+ * the canonical real-world implementation can use the unsuffixed name.
+ */
+export interface AgentRuntimeContract {
+  getSnapshot: () => AgentServiceSnapshot;
+  reset: () => void;
+  service: AgentService;
+  subscribe: (listener: AgentServiceListener) => () => void;
 }

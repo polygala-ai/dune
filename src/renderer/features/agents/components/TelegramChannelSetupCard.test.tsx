@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { TelegramChannelSetupCard } from '@/renderer/features/agents/components/TelegramChannelSetupCard';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import type { TelegramSetupSession } from '@/renderer/features/agents/types';

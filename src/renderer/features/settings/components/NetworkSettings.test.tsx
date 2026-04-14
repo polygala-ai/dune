@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 
 import { NetworkSettings } from './NetworkSettings';

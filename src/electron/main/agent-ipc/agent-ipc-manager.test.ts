@@ -7,7 +7,7 @@ import {
   createAgentIpcDirectoryMetadata,
   resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
-} from '@/electron/shared/agent-ipc/ipc-directory';
+} from '@/electron/main/agent-ipc/ipc-directory';
 import { AgentIpcManager } from './agent-ipc-manager';
 
 function createTempHome() {

@@ -1,8 +1,9 @@
 import type {
+  AgentRuntimeContract,
   AgentService,
   AgentServiceListener,
   AgentServiceSnapshot,
-} from '@/renderer/features/agents/model/agent-service';
+} from '@/shared/agents/agent-runtime';
 import type {
   Agent,
   AgentExternalTarget,
@@ -194,13 +195,6 @@ function createDefaultRuntimeInfo(): AgentRuntimeInfo {
     mode: 'mock-fallback',
     status: 'ready',
   };
-}
-
-export interface AgentRuntime {
-  getSnapshot: () => AgentServiceSnapshot;
-  reset: () => void;
-  service: AgentService;
-  subscribe: (listener: AgentServiceListener) => () => void;
 }
 
 interface PendingTimerRecord {
@@ -720,7 +714,7 @@ class MockAgentService implements AgentService {
   }
 }
 
-export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntime {
+export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntimeContract {
   const service = new MockAgentService(runtimeInfo);
 
   return {

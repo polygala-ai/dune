@@ -26,129 +26,97 @@ import type {
   TelegramConnectionStatus,
   TelegramSetupSession,
   UpdateAgentChannelInput,
-} from '../../renderer/features/agents/types';
+} from '@/renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
   createDefaultTelegramAgentRuntimeState,
   createDefaultExternalChannelsState,
-} from '../../renderer/features/agents/model/channels';
+} from '@/renderer/features/agents/model/channels';
 import {
   createAgentId,
   toAgentChatJid,
   toAgentPathId,
-} from '../../shared/agents/agent-id';
-import { createProjectMainAgentName } from '../../shared/agents/project-main-name';
+} from '@/shared/agents/agent-id';
+import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import {
   summarizeMessagePreview,
-} from '../../shared/agents/message-content';
+} from '@/shared/agents/message-content';
 import {
   createReadyAssignmentsInboxSignalMessage,
   type ReadyAssignmentsInboxSignal,
-} from '../../shared/agents/ready-assignments';
-import { normalizeProjectRootPath } from '../../shared/workflow/project-artifacts';
+} from '@/shared/agents/ready-assignments';
+import { normalizeProjectRootPath } from '@/shared/workflow/project-artifacts';
 import {
   normalizeAgentAttachments,
-} from './agent-message-attachments';
+} from '../agent-message-attachments';
 import {
   createAgentIpcDirectoryMetadata,
   resolveAgentDuneDir,
   resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
-} from '../shared/agent-ipc/ipc-directory';
-import { DuneAgent } from './dune-agent';
-import { TelegramBridge } from './telegram-bridge';
-import type { TelegramSecretsStore } from './telegram-bridge';
-import { detectCodingEngines } from './coding-engine-detect';
+} from '@/electron/main/agent-ipc/ipc-directory';
+import { DuneAgent } from '../dune-agent';
+import { TelegramBridge } from '../telegram-bridge';
+import type { TelegramSecretsStore } from '../telegram-bridge';
+import { detectCodingEngines } from '../coding-engine-detect';
+
+import { createChannelBinding, mapTelegramChannelStatus } from './channels';
+import {
+  createAssistantMessage,
+  createBuiltInAgentCopy,
+  createDraftAgent,
+  createExternalAgentCopy,
+  createMessageId,
+  createUserMessage,
+  normalizePersistedAgentRecord,
+  normalizePersistedMessages,
+  summarizePreview,
+  type PersistedAgentRecord,
+} from './records';
+import {
+  createIpcLayout,
+  findAgentDuneDirs,
+  findProjectDuneDirs,
+  resolveAgentLiteRuntimeRoot,
+  sanitizeRuntimePathSegment,
+  seedAgentIpcSources,
+} from './paths';
+import {
+  cloneSnapshot,
+  createRuntimeInfo,
+  createRuntimeReadyMessage,
+} from './snapshot';
+import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
+import { ReadyInbox } from './ready-inbox';
+import { MessageStream, type PendingAssistantMessage } from './message-stream';
+import { Lifecycle } from './lifecycle';
+import { AgentRecords } from './agent-records';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 
-export interface AgentServiceSnapshot {
-  agents: Agent[];
-  codingEngines: CodingEngineStatus[];
-  externalChannels: ExternalChannelsState;
-  isStreaming: boolean;
-  runtimeInfo: AgentRuntimeInfo;
-  selectedAgentId: string | null;
-  telegramSetupSessions: TelegramSetupSession[];
-}
+import type {
+  AgentRuntimeContract,
+  AgentService,
+  AgentServiceListener,
+  AgentServiceSnapshot,
+} from '@/shared/agents/agent-runtime';
 
-export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
-
-export interface AgentService {
-  cancelTelegramSetupSession: (sessionId: string) => Promise<void>;
-  createAgent: (input: CreateAgentInput) => Promise<string>;
-  deleteAgent: (agentId: string) => Promise<void>;
-  ensureProjectMainAgent: (
-    projectId: string,
-    projectName: string,
-    projectRootPath?: string | null,
-  ) => Promise<string>;
-  getTelegramSetupSession: (sessionId: string) => Promise<TelegramSetupSession | null>;
-  getSnapshot: () => AgentServiceSnapshot;
-  listAgents: () => Agent[];
-  selectAgent: (agentId: string) => void;
-  sendMessage: (agentId: string, text: string) => Promise<void>;
-  signalReadyAssignmentInbox: (
-    agentId: string,
-    signal: ReadyAssignmentsInboxSignal,
-  ) => Promise<void>;
-  startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
-  subscribe: (listener: AgentServiceListener) => () => void;
-  updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
-}
-
-export interface AgentRuntime {
-  getSnapshot: () => AgentServiceSnapshot;
-  reset: () => void;
-  service: AgentService;
-  subscribe: (listener: AgentServiceListener) => () => void;
-}
-
-interface PersistedAgentRecord {
-  agent: AgentServiceSnapshot['agents'][number];
-  groupFolder: string;
-  projectName?: string | null;
-  projectRootPath?: string | null;
-}
+export { resolveAgentLiteRuntimeRoot } from './paths';
+export type {
+  AgentRuntimeContract,
+  AgentService,
+  AgentServiceListener,
+  AgentServiceSnapshot,
+};
 
 export interface AgentStore {
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T): Promise<void>;
-}
-
-interface PendingAssistantMessage {
-  idleTimer: ReturnType<typeof globalThis.setTimeout> | null;
-  messageId: string;
-  safetyTimer: ReturnType<typeof globalThis.setTimeout> | null;
-}
-
-function normalizePersistedMessages(
-  messages: AgentMessage[],
-  options: { groupFolder: string; runtimeRoot: string },
-) {
-  const persistedMessages = Array.isArray(messages) ? messages : [];
-  const lastPersistedMessage = persistedMessages.at(-1);
-  const normalizedMessages = persistedMessages.map((message) => ({
-    ...message,
-    attachments: normalizeAgentAttachments(message.attachments, options),
-    format: (message.format === 'markdown' ? 'markdown' : 'plain') as AgentMessage['format'],
-    status: message.status === 'streaming' ? 'complete' : message.status,
-  }));
-
-  if (
-    lastPersistedMessage?.role === 'assistant'
-    && lastPersistedMessage.content === ''
-    && lastPersistedMessage.status === 'streaming'
-  ) {
-    normalizedMessages.pop();
-  }
-
-  return normalizedMessages;
 }
 
 type TelegramModule = typeof import('@boxlite-ai/agentlite/channels/telegram');
@@ -161,9 +129,9 @@ const importTelegramModule = globalThis.Function(
 
 export type { TelegramSecretsStore };
 
-export interface AgentLiteHostOptions {
+export interface AgentRuntimeOptions {
   agentStore: AgentStore;
-  bundledAgentIpcDir?: string;
+  bundledAgentDir?: string;
   createTelegramChannelFactory?: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
@@ -183,444 +151,32 @@ export interface AgentLiteHostOptions {
   telegramSecretsStore?: TelegramSecretsStore;
 }
 
-function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
-  return {
-    agents: snapshot.agents.map((agent) => ({
-      ...agent,
-      activityEvents: agent.activityEvents.map((event) => ({ ...event })),
-      channel: {
-        ...agent.channel,
-        target: agent.channel.target ? { ...agent.channel.target } : null,
-      },
-      codingEngineEvents: agent.codingEngineEvents.map((event) => ({ ...event })),
-      contextCards: agent.contextCards.map((card) => ({ ...card })),
-      messages: agent.messages.map((message) => ({
-        ...message,
-        attachments: message.attachments.map((attachment) => ({ ...attachment })),
-      })),
-      projectId: agent.projectId ?? null,
-      role: agent.role,
-      telegram: cloneTelegramAgentRuntimeState(agent.telegram),
-    })),
-    codingEngines: snapshot.codingEngines.map((engine) => ({ ...engine })),
-    externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
-    isStreaming: snapshot.isStreaming,
-    runtimeInfo: { ...snapshot.runtimeInfo },
-    selectedAgentId: snapshot.selectedAgentId,
-    telegramSetupSessions: snapshot.telegramSetupSessions.map(cloneTelegramSetupSession),
-  };
-}
-
-function createMessageId(role: AgentMessage['role'], now: number) {
-  return `message-${role}-${now}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function summarizePreview(content: string) {
-  return summarizeMessagePreview(content);
-}
-
-function createRuntimeReadyMessage(credentials: Record<string, string>) {
-  return Object.keys(credentials).length > 0
-    ? 'AgentLite is running with saved model credentials.'
-    : 'AgentLite is running without saved model credentials; replies will fail.';
-}
-
-function createRuntimeInfo(
-  runtimeRoot: string,
-  homeDir: string,
-  overrides: Partial<AgentRuntimeInfo> = {},
-): AgentRuntimeInfo {
-  return {
-    artifactsPath: resolveArtifactsDir(homeDir),
-    mode: 'real',
-    rootPath: runtimeRoot,
-    status: 'starting',
-    ...overrides,
-  };
-}
-
-function isAgentLiteRuntimeLockError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-
-  return message.includes('Failed to acquire runtime lock')
-    || message.includes('Another BoxliteRuntime is already using directory');
-}
-
-function waitForTimeout(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    globalThis.setTimeout(resolve, delayMs);
-  });
-}
-
-function createGroupFolder(name: string, agentId: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'agent';
-
-  return `${slug}-${agentId.split(':').pop()?.slice(0, 8) ?? 'agent'}`;
-}
-
-function mapTelegramChannelStatus(status: TelegramConnectionStatus): AgentChannelStatus {
-  switch (status) {
-    case 'connected':
-      return 'connected';
-    case 'connecting':
-      return 'connecting';
-    case 'error':
-      return 'error';
-    case 'disconnected':
-    case 'not-configured':
-      return 'disconnected';
-    default:
-      return 'disconnected';
-  }
-}
-
-function createChannelBinding(
-  channelId: AgentChannelId,
-  telegramState: TelegramAgentRuntimeState | null,
-  target: AgentExternalTarget | null = null,
-): AgentChannelBinding {
-  switch (channelId) {
-    case 'discord':
-      return {
-        canCompose: false,
-        id: 'discord',
-        kind: 'external',
-        label: 'Discord',
-        status: 'coming-soon',
-      };
-    case 'slack':
-      return {
-        canCompose: false,
-        id: 'slack',
-        kind: 'external',
-        label: 'Slack',
-        status: 'coming-soon',
-      };
-    case 'telegram':
-      return {
-        canCompose: false,
-        id: 'telegram',
-        kind: 'external',
-        label: 'Telegram',
-        status: mapTelegramChannelStatus(telegramState?.status ?? 'disconnected'),
-        ...(target ? { target } : {}),
-      };
-    default:
-      return {
-        canCompose: true,
-        id: 'dune-chat',
-        kind: 'built-in',
-        label: 'Dune chat',
-        status: 'ready',
-      };
-  }
-}
-
-function createBuiltInAgentCopy() {
-  return {
-    note: 'This agent is running inside the real AgentLite foundation that Dune now hosts directly in the desktop runtime.',
-    preview: 'Ready for a first instruction.',
-  };
-}
-
-function createExternalAgentCopy(attachedLabel: string) {
-  return {
-    note: `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
-    preview: `Attached to ${attachedLabel}. Dune mirrors the transcript.`,
-  };
-}
-
-function createDraftAgent(
-  agentId: string,
-  name: string,
-  now: number,
-  channelId: CreateAgentInput['channelId'],
-  telegramState: TelegramAgentRuntimeState | null,
-  externalTarget: AgentExternalTarget | null,
-  projectId: string,
-  role: AgentRole,
-): Agent {
-  const channel = createChannelBinding(channelId, telegramState, externalTarget);
-  const attachedLabel = channel.target?.name ?? channel.label;
-  const copy = channel.kind === 'built-in'
-    ? createBuiltInAgentCopy()
-    : createExternalAgentCopy(attachedLabel);
-
-  return {
-    channel,
-    activityEvents: [],
-    codingEngineEvents: [],
-    contextCards: [],
-    id: agentId,
-    messages: [] satisfies AgentMessage[],
-    name,
-    note: copy.note,
-    preview: copy.preview,
-    projectId,
-    role,
-    status: 'draft',
-    telegram: channelId === 'telegram'
-      ? telegramState ?? createDefaultTelegramAgentRuntimeState({ boundChat: externalTarget })
-      : null,
-    updatedAt: now,
-    workspace: 'AgentLite agent',
-  };
-}
-
-function createUserMessage(content: string, now: number): AgentMessage {
-  return {
-    attachments: [],
-    content,
-    createdAt: now,
-    format: 'plain',
-    id: createMessageId('user', now),
-    role: 'user',
-    status: 'complete',
-  };
-}
-
-function createAssistantMessage(now: number): AgentMessage {
-  return {
-    attachments: [],
-    content: '',
-    createdAt: now,
-    format: 'markdown',
-    id: createMessageId('assistant', now),
-    role: 'assistant',
-    status: 'streaming',
-  };
-}
-
-function normalizePersistedAgentRecord(
-  record: PersistedAgentRecord,
-  runtimeRoot: string,
-): PersistedAgentRecord {
-  const groupFolder = record.groupFolder || createGroupFolder(record.agent.name, record.agent.id);
-
-  return {
-    agent: {
-      ...record.agent,
-      activityEvents: Array.isArray(record.agent.activityEvents)
-        ? record.agent.activityEvents.map((event) => ({ ...event }))
-        : [],
-      channel: {
-        ...record.agent.channel,
-        target: record.agent.channel.target ? { ...record.agent.channel.target } : null,
-      },
-      codingEngineEvents: Array.isArray(record.agent.codingEngineEvents)
-        ? record.agent.codingEngineEvents.map((event) => ({ ...event }))
-        : [],
-      contextCards: record.agent.contextCards.map((card) => ({ ...card })),
-      messages: normalizePersistedMessages(record.agent.messages, {
-        groupFolder,
-        runtimeRoot,
-      }),
-      projectId: typeof record.agent.projectId === 'string' ? record.agent.projectId : null,
-      role: record.agent.role === 'project-main' ? 'project-main' : 'custom',
-      status: record.agent.status === 'live' ? 'ready' : record.agent.status,
-      telegram: cloneTelegramAgentRuntimeState(record.agent.telegram),
-    },
-    groupFolder,
-    projectName: typeof record.projectName === 'string' && record.projectName.trim()
-      ? record.projectName.trim()
-      : null,
-    projectRootPath: normalizeProjectRootPath(record.projectRootPath),
-  };
-}
-
-export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()) {
-  return path.join(homeDir, '.dune', 'agentlite');
-}
-
 import {
-  copyDirRecursive,
   readAgentInstructions,
-  readIpcGuide,
-  resolveArtifactsDir,
-  resolveBundledAgentIpcDir,
+  resolveBundledAgentDir,
   seedArtifacts,
-} from './artifacts';
+} from '../artifacts';
 
-const AGENT_IPC_SOURCE_NAMES = [
-  'dune',
-  'dune-project-kickoff',
-  'dune-mcp-server',
-] as const;
-
-/**
- * Extract agent-ipc source directories from the bundled location (which may
- * live inside app.asar) to a writable, asar-free location under ~/.dune/.
- * AgentLite's addSkill/addMcpServer validate the path exists on disk and
- * downstream code copies the tree with fs.cpSync — neither is asar-safe, so
- * we stage a plain-filesystem copy once per boot.
- */
-function seedAgentIpcSources(bundledDir: string, homeDir: string): string {
-  const stagingDir = path.join(homeDir, '.dune', 'agent-ipc');
-  fs.mkdirSync(stagingDir, { recursive: true });
-  for (const name of AGENT_IPC_SOURCE_NAMES) {
-    const src = path.join(bundledDir, name);
-    if (!fs.existsSync(src)) continue;
-    const dst = path.join(stagingDir, name);
-    if (fs.existsSync(dst)) {
-      fs.rmSync(dst, { recursive: true, force: true });
-    }
-    copyDirRecursive(src, dst);
-  }
-  return stagingDir;
-}
-
-function createIpcLayout(
-  homeDir: string,
-  projectId: string,
-  projectName: string | null,
-  agentId: string,
-  agentName: string,
-  agentRole: AgentRole,
-): { duneMountRoot: string; ipcDir: string } {
-  const projectDir = resolveProjectDuneDir(homeDir, projectId, projectName);
-  const agentDir = resolveAgentDuneDir(homeDir, projectId, projectName, agentName, agentId);
-  const ipcDir = resolveAgentIpcDir(homeDir, projectId, projectName, agentName, agentId);
-
-  fs.mkdirSync(path.join(ipcDir, 'agent'), { recursive: true });
-  fs.mkdirSync(path.join(ipcDir, 'host'), { recursive: true });
-
-  fs.writeFileSync(
-    resolveAgentIpcMetadataPath(ipcDir),
-    `${JSON.stringify(
-      createAgentIpcDirectoryMetadata(projectId, agentId, agentName, projectName),
-      null,
-      2,
-    )}\n`,
-  );
-
-  fs.writeFileSync(
-    path.join(projectDir, 'CLAUDE.md'),
-    readIpcGuide(projectId, {
-      ipcMountPath: `/workspace/extra/dune/agents/${path.basename(agentDir)}/ipc/`,
-      rootMountPath: '/workspace/extra/dune/',
-    }, homeDir),
-  );
-  fs.writeFileSync(path.join(agentDir, 'CLAUDE.md'), readIpcGuide(projectId, {}, homeDir));
-
-  if (projectName) {
-    for (const agentPath of findAgentDuneDirs(homeDir, projectId, agentId)) {
-      if (agentPath !== agentDir) {
-        fs.rmSync(agentPath, { force: true, recursive: true });
-      }
-    }
-
-    for (const projectPath of findProjectDuneDirs(homeDir, projectId)) {
-      if (projectPath !== projectDir) {
-        fs.rmSync(projectPath, { force: true, recursive: true });
-      }
-    }
-  }
-
-  return {
-    duneMountRoot: agentRole === 'project-main' ? projectDir : agentDir,
-    ipcDir,
-  };
-}
-
-function sanitizeRuntimePathSegment(value: string, fallback: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || fallback;
-}
-
-function findProjectDuneDirs(
-  homeDir: string,
-  projectId: string,
-): string[] {
-  const projsDir = path.join(homeDir, '.dune', 'projs');
-
-  if (!fs.existsSync(projsDir)) {
-    return [];
-  }
-
-  const projectIdSegment = sanitizeRuntimePathSegment(projectId, 'project');
-  const matchingProjectDirs: string[] = [];
-
-  for (const entry of fs.readdirSync(projsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-
-    if (entry.name === projectIdSegment || entry.name.endsWith(`-${projectIdSegment}`)) {
-      matchingProjectDirs.push(path.join(projsDir, entry.name));
-    }
-  }
-
-  return matchingProjectDirs;
-}
-
-function findAgentDuneDirs(
-  homeDir: string,
-  projectId: string,
-  agentId: string,
-): string[] {
-  const agentIdSegments = new Set([
-    sanitizeRuntimePathSegment(agentId, 'agent'),
-    sanitizeRuntimePathSegment(toAgentPathId(agentId), 'agent'),
-  ]);
-  const matchingAgentDirs: string[] = [];
-
-  for (const projectDir of findProjectDuneDirs(homeDir, projectId)) {
-    const agentsDir = path.join(projectDir, 'agents');
-
-    if (!fs.existsSync(agentsDir)) {
-      continue;
-    }
-
-    for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      if (
-        [...agentIdSegments].some((agentIdSegment) =>
-          entry.name === agentIdSegment || entry.name.endsWith(`-${agentIdSegment}`),
-        )
-      ) {
-        matchingAgentDirs.push(path.join(agentsDir, entry.name));
-      }
-    }
-  }
-
-  return matchingAgentDirs;
-}
-
-
-export class AgentLiteHost implements AgentRuntime {
+export class AgentRuntime implements AgentRuntimeContract {
   private readonly listeners = new Set<AgentServiceListener>();
 
   private readonly now: () => number;
 
-  private readonly pendingAssistantMessages = new Map<string, PendingAssistantMessage>();
+  private readonly messageStream = new MessageStream();
 
-  private readonly pendingReadyInboxSignals = new Map<string, ReadyAssignmentsInboxSignal>();
+  private readonly readyInbox = new ReadyInbox();
 
-  private readonly deliveredReadyInboxGenerations = new Map<string, number>();
+  private readonly records = new AgentRecords();
 
-  private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
-
-  private readonly agentRuntimes = new Map<string, DuneAgent>();
-
-  private readonly agentRuntimeStarts = new Map<string, Promise<DuneAgent>>();
+  private readonly lifecycle = new Lifecycle();
 
   private readonly agentStore: AgentStore;
 
   private readonly homeDir: string;
 
-  private readonly onAgentIdle: AgentLiteHostOptions['onAgentIdle'];
+  private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
-  private readonly onIpcDirCreated: AgentLiteHostOptions['onIpcDirCreated'];
+  private readonly onIpcDirCreated: AgentRuntimeOptions['onIpcDirCreated'];
 
   private readonly runtimeRoot: string;
 
@@ -630,11 +186,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly duneMcpServerDir: string;
 
-  private readonly bundledAgentIpcDir: string;
-
-  private agentLite: AgentLite | null = null;
-
-  private agentLiteStartPromise: Promise<AgentLite> | null = null;
+  private readonly bundledAgentDir: string;
 
   private readonly loadAgentLiteModule: () => Promise<typeof import('@boxlite-ai/agentlite')>;
 
@@ -658,14 +210,14 @@ export class AgentLiteHost implements AgentRuntime {
 
   readonly service: AgentService;
 
-  constructor(options: AgentLiteHostOptions) {
+  constructor(options: AgentRuntimeOptions) {
     this.agentStore = options.agentStore;
     this.homeDir = options.homeDir ?? os.homedir();
     this.onAgentIdle = options.onAgentIdle;
     this.onIpcDirCreated = options.onIpcDirCreated;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
-    this.bundledAgentIpcDir = options.bundledAgentIpcDir ?? resolveBundledAgentIpcDir();
-    const stagingDir = seedAgentIpcSources(this.bundledAgentIpcDir, this.homeDir);
+    this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
+    const stagingDir = seedAgentIpcSources(this.bundledAgentDir, this.homeDir);
     this.duneSkillDir = path.join(stagingDir, 'dune');
     this.projectKickoffSkillDir = path.join(stagingDir, 'dune-project-kickoff');
     this.duneMcpServerDir = path.join(stagingDir, 'dune-mcp-server');
@@ -767,7 +319,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   async start() {
-    seedArtifacts(this.homeDir, this.bundledAgentIpcDir);
+    seedArtifacts(this.homeDir, this.bundledAgentDir);
     await this.loadPersistedState();
 
     const persistedAgentValidationError = this.validatePersistedAgents();
@@ -788,7 +340,7 @@ export class AgentLiteHost implements AgentRuntime {
     const codingEngines = await detectCodingEngines();
     this.snapshot = { ...this.snapshot, codingEngines };
 
-    for (const record of this.persistedAgents.values()) {
+    for (const record of this.records.values()) {
       try {
         await this.ensureAgentRuntime(record);
       } catch (error) {
@@ -816,17 +368,13 @@ export class AgentLiteHost implements AgentRuntime {
     }
 
     this.shutdownPromise = (async () => {
-      this.clearPendingAssistantMessages();
+      this.messageStream.clear();
       this.telegram.clearAllSetupSessions();
 
       try {
         await this.telegram.disconnectAll();
-        await this.agentLite?.stop();
       } finally {
-        this.agentLite = null;
-        this.agentLiteStartPromise = null;
-        this.agentRuntimes.clear();
-        this.agentRuntimeStarts.clear();
+        await this.lifecycle.stop();
       }
     })();
 
@@ -838,13 +386,11 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   reset() {
-    this.clearPendingAssistantMessages();
-    this.pendingReadyInboxSignals.clear();
-    this.deliveredReadyInboxGenerations.clear();
+    this.messageStream.clear();
+    this.readyInbox.clear();
     this.telegram.reset();
-    this.persistedAgents.clear();
-    this.agentRuntimes.clear();
-    this.agentRuntimeStarts.clear();
+    this.records.clear();
+    this.lifecycle.clearRuntimes();
     this.snapshot = {
       agents: [],
       codingEngines: [],
@@ -852,7 +398,7 @@ export class AgentLiteHost implements AgentRuntime {
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
         message: this.blockedMessage ?? 'AgentLite runtime state was cleared in-process.',
-        status: this.blockedMessage ? 'error' : this.agentLite ? 'ready' : 'starting',
+        status: this.blockedMessage ? 'error' : this.lifecycle.isEngineReady() ? 'ready' : 'starting',
       }),
       selectedAgentId: null,
       telegramSetupSessions: [],
@@ -929,7 +475,7 @@ export class AgentLiteHost implements AgentRuntime {
       projectName,
       projectRootPath,
     } satisfies PersistedAgentRecord;
-    this.persistedAgents.set(agentId, persistedRecord);
+    this.records.set(persistedRecord);
     this.snapshot = {
       ...this.snapshot,
       agents: [nextAgent, ...this.snapshot.agents],
@@ -961,7 +507,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async updateAgentChannel(input: UpdateAgentChannelInput) {
     const agentId = input.agentId.trim();
-    const record = this.persistedAgents.get(agentId);
+    const record = this.records.get(agentId);
 
     if (!record) {
       throw new Error(`Agent "${input.agentId}" was not found.`);
@@ -981,7 +527,7 @@ export class AgentLiteHost implements AgentRuntime {
         throw new Error('Telegram is not connected.');
       }
 
-      const duneAgent = this.agentRuntimes.get(agentId)
+      const duneAgent = this.lifecycle.getRuntime(agentId)
         ?? await this.ensureAgentRuntime(record);
       const channelFactory = await this.createTelegramChannelFactory(setupSession.token);
 
@@ -1024,7 +570,7 @@ export class AgentLiteHost implements AgentRuntime {
       throw new Error(`${input.channelId} is not available yet.`);
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(record);
 
     await duneAgent.detachExternalChannel();
@@ -1078,7 +624,7 @@ export class AgentLiteHost implements AgentRuntime {
     const expectedName = createProjectMainAgentName(trimmedProjectId);
 
     if (existingAgent) {
-      const persistedRecord = this.persistedAgents.get(existingAgent.id);
+      const persistedRecord = this.records.get(existingAgent.id);
       const shouldRefreshProjectRuntimes = Boolean(
         persistedRecord && (
           persistedRecord.projectName !== trimmedProjectName ||
@@ -1158,7 +704,7 @@ export class AgentLiteHost implements AgentRuntime {
       projectRootPath: normalizedProjectRootPath,
     } satisfies PersistedAgentRecord;
 
-    this.persistedAgents.set(agentId, persistedRecord);
+    this.records.set(persistedRecord);
     this.snapshot = {
       ...this.snapshot,
       agents: [nextAgent, ...this.snapshot.agents],
@@ -1178,22 +724,21 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private async deleteAgent(agentId: string) {
-    if (!this.persistedAgents.has(agentId)) {
+    if (!this.records.has(agentId)) {
       return;
     }
 
-    this.clearPendingAssistantMessage(agentId);
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.delete(agentId);
-    const deletedRecord = this.persistedAgents.get(agentId)!;
+    this.messageStream.forget(agentId);
+    this.readyInbox.forget(agentId);
+    const deletedRecord = this.records.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
-    this.persistedAgents.delete(agentId);
+    this.records.delete(agentId);
 
-    const duneAgent = this.agentRuntimes.get(agentId);
+    const duneAgent = this.lifecycle.getRuntime(agentId);
 
     if (duneAgent) {
-      this.agentRuntimes.delete(agentId);
-      await this.agentLite?.deleteAgent(deletedRecord.groupFolder);
+      this.lifecycle.deleteRuntime(agentId);
+      await this.lifecycle.deleteSdkAgent(deletedRecord.groupFolder);
     }
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
@@ -1213,7 +758,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.snapshot = {
       ...this.snapshot,
       agents: nextAgents,
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
       selectedAgentId: nextSelectedAgentId,
       telegramSetupSessions: this.telegram.listSetupSessions(),
     };
@@ -1232,7 +777,7 @@ export class AgentLiteHost implements AgentRuntime {
         fs.rmSync(agentDir, { force: true, recursive: true });
       }
 
-      const hasRemainingProjectAgents = [...this.persistedAgents.values()]
+      const hasRemainingProjectAgents = [...this.records.values()]
         .some((record) => record.agent.projectId === agent.projectId);
 
       if (hasRemainingProjectAgents) {
@@ -1271,7 +816,7 @@ export class AgentLiteHost implements AgentRuntime {
 
     const trimmedText = text.trim();
 
-    if (!trimmedText || this.pendingAssistantMessages.has(agentId)) {
+    if (!trimmedText || this.messageStream.has(agentId)) {
       return;
     }
 
@@ -1299,7 +844,7 @@ export class AgentLiteHost implements AgentRuntime {
     const itemCount = Math.max(0, signal.itemCount);
 
     if (itemCount === 0) {
-      this.pendingReadyInboxSignals.delete(agentId);
+      this.readyInbox.forget(agentId);
       return;
     }
 
@@ -1307,8 +852,8 @@ export class AgentLiteHost implements AgentRuntime {
       generation: signal.generation,
       itemCount,
     } satisfies ReadyAssignmentsInboxSignal;
-    const deliveredGeneration = this.deliveredReadyInboxGenerations.get(agentId) ?? 0;
-    const pendingGeneration = this.pendingReadyInboxSignals.get(agentId)?.generation ?? 0;
+    const deliveredGeneration = this.readyInbox.getDeliveredGeneration(agentId);
+    const pendingGeneration = this.readyInbox.getPending(agentId)?.generation ?? 0;
 
     if (
       normalizedSignal.generation <= deliveredGeneration
@@ -1319,12 +864,12 @@ export class AgentLiteHost implements AgentRuntime {
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
 
-    if (!agent?.channel.canCompose || !this.persistedAgents.has(agentId)) {
+    if (!agent?.channel.canCompose || !this.records.has(agentId)) {
       return;
     }
 
-    if (this.pendingAssistantMessages.has(agentId)) {
-      this.pendingReadyInboxSignals.set(agentId, normalizedSignal);
+    if (this.messageStream.has(agentId)) {
+      this.readyInbox.queue(agentId, normalizedSignal);
       return;
     }
 
@@ -1335,17 +880,16 @@ export class AgentLiteHost implements AgentRuntime {
     agentId: string,
     signal: ReadyAssignmentsInboxSignal,
   ) {
-    const persistedRecord = this.persistedAgents.get(agentId);
+    const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
       return;
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(persistedRecord);
 
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.set(agentId, signal.generation);
+    this.readyInbox.markDelivered(agentId, signal.generation);
 
     await duneAgent.pushControlMessage(
       toAgentChatJid(agentId),
@@ -1365,13 +909,13 @@ export class AgentLiteHost implements AgentRuntime {
       transcriptText: string;
     },
   ) {
-    const persistedRecord = this.persistedAgents.get(agentId);
+    const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
       throw new Error(`Agent runtime "${agentId}" is unavailable.`);
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(persistedRecord);
 
     const assistantMessage = createAssistantMessage(options.timestamp);
@@ -1385,7 +929,7 @@ export class AgentLiteHost implements AgentRuntime {
       format: options.format,
     } satisfies AgentMessage;
 
-    this.pendingAssistantMessages.set(agentId, {
+    this.messageStream.set(agentId, {
       idleTimer: null,
       messageId: assistantMessage.id,
       safetyTimer: null,
@@ -1451,7 +995,7 @@ export class AgentLiteHost implements AgentRuntime {
       return;
     }
 
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
     const now = this.now();
 
     this.snapshot = {
@@ -1465,7 +1009,7 @@ export class AgentLiteHost implements AgentRuntime {
           // No pending message — start a new streaming assistant message
           // so subsequent chunks from AgentLite append to it.
           const newMessageId = createMessageId('assistant', now);
-          this.pendingAssistantMessages.set(agentId, {
+          this.messageStream.set(agentId, {
             idleTimer: null,
             messageId: newMessageId,
             safetyTimer: null,
@@ -1510,7 +1054,7 @@ export class AgentLiteHost implements AgentRuntime {
           updatedAt: now,
         };
       }),
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
     };
 
     this.scheduleFinalizeAssistantMessage(agentId);
@@ -1555,12 +1099,12 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private scheduleFinalizeAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
 
     if (!pending) {
       this.snapshot = {
         ...this.snapshot,
-        isStreaming: this.pendingAssistantMessages.size > 0,
+        isStreaming: this.messageStream.isStreaming,
       };
       return;
     }
@@ -1575,23 +1119,15 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private finalizeAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
 
     if (!pending) {
       return;
     }
 
-    if (pending.idleTimer) {
-      globalThis.clearTimeout(pending.idleTimer);
-    }
-
-    if (pending.safetyTimer) {
-      globalThis.clearTimeout(pending.safetyTimer);
-    }
-
     const now = this.now();
 
-    this.pendingAssistantMessages.delete(agentId);
+    this.messageStream.forget(agentId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -1612,7 +1148,7 @@ export class AgentLiteHost implements AgentRuntime {
             }
           : agent,
       ),
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
     };
     this.persistState();
     this.emit();
@@ -1623,7 +1159,7 @@ export class AgentLiteHost implements AgentRuntime {
 
     // Outbound Telegram delivery is handled by DuneChannel's external driver.
 
-    const pendingReadyInboxSignal = this.pendingReadyInboxSignals.get(agentId) ?? null;
+    const pendingReadyInboxSignal = this.readyInbox.getPending(agentId);
 
     if (pendingReadyInboxSignal) {
       void this.dispatchReadyAssignmentInboxSignal(agentId, pendingReadyInboxSignal);
@@ -1681,14 +1217,14 @@ export class AgentLiteHost implements AgentRuntime {
         continue;
       }
 
-      const record = this.persistedAgents.get(patch.agentId);
+      const record = this.records.get(patch.agentId);
 
       if (!record) {
         continue;
       }
 
       try {
-        const duneAgent = this.agentRuntimes.get(patch.agentId)
+        const duneAgent = this.lifecycle.getRuntime(patch.agentId)
           ?? await this.ensureAgentRuntime(record);
         const channelFactory = await this.resolveExternalChannelFactory(
           patch.channel.id,
@@ -1730,7 +1266,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private validatePersistedAgents() {
-    const unscopedAgents = [...this.persistedAgents.values()]
+    const unscopedAgents = [...this.records.values()]
       .filter((record) => record.agent.projectId === null)
       .map((record) => record.agent.id);
 
@@ -1746,15 +1282,16 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private async ensureAgentLiteReady(): Promise<AgentLite> {
-    if (this.agentLite) {
-      return this.agentLite;
+    const existing = this.lifecycle.getEngine();
+    if (existing) {
+      return existing;
     }
 
     if (this.shutdownPromise) {
       throw new Error('AgentLite runtime is shutting down.');
     }
 
-    const inFlight = this.agentLiteStartPromise;
+    const inFlight = this.lifecycle.getInFlightEngineStart();
 
     if (inFlight) {
       return inFlight;
@@ -1769,7 +1306,7 @@ export class AgentLiteHost implements AgentRuntime {
           const agentLite = await agentLiteModule.createAgentLite({
             workdir: this.runtimeRoot,
           });
-          this.agentLite = agentLite;
+          this.lifecycle.setEngine(agentLite);
           return agentLite;
         } catch (error) {
           lastError = error;
@@ -1788,14 +1325,12 @@ export class AgentLiteHost implements AgentRuntime {
       throw lastError instanceof Error ? lastError : new Error(String(lastError));
     })();
 
-    this.agentLiteStartPromise = startPromise;
+    this.lifecycle.beginEngineStart(startPromise);
 
     try {
       return await startPromise;
     } finally {
-      if (this.agentLiteStartPromise === startPromise) {
-        this.agentLiteStartPromise = null;
-      }
+      this.lifecycle.endEngineStart(startPromise);
     }
   }
 
@@ -1819,20 +1354,20 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async ensureAgentRuntime(record: PersistedAgentRecord): Promise<DuneAgent> {
     const agentId = record.agent.id;
-    const existing = this.agentRuntimes.get(agentId);
+    const existing = this.lifecycle.getRuntime(agentId);
 
     if (existing) {
       return existing;
     }
 
-    const inFlight = this.agentRuntimeStarts.get(agentId);
+    const inFlight = this.lifecycle.getInFlightRuntimeStart(agentId);
 
     if (inFlight) {
       return inFlight;
     }
 
     const startPromise = (async () => {
-      const agentLite = this.agentLite ?? await this.ensureAgentLiteReady();
+      const agentLite = this.lifecycle.getEngine() ?? await this.ensureAgentLiteReady();
       let ipcHostPath: string | undefined;
       let ipcContainerPath: string | undefined;
       const mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }> = [];
@@ -2042,43 +1577,41 @@ export class AgentLiteHost implements AgentRuntime {
         this.persistState();
       }
 
-      if (!this.persistedAgents.has(agentId)) {
+      if (!this.records.has(agentId)) {
         await this.cleanupFailedAgentRuntime(record);
         throw new Error(`Agent runtime "${agentId}" was removed before startup completed.`);
       }
 
-      this.agentRuntimes.set(agentId, duneAgent);
+      this.lifecycle.setRuntime(agentId, duneAgent);
       return duneAgent;
     })();
 
-    this.agentRuntimeStarts.set(agentId, startPromise);
+    this.lifecycle.beginRuntimeStart(agentId, startPromise);
 
     try {
       return await startPromise;
     } finally {
-      if (this.agentRuntimeStarts.get(agentId) === startPromise) {
-        this.agentRuntimeStarts.delete(agentId);
-      }
+      this.lifecycle.endRuntimeStart(agentId, startPromise);
     }
   }
 
   private async refreshProjectAgentRuntimes(projectId: string) {
-    const projectAgentRecords = [...this.persistedAgents.values()]
+    const projectAgentRecords = [...this.records.values()]
       .filter((record) => record.agent.projectId === projectId);
 
     for (const record of projectAgentRecords) {
       const agentId = record.agent.id;
-      const hasRuntime = this.agentRuntimes.has(agentId);
+      const hasRuntime = this.lifecycle.hasRuntime(agentId);
 
       if (!hasRuntime) {
         continue;
       }
 
-      this.clearPendingAssistantMessage(agentId);
-      this.agentRuntimes.delete(agentId);
+      this.messageStream.forget(agentId);
+      this.lifecycle.deleteRuntime(agentId);
 
       try {
-        await this.agentLite?.deleteAgent(record.groupFolder);
+        await this.lifecycle.deleteSdkAgent(record.groupFolder);
       } catch (error) {
         console.error(`Failed to refresh runtime mounts for "${record.agent.name}".`, error);
       }
@@ -2090,10 +1623,9 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private rollbackOptimisticAgent(agentId: string) {
-    this.persistedAgents.delete(agentId);
-    this.agentRuntimes.delete(agentId);
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.delete(agentId);
+    this.records.delete(agentId);
+    this.lifecycle.deleteRuntime(agentId);
+    this.readyInbox.forget(agentId);
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
     const nextSelectedAgentId = this.snapshot.selectedAgentId === agentId
@@ -2110,7 +1642,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private resolveAgentIdByChatJid(chatJid: string): string | null {
-    for (const record of this.persistedAgents.values()) {
+    for (const record of this.records.values()) {
       if (toAgentChatJid(record.agent.id) === chatJid) {
         return record.agent.id;
       }
@@ -2121,7 +1653,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async cleanupFailedAgentRuntime(record: PersistedAgentRecord) {
     try {
-      await this.agentLite?.deleteAgent(record.groupFolder);
+      await this.lifecycle.deleteSdkAgent(record.groupFolder);
     } catch (cleanupError) {
       console.error(
         `Failed to clean up agent runtime for "${record.agent.name}" after startup failed.`,
@@ -2153,7 +1685,7 @@ export class AgentLiteHost implements AgentRuntime {
     const projectNameCache = new Map<string, string | null>();
     let didPrune = false;
 
-    for (const [agentId, record] of [...this.persistedAgents.entries()]) {
+    for (const [agentId, record] of [...this.records.entries()]) {
       const projectId = record.agent.projectId;
 
       if (!projectId) {
@@ -2173,7 +1705,7 @@ export class AgentLiteHost implements AgentRuntime {
         continue;
       }
 
-      this.persistedAgents.delete(agentId);
+      this.records.delete(agentId);
       this.cleanupDeletedAgentPaths(record.agent);
       this.cleanupPersistedAgentRuntimeState(record);
       didPrune = true;
@@ -2191,15 +1723,15 @@ export class AgentLiteHost implements AgentRuntime {
       const agents = (await this.agentStore.get<PersistedAgentRecord[]>('agents')) ?? [];
       const selectedAgentId = await this.agentStore.get<string | null>('selectedAgentId');
 
-      this.persistedAgents.clear();
+      this.records.clear();
 
       for (const record of agents.map((item) => normalizePersistedAgentRecord(item, this.runtimeRoot))) {
-        this.persistedAgents.set(record.agent.id, record);
+        this.records.set(record);
       }
 
       const didPruneOrphans = await this.pruneOrphanedPersistedAgents();
 
-      const snapshotAgents = [...this.persistedAgents.values()].map((record) => record.agent);
+      const snapshotAgents = [...this.records.values()].map((record) => record.agent);
       const hasSelectedAgent = selectedAgentId
         ? snapshotAgents.some((agent) => agent.id === selectedAgentId)
         : false;
@@ -2228,7 +1760,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private persistState() {
     for (const agent of this.snapshot.agents) {
-      const record = this.persistedAgents.get(agent.id);
+      const record = this.records.get(agent.id);
 
       if (record) {
         record.agent = {
@@ -2249,44 +1781,13 @@ export class AgentLiteHost implements AgentRuntime {
       }
     }
 
-    void this.agentStore.set('agents', [...this.persistedAgents.values()]);
+    void this.agentStore.set('agents', [...this.records.values()]);
     void this.agentStore.set('selectedAgentId', this.snapshot.selectedAgentId);
   }
 
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
-
-  private clearPendingAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
-
-    if (!pending) {
-      return;
-    }
-
-    if (pending.idleTimer) {
-      globalThis.clearTimeout(pending.idleTimer);
-    }
-
-    if (pending.safetyTimer) {
-      globalThis.clearTimeout(pending.safetyTimer);
-    }
-
-    this.pendingAssistantMessages.delete(agentId);
-  }
-
-  private clearPendingAssistantMessages() {
-    for (const pending of this.pendingAssistantMessages.values()) {
-      if (pending.idleTimer) {
-        globalThis.clearTimeout(pending.idleTimer);
-      }
-      if (pending.safetyTimer) {
-        globalThis.clearTimeout(pending.safetyTimer);
-      }
-    }
-
-    this.pendingAssistantMessages.clear();
-  }
 
   private emit() {
     const nextSnapshot = this.getSnapshot();

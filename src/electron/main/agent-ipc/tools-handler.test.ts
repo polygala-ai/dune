@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AppStorage } from '@/electron/main/storage/app-storage';
-import { createToolHandler } from './tools-handler';
+import { createToolHandler } from './tools';
 
 function createMemoryStore(initialData: Record<string, unknown> = {}): AppStorage {
   const data = new Map<string, unknown>(Object.entries(initialData));

@@ -1,18 +1,16 @@
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
 import type {
+  AgentRuntimeContract,
   AgentServiceListener,
   AgentServiceSnapshot,
-} from '@/renderer/features/agents/model/agent-service';
+} from '@/shared/agents/agent-runtime';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
   createDefaultExternalChannelsState,
 } from '@/renderer/features/agents/model/channels';
-import {
-  createMockAgentRuntime,
-  type AgentRuntime,
-} from '@/renderer/features/agents/services/mock-agent-service';
+import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
@@ -77,7 +75,7 @@ function hasRuntimeBridge(
   );
 }
 
-class BridgeAgentRuntime implements AgentRuntime {
+class BridgeAgentRuntime implements AgentRuntimeContract {
   private listeners = new Set<AgentServiceListener>();
 
   private snapshot: AgentServiceSnapshot = createInitialBridgeSnapshot();
@@ -232,13 +230,13 @@ class BridgeAgentRuntime implements AgentRuntime {
   }
 }
 
-type SyncableAgentRuntime = AgentRuntime & {
+type SyncableAgentRuntime = AgentRuntimeContract & {
   syncSnapshot?: (reason?: string) => Promise<AgentServiceSnapshot>;
 };
 
 export function createAgentRuntime(
   desktopBridge: DesktopBridge | undefined = window.duneDesktop,
-): AgentRuntime {
+): AgentRuntimeContract {
   if (hasRuntimeBridge(desktopBridge)) {
     return new BridgeAgentRuntime(desktopBridge);
   }
@@ -246,7 +244,7 @@ export function createAgentRuntime(
   return createMockAgentRuntime();
 }
 
-export const agentRuntime: AgentRuntime = createAgentRuntime();
+export const agentRuntime: AgentRuntimeContract = createAgentRuntime();
 
 export async function syncAgentRuntimeSnapshot(reason = 'manual') {
   if (typeof (agentRuntime as SyncableAgentRuntime).syncSnapshot === 'function') {

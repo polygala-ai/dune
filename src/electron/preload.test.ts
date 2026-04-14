@@ -29,7 +29,7 @@ describe('preload bridge', () => {
   });
 
   it('exposes a frozen desktop bridge to the renderer', async () => {
-    await import('@/electron/preload/index');
+    await import('@/electron/preload');
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     expect(exposeInMainWorld).toHaveBeenCalledWith(
@@ -59,7 +59,7 @@ describe('preload bridge', () => {
       selectedAgentId: null,
     });
 
-    await import('@/electron/preload/index');
+    await import('@/electron/preload');
 
     const desktopBridge = exposeInMainWorld.mock.calls[0]?.[1] as
       | DesktopBridge
@@ -166,7 +166,7 @@ describe('preload bridge', () => {
   it('proxies storage calls through ipcRenderer', async () => {
     invoke.mockResolvedValue(null);
 
-    await import('@/electron/preload/index');
+    await import('@/electron/preload');
 
     const bridge = exposeInMainWorld.mock.calls[0]?.[1] as
       | DesktopBridge
@@ -186,7 +186,7 @@ describe('preload bridge', () => {
   });
 
   it('exposes all expected bridge methods', async () => {
-    await import('@/electron/preload/index');
+    await import('@/electron/preload');
 
     const bridge = exposeInMainWorld.mock.calls[0]?.[1] as
       | DesktopBridge

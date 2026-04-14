@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
-import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import type { PresentedAgent } from '@/renderer/features/agents/types';

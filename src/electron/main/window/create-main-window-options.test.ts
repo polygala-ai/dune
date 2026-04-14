@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMainWindowOptions } from '@/electron/window/create-main-window-options';
+import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';
 import { MAC_TITLEBAR_OVERLAY_HEIGHT } from '@/shared/window/titlebar';
 
 describe('createMainWindowOptions', () => {

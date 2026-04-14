@@ -3,8 +3,8 @@ import {
   ipcRenderer,
 } from 'electron';
 
-import type { DesktopBridge } from '../../shared/electron/desktop-bridge';
-import { ipcChannels } from '../../shared/electron/ipc-channels';
+import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
+import { ipcChannels } from '@/shared/electron/ipc-channels';
 
 const bridge: DesktopBridge = {
   applyNetworkSettings: () => ipcRenderer.invoke(ipcChannels.applyNetworkSettings),

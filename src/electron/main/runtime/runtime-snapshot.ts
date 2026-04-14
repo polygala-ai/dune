@@ -1,4 +1,4 @@
-import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 
 export interface RuntimeSnapshotController {
