@@ -22,7 +22,7 @@ export default defineConfig({
       exclude: [
         'build/**/*.test.ts',
         'src/electron/main/index.ts',
-        'src/electron/preload/index.ts',
+        'src/electron/preload.ts',
         'tests/**',
       ],
     },
