@@ -31,6 +31,37 @@ import { extractWorkspaceAttachmentPaths } from '../../shared/agents/message-con
 
 const TELEGRAM_PAIR_CODE_TTL_MS = 10 * 60 * 1000;
 
+// grammy's bot.start() resolves only once getMe succeeds and polling begins.
+// If the network is broken or the token is wrong, it can hang indefinitely —
+// keeping the "Save token" button stuck in "Saving…". Bound the wait so the
+// bridge surfaces a proper error instead of blocking the IPC call.
+const TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS = 15_000;
+
+function connectDriverWithTimeout(
+  driver: ChannelDriver,
+  timeoutMs: number,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(
+        `Telegram bot did not respond within ${Math.round(timeoutMs / 1000)}s. `
+          + 'Check the bot token and network (Settings → Network).',
+      ));
+    }, timeoutMs);
+
+    driver
+      .connect()
+      .then(() => {
+        globalThis.clearTimeout(timeoutId);
+        resolve();
+      })
+      .catch((error) => {
+        globalThis.clearTimeout(timeoutId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+  });
+}
+
 const TELEGRAM_OBSERVER_GROUP = Object.freeze({
   added_at: new Date(0).toISOString(),
   folder: 'telegram-observer',
@@ -372,7 +403,7 @@ export class TelegramBridge {
 
         try {
           driver = await this.createObserver(token, fingerprint);
-          await driver.connect();
+          await connectDriverWithTimeout(driver, TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS);
           let botUsername: string | null = null;
 
           try {
@@ -390,9 +421,19 @@ export class TelegramBridge {
             token,
           };
         } catch (error) {
+          // Disconnect the hung/failed driver so it doesn't keep polling in the
+          // background while we surface the error to the UI.
+          if (driver) {
+            try {
+              await driver.disconnect();
+            } catch (disconnectError) {
+              console.warn('Failed to disconnect a stalled Telegram driver.', disconnectError);
+            }
+          }
+
           observer = {
             botUsername: null,
-            driver,
+            driver: null,
             errorMessage: error instanceof Error ? error.message : String(error),
             fingerprint,
             status: 'error',
