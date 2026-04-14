@@ -92,6 +92,7 @@ import {
 } from './snapshot';
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
 import { ReadyInbox } from './ready-inbox';
+import { MessageStream, type PendingAssistantMessage } from './message-stream';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
@@ -137,12 +138,6 @@ export interface AgentStore {
   set<T>(key: string, value: T): Promise<void>;
 }
 
-interface PendingAssistantMessage {
-  idleTimer: ReturnType<typeof globalThis.setTimeout> | null;
-  messageId: string;
-  safetyTimer: ReturnType<typeof globalThis.setTimeout> | null;
-}
-
 type TelegramModule = typeof import('@boxlite-ai/agentlite/channels/telegram');
 
 // eslint-disable-next-line no-new-func
@@ -186,7 +181,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly now: () => number;
 
-  private readonly pendingAssistantMessages = new Map<string, PendingAssistantMessage>();
+  private readonly messageStream = new MessageStream();
 
   private readonly readyInbox = new ReadyInbox();
 
@@ -398,7 +393,7 @@ export class AgentLiteHost implements AgentRuntime {
     }
 
     this.shutdownPromise = (async () => {
-      this.clearPendingAssistantMessages();
+      this.messageStream.clear();
       this.telegram.clearAllSetupSessions();
 
       try {
@@ -420,7 +415,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   reset() {
-    this.clearPendingAssistantMessages();
+    this.messageStream.clear();
     this.readyInbox.clear();
     this.telegram.reset();
     this.persistedAgents.clear();
@@ -763,7 +758,7 @@ export class AgentLiteHost implements AgentRuntime {
       return;
     }
 
-    this.clearPendingAssistantMessage(agentId);
+    this.messageStream.forget(agentId);
     this.readyInbox.forget(agentId);
     const deletedRecord = this.persistedAgents.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
@@ -793,7 +788,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.snapshot = {
       ...this.snapshot,
       agents: nextAgents,
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
       selectedAgentId: nextSelectedAgentId,
       telegramSetupSessions: this.telegram.listSetupSessions(),
     };
@@ -851,7 +846,7 @@ export class AgentLiteHost implements AgentRuntime {
 
     const trimmedText = text.trim();
 
-    if (!trimmedText || this.pendingAssistantMessages.has(agentId)) {
+    if (!trimmedText || this.messageStream.has(agentId)) {
       return;
     }
 
@@ -903,7 +898,7 @@ export class AgentLiteHost implements AgentRuntime {
       return;
     }
 
-    if (this.pendingAssistantMessages.has(agentId)) {
+    if (this.messageStream.has(agentId)) {
       this.readyInbox.queue(agentId, normalizedSignal);
       return;
     }
@@ -964,7 +959,7 @@ export class AgentLiteHost implements AgentRuntime {
       format: options.format,
     } satisfies AgentMessage;
 
-    this.pendingAssistantMessages.set(agentId, {
+    this.messageStream.set(agentId, {
       idleTimer: null,
       messageId: assistantMessage.id,
       safetyTimer: null,
@@ -1030,7 +1025,7 @@ export class AgentLiteHost implements AgentRuntime {
       return;
     }
 
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
     const now = this.now();
 
     this.snapshot = {
@@ -1044,7 +1039,7 @@ export class AgentLiteHost implements AgentRuntime {
           // No pending message — start a new streaming assistant message
           // so subsequent chunks from AgentLite append to it.
           const newMessageId = createMessageId('assistant', now);
-          this.pendingAssistantMessages.set(agentId, {
+          this.messageStream.set(agentId, {
             idleTimer: null,
             messageId: newMessageId,
             safetyTimer: null,
@@ -1089,7 +1084,7 @@ export class AgentLiteHost implements AgentRuntime {
           updatedAt: now,
         };
       }),
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
     };
 
     this.scheduleFinalizeAssistantMessage(agentId);
@@ -1134,12 +1129,12 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private scheduleFinalizeAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
 
     if (!pending) {
       this.snapshot = {
         ...this.snapshot,
-        isStreaming: this.pendingAssistantMessages.size > 0,
+        isStreaming: this.messageStream.isStreaming,
       };
       return;
     }
@@ -1154,23 +1149,15 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private finalizeAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
+    const pending = this.messageStream.get(agentId);
 
     if (!pending) {
       return;
     }
 
-    if (pending.idleTimer) {
-      globalThis.clearTimeout(pending.idleTimer);
-    }
-
-    if (pending.safetyTimer) {
-      globalThis.clearTimeout(pending.safetyTimer);
-    }
-
     const now = this.now();
 
-    this.pendingAssistantMessages.delete(agentId);
+    this.messageStream.forget(agentId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -1191,7 +1178,7 @@ export class AgentLiteHost implements AgentRuntime {
             }
           : agent,
       ),
-      isStreaming: this.pendingAssistantMessages.size > 0,
+      isStreaming: this.messageStream.isStreaming,
     };
     this.persistState();
     this.emit();
@@ -1653,7 +1640,7 @@ export class AgentLiteHost implements AgentRuntime {
         continue;
       }
 
-      this.clearPendingAssistantMessage(agentId);
+      this.messageStream.forget(agentId);
       this.agentRuntimes.delete(agentId);
 
       try {
@@ -1834,37 +1821,6 @@ export class AgentLiteHost implements AgentRuntime {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
-
-  private clearPendingAssistantMessage(agentId: string) {
-    const pending = this.pendingAssistantMessages.get(agentId);
-
-    if (!pending) {
-      return;
-    }
-
-    if (pending.idleTimer) {
-      globalThis.clearTimeout(pending.idleTimer);
-    }
-
-    if (pending.safetyTimer) {
-      globalThis.clearTimeout(pending.safetyTimer);
-    }
-
-    this.pendingAssistantMessages.delete(agentId);
-  }
-
-  private clearPendingAssistantMessages() {
-    for (const pending of this.pendingAssistantMessages.values()) {
-      if (pending.idleTimer) {
-        globalThis.clearTimeout(pending.idleTimer);
-      }
-      if (pending.safetyTimer) {
-        globalThis.clearTimeout(pending.safetyTimer);
-      }
-    }
-
-    this.pendingAssistantMessages.clear();
-  }
 
   private emit() {
     const nextSnapshot = this.getSnapshot();
