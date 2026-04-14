@@ -1,3 +1,5 @@
+// Network settings UI.
+
 import { useEffect, useMemo, useState } from 'react';
 
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
@@ -15,6 +17,7 @@ import { SettingsSectionIntro } from './SettingsSectionIntro';
 
 const STORE_NAME = 'settings';
 
+/** Feedback state. */
 type FeedbackState =
   | { kind: 'error'; message: string }
   | { kind: 'success'; message: string }
@@ -46,6 +49,7 @@ const networkModeOptions: Array<{
   },
 ];
 
+/** Creates settings store. */
 function createSettingsStore() {
   return {
     get: async <T,>(key: string): Promise<T | null> => {
@@ -58,6 +62,7 @@ function createSettingsStore() {
   };
 }
 
+/** Parses bypass rules. */
 function parseBypassRules(value: string) {
   return value
     .split('\n')
@@ -65,6 +70,7 @@ function parseBypassRules(value: string) {
     .filter(Boolean);
 }
 
+/** Renders the network settings UI. */
 export function NetworkSettings(props: SettingsSectionComponentProps) {
   void props;
   const settingsStore = useMemo(() => createSettingsStore(), []);
@@ -97,6 +103,7 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
   const canSave = !isLoading && !isSaving && (!isManualMode || Boolean(manualProxyUrl.trim()));
   const selectedMode = networkModeOptions.find((option) => option.id === mode) ?? networkModeOptions[1]!;
 
+  /** Handles save. */
   const handleSave = async () => {
     setSaving(true);
     setFeedback(null);

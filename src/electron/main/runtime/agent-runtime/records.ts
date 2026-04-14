@@ -1,3 +1,5 @@
+// Agent runtime record builders and normalization helpers.
+
 import type {
   Agent,
   AgentExternalTarget,
@@ -18,6 +20,7 @@ import { normalizeAgentAttachments } from '../agent-message-attachments';
 import { createChannelBinding } from './channels';
 import { createGroupFolder } from './utils';
 
+/** Persisted agent record shape. */
 export interface PersistedAgentRecord {
   agent: Agent;
   groupFolder: string;
@@ -25,6 +28,7 @@ export interface PersistedAgentRecord {
   projectRootPath?: string | null;
 }
 
+/** Normalizes persisted messages. */
 export function normalizePersistedMessages(
   messages: AgentMessage[],
   options: { groupFolder: string; runtimeRoot: string },
@@ -49,14 +53,17 @@ export function normalizePersistedMessages(
   return normalizedMessages;
 }
 
+/** Creates message ID. */
 export function createMessageId(role: AgentMessage['role'], now: number): string {
   return `message-${role}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Summarizes preview. */
 export function summarizePreview(content: string): string {
   return summarizeMessagePreview(content);
 }
 
+/** Creates built in agent copy. */
 export function createBuiltInAgentCopy() {
   return {
     note: 'This agent is running inside the real AgentLite foundation that Dune now hosts directly in the desktop runtime.',
@@ -64,6 +71,7 @@ export function createBuiltInAgentCopy() {
   };
 }
 
+/** Creates external agent copy. */
 export function createExternalAgentCopy(attachedLabel: string) {
   return {
     note: `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
@@ -71,6 +79,7 @@ export function createExternalAgentCopy(attachedLabel: string) {
   };
 }
 
+/** Creates draft agent. */
 export function createDraftAgent(
   agentId: string,
   name: string,
@@ -108,6 +117,7 @@ export function createDraftAgent(
   };
 }
 
+/** Creates user message. */
 export function createUserMessage(content: string, now: number): AgentMessage {
   return {
     attachments: [],
@@ -120,6 +130,7 @@ export function createUserMessage(content: string, now: number): AgentMessage {
   };
 }
 
+/** Creates assistant message. */
 export function createAssistantMessage(now: number): AgentMessage {
   return {
     attachments: [],
@@ -132,6 +143,7 @@ export function createAssistantMessage(now: number): AgentMessage {
   };
 }
 
+/** Normalizes persisted agent record. */
 export function normalizePersistedAgentRecord(
   record: PersistedAgentRecord,
   runtimeRoot: string,

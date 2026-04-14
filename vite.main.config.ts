@@ -1,8 +1,11 @@
+// Vite configuration for the Electron main process bundle.
+
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 import { isExternalModuleId } from './build/external-modules';
 
+/** Externalizes configured modules. */
 function externalizeConfiguredModules(): Plugin {
   return {
     enforce: 'pre',

@@ -1,3 +1,5 @@
+// Local data reset tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +9,7 @@ import { resetLocalData } from '@/electron/main/reset-local-data';
 
 const tempDirs: string[] = [];
 
+/** Creates temp dir. */
 function createTempDir(prefix: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);

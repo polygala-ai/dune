@@ -1,7 +1,10 @@
+// Workflow seed data builders.
+
 import { createId, createProjectId } from '@/shared/id';
 import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
 
+/** Creates empty workflow snapshot. */
 export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   return {
     items: [],
@@ -13,6 +16,7 @@ export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   };
 }
 
+/** Creates seed workflow snapshot. */
 export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSnapshot {
   const projectId = createProjectId();
 

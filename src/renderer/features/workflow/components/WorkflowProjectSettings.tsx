@@ -1,3 +1,5 @@
+// Workflow project settings UI.
+
 import {
   type ReactNode,
   useEffect,
@@ -17,6 +19,7 @@ import { Button } from '@/renderer/shared/ui/button';
 import { Input } from '@/renderer/shared/ui/input';
 import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 
+/** Renders the project inspector card UI. */
 function ProjectInspectorCard({
   children,
   className,
@@ -41,6 +44,7 @@ function ProjectInspectorCard({
   );
 }
 
+/** Renders the project inspector inset UI. */
 function ProjectInspectorInset({
   children,
   className,
@@ -60,6 +64,7 @@ function ProjectInspectorInset({
   );
 }
 
+/** Workflow project settings props. */
 interface WorkflowProjectSettingsProps {
   className?: string;
   onCancel: () => void;
@@ -71,6 +76,7 @@ interface WorkflowProjectSettingsProps {
   project: WorkflowProject;
 }
 
+/** Renders the workflow project settings UI. */
 export function WorkflowProjectSettings({
   className,
   onCancel,
@@ -108,6 +114,7 @@ export function WorkflowProjectSettings({
     );
   }, [description, name, project.description, project.name, project.rootPath, rootPath]);
 
+  /** Handles root path pick. */
   const handlePickRootPath = async () => {
     setErrorMessage(null);
     setIsPickingFolder(true);
@@ -125,6 +132,7 @@ export function WorkflowProjectSettings({
     }
   };
 
+  /** Handles save. */
   const handleSave = async () => {
     setErrorMessage(null);
     setIsSaving(true);

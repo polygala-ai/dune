@@ -1,3 +1,5 @@
+// Agent message attachment tests.
+
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 

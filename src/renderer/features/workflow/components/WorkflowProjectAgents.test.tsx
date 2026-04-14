@@ -1,3 +1,5 @@
+// Workflow project-agent tests.
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -41,7 +43,7 @@ describe('WorkflowProjectAgents', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows the legacy empty state once runtime startup has finished with no agents', () => {
+  it('shows the empty state once runtime startup has finished with no agents', () => {
     render(
       <WorkflowProjectAgents
         agents={[]}

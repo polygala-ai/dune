@@ -1,3 +1,5 @@
+// App smoke end-to-end coverage.
+
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -16,6 +18,7 @@ import {
   resizeWindow,
 } from './helpers';
 
+/** Returns agent open button. */
 function getAgentOpenButton(page: Page, agentName: string) {
   return page
     .getByText(agentName, { exact: true })
@@ -23,6 +26,7 @@ function getAgentOpenButton(page: Page, agentName: string) {
     .getByRole('button', { name: /^Open agent$/i });
 }
 
+/** Asserts agent title. */
 async function expectAgentTitle(page: Page, agentName: string) {
   if (process.platform === 'darwin') {
     await expect(page.getByTestId('titlebar-agent-title')).toContainText(agentName);

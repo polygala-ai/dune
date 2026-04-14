@@ -1,3 +1,5 @@
+// Store selector helpers.
+
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAppStore } from '@/renderer/app/store/use-app-store';
@@ -15,6 +17,7 @@ import {
   selectWorkflowProjectById,
 } from '@/renderer/features/workflow/model/workflow-presenters';
 
+/** Agent session hook. */
 export function useAgentSession() {
   const {
     agentCustomizations,
@@ -65,6 +68,7 @@ export function useAgentSession() {
   };
 }
 
+/** Shell state hook. */
 export function useShellState() {
   return useAppStore(
     useShallow((state) => ({
@@ -78,6 +82,7 @@ export function useShellState() {
   );
 }
 
+/** Workflow session hook. */
 export function useWorkflowSession() {
   const {
     agents,
@@ -210,6 +215,7 @@ export function useWorkflowSession() {
   };
 }
 
+/** Settings state hook. */
 export function useSettingsState() {
   return useAppStore(
     useShallow((state) => ({

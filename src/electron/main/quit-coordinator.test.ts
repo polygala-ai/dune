@@ -1,7 +1,10 @@
+// Quit coordinator tests.
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
 
+/** Flushes microtasks. */
 async function flushMicrotasks() {
   await Promise.resolve();
   await Promise.resolve();

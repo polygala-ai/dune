@@ -1,3 +1,5 @@
+// Context panel host tests.
+
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +11,7 @@ import { createDefaultExternalChannelsState } from '@/renderer/features/agents/m
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 
+/** Creates agent. */
 function createAgent(
   overrides: Partial<PresentedAgent> = {},
 ): PresentedAgent {
@@ -40,6 +43,7 @@ function createAgent(
   };
 }
 
+/** Creates snapshot. */
 function createSnapshot(
   overrides: Partial<AgentServiceSnapshot> = {},
 ): AgentServiceSnapshot {

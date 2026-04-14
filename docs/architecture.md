@@ -9,7 +9,7 @@ Dune is an Electron desktop app with:
 - a React renderer in `src/renderer/`
 - a flat preload bridge exposed as `window.duneDesktop`
 - a privileged main process in `src/electron/main/`
-- an AgentLite-backed runtime in `src/electron/runtime-core/`
+- an AgentLite-backed runtime in `src/electron/main/runtime/`
 - local persistence in Electron `userData` plus the `.dune` runtime tree
 
 The main product surfaces are:
@@ -27,7 +27,7 @@ The main product surfaces are:
   - `useWorkflowPersistence` loads and saves the workflow snapshot.
   - The renderer does not import Electron or Node APIs directly.
 - Preload
-  - `src/electron/preload/index.ts` exposes a flat `DesktopBridge`.
+  - `src/electron/preload.ts` exposes a flat `DesktopBridge`.
   - Each bridge method maps to one IPC capability or subscription.
 - Main process
   - Creates the window.
@@ -35,9 +35,9 @@ The main product surfaces are:
   - Owns storage, proxy configuration, runtime bootstrap, reset, and shutdown.
 - Runtime controller
   - `DesktopRuntimeController` is the main-process facade for runtime actions.
-  - It starts in mock mode, then swaps to `AgentLiteHost` when available.
+  - It starts in mock mode, then swaps to `AgentRuntime` when available.
 - Runtime core
-  - `AgentLiteHost` owns persisted agent state, AgentLite startup, snapshots, Telegram integration, and Dune-managed agent runtimes.
+  - `AgentRuntime` owns persisted agent state, AgentLite startup, snapshots, Telegram integration, and Dune-managed agent runtimes.
   - `DuneAgent` wraps one AgentLite agent.
   - `TelegramBridge` manages Telegram setup sessions, observers, and inbound messages.
 - Storage
@@ -53,81 +53,73 @@ The main product surfaces are:
 
 ### Call Graph (Big Picture)
 
-A visual view of how a single user action crosses the three process boundaries
-and comes back.
+Three processes, one snapshot. Commands flow up, snapshots flow down.
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  RENDERER (React, sandboxed — no Node access)                       │
-│                                                                     │
-│   UI Component (e.g. AgentView.tsx)                                 │
-│        │                                                            │
-│        │ user clicks "Send"                                         │
-│        ▼                                                            │
-│   useAppStore (Zustand)  ──►  app-commands.ts                       │
-│        │                           │                                │
-│        │                           │ cross-slice workflow           │
-│        │                           ▼                                │
-│        │                    agentRuntime.sendMessage(id, text)      │
-│        │                           │                                │
-│        │                           ▼                                │
-│        │                    window.duneDesktop.sendAgentMessage(…)  │
-└────────┼───────────────────────────┼────────────────────────────────┘
-         │                           │
-         │                           ▼
-┌────────┼────────────────────────────────────────────────────────────┐
-│  PRELOAD (contextBridge — the only renderer→main door)              │
-│                                                                     │
-│   bridge.sendAgentMessage = (id, text) =>                           │
-│       ipcRenderer.invoke('dune:runtime:sendAgentMessage', id, text) │
-│                              │                                      │
-└──────────────────────────────┼──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  MAIN (Node.js — owns OS, files, processes)                         │
-│                                                                     │
-│   ipcMain.handle('dune:runtime:sendAgentMessage', handler)          │
-│        │                                                            │
-│        ▼                                                            │
-│   DesktopRuntimeController      ◄── AppStorage (JsonFile/Encrypted) │
-│        │                                                            │
-│        │ delegates to activeRuntime                                 │
-│        ▼                                                            │
-│   AgentLiteHost (real)  ──or──  createMockAgentRuntime() (boot)     │
-│        │                                                            │
-│        │ spawns + talks to                                          │
-│        ▼                                                            │
-│   AgentIpcManager ──► AgentIpcConnection ──► project agent          │
-│                                                (claude / codex)     │
-│                                                                     │
-│   Events flow back:                                                 │
-│        DesktopRuntimeController.listeners                           │
-│            │                                                        │
-│            ▼                                                        │
-│        webContents.send('dune:runtime:<event>', payload)            │
-└──────────┼──────────────────────────────────────────────────────────┘
-           │
-           ▼  (reverse trip)
-┌─────────────────────────────────────────────────────────────────────┐
-│   ipcRenderer.on(…) → bridge.subscribe callback                     │
-│           │                                                         │
-│           ▼                                                         │
-│   runtime-sync → useAppStore.setState(…) → React re-renders         │
-└─────────────────────────────────────────────────────────────────────┘
+┌─ RENDERER ──────────────────────────┐
+│  entry.tsx                           │
+│    └─► AppShell                      │
+│          └─► useAppStore (zustand)   │
+│                ├─ agent-slice        │
+│                ├─ shell-slice        │
+│                ├─ settings-slice     │
+│                └─ workflow-slice     │
+│                                      │
+│  BridgeAgentRuntime                  │
+│   (store ⇄ window.duneDesktop)       │
+└──────────────┬───────────────────────┘
+               │
+               ▼  window.duneDesktop.xxx()
+┌─ PRELOAD ────────────────────────────┐
+│  preload.ts                          │
+│    const bridge: DesktopBridge       │
+│    contextBridge.exposeInMainWorld   │
+└──────────────┬───────────────────────┘
+               │
+               ▼  ipcRenderer.invoke / .on
+┌─ MAIN ───────────────────────────────┐
+│  main.ts                             │
+│    ipcMain.handle(...)               │
+│         │                            │
+│         ▼                            │
+│  DesktopRuntimeController            │
+│         │                            │
+│         ▼                            │
+│  AgentRuntime                        │
+│    └─► DuneAgent                     │
+│          └─► DuneChannel             │
+│                                      │
+│  JsonFileStorage / Encrypted...      │
+└──────────────────────────────────────┘
+
+Shared contracts (types only, no runtime):
+  ipc-channels.ts    channel names
+  desktop-bridge.ts  DesktopBridge interface
+  agent-runtime.ts   AgentServiceSnapshot
 ```
+
+Two flows to memorise:
+
+```text
+Command    UI → store → Bridge → preload → ipcMain → Controller → Engine
+Snapshot   Engine → Controller → webContents.send → preload → Bridge → store → UI
+```
+
+Read in this order: `ipc-channels.ts` → `desktop-bridge.ts` → `preload.ts` →
+`main.ts` → `AppShell.tsx` → `use-app-store.ts`. After those six, everything
+else is just following names.
 
 ### Process Boundary Reference
 
 | Layer       | Lives in                      | Can touch                        | Talks to next layer via           |
 |-------------|-------------------------------|----------------------------------|-----------------------------------|
 | Renderer    | `src/renderer/`               | DOM, React, Zustand              | `window.duneDesktop.*`            |
-| Preload     | `src/electron/preload/index.ts` | `contextBridge`, `ipcRenderer` | `ipcRenderer.invoke` / `.on`      |
+| Preload     | `src/electron/preload.ts` | `contextBridge`, `ipcRenderer` | `ipcRenderer.invoke` / `.on`      |
 | Main        | `src/electron/main/`          | Node, fs, child_process, network | `ipcMain.handle` / `webContents.send` |
 
 The preload is intentionally a dumb pass-through — one method per IPC channel,
 no logic. All real work happens on the ends: React state in the renderer,
-`DesktopRuntimeController` + `AgentLiteHost` + `AppStorage` in main.
+`DesktopRuntimeController` + `AgentRuntime` + `AppStorage` in main.
 
 ### Component Graph
 
@@ -149,7 +141,7 @@ User
           -> secrets.json
         -> NetworkProxyManager
         -> DesktopRuntimeController
-          -> AgentLiteHost
+          -> AgentRuntime
             -> AgentLite / DuneAgent
             -> TelegramBridge
             -> Project agent IPC tree
@@ -164,7 +156,7 @@ User
 
 ## Runtime Boot And Lifecycle
 
-Startup begins in `app.whenReady()` in `src/electron/main/index.ts`.
+Startup begins in `app.whenReady()` in `src/electron/main.ts`.
 
 1. Resolve the runtime home and Electron `userData` paths.
    - `DUNE_AGENTLITE_HOME_DIR` overrides the home used for AgentLite data and project IPC trees.
@@ -186,7 +178,7 @@ Startup begins in `app.whenReady()` in `src/electron/main/index.ts`.
 ### Runtime States
 
 - `DesktopRuntimeController` starts in mock mode so the UI can render immediately.
-- If AgentLite starts successfully, it swaps to `AgentLiteHost`.
+- If AgentLite starts successfully, it swaps to `AgentRuntime`.
 - If AgentLite startup fails, it stays in mock fallback mode with an error message.
 
 ### Quit, Reset, And Relaunch
@@ -204,8 +196,8 @@ Startup begins in `app.whenReady()` in `src/electron/main/index.ts`.
 2. `useAgentSubmit` sends the message through `agentRuntime.service.sendMessage(...)`.
 3. The preload bridge calls `window.duneDesktop.sendAgentMessage(...)`.
 4. The main process routes the request to `DesktopRuntimeController`.
-5. The controller forwards it to `AgentLiteHost`.
-6. `AgentLiteHost` updates persisted and in-memory transcript state, ensures a `DuneAgent` exists, and pushes the input into the Dune channel.
+5. The controller forwards it to `AgentRuntime`.
+6. `AgentRuntime` updates persisted and in-memory transcript state, ensures a `DuneAgent` exists, and pushes the input into the Dune channel.
 7. Assistant output updates the runtime snapshot.
 8. The main process broadcasts `runtimeSnapshotUpdated`.
 9. The bridge runtime updates the snapshot and the renderer store rerenders.
@@ -221,7 +213,7 @@ User
       -> window.duneDesktop.sendAgentMessage(...)
         -> ipcMain handler
           -> DesktopRuntimeController
-            -> AgentLiteHost
+            -> AgentRuntime
               -> DuneAgent / AgentLite
               => runtime snapshot update
           => runtimeSnapshotUpdated

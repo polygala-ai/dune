@@ -1,3 +1,5 @@
+// Vite configuration for the Electron preload bundle.
+
 import path from 'node:path';
 import { defineConfig } from 'vite';
 

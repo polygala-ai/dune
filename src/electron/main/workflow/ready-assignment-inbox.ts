@@ -1,20 +1,25 @@
+// Ready-assignment inbox synchronization.
+
 import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Agent } from '@/renderer/features/agents/types';
 import { READY_ASSIGNMENTS_INBOX_FILENAME } from '@/shared/agents/ready-assignments';
+import { isPlainObject } from '@/shared/is-record';
 import { resolveMountedItemArtifactPath } from '@/shared/workflow/project-artifacts';
 import {
   resolveAgentDuneDir,
   resolveProjectDuneDir,
-} from '@/electron/main/agent-ipc/ipc-directory';
+} from '@/electron/main/dune-paths';
 
+/** Workflow project snapshot. */
 interface WorkflowProjectSnapshot {
   id: string;
   name: string;
   rootPath: string | null;
 }
 
+/** Workflow task snapshot. */
 interface WorkflowTaskSnapshot {
   id: string;
   notes: string;
@@ -22,6 +27,7 @@ interface WorkflowTaskSnapshot {
   title: string;
 }
 
+/** Workflow item snapshot. */
 interface WorkflowItemSnapshot {
   artifactFolderName: string;
   brief: string;
@@ -35,11 +41,13 @@ interface WorkflowItemSnapshot {
   updatedAt: number;
 }
 
+/** Ready assignments workflow snapshot. */
 export interface ReadyAssignmentsWorkflowSnapshot {
   items: WorkflowItemSnapshot[];
   projects: WorkflowProjectSnapshot[];
 }
 
+/** Ready assignment inbox task shape. */
 interface ReadyAssignmentInboxTask {
   id: string;
   notes: string;
@@ -47,6 +55,7 @@ interface ReadyAssignmentInboxTask {
   title: string;
 }
 
+/** Ready assignment inbox item shape. */
 interface ReadyAssignmentInboxItem {
   artifactPath: string | null;
   brief: string;
@@ -60,6 +69,7 @@ interface ReadyAssignmentInboxItem {
   updatedAt: number;
 }
 
+/** Ready assignment inbox file shape. */
 interface ReadyAssignmentInboxFile {
   agent: {
     id: string;
@@ -72,6 +82,7 @@ interface ReadyAssignmentInboxFile {
   schemaVersion: 1;
 }
 
+/** Ready assignment inbox state. */
 export interface ReadyAssignmentInboxState {
   generation: number;
   itemCount: number;
@@ -79,6 +90,7 @@ export interface ReadyAssignmentInboxState {
   signature: string;
 }
 
+/** Ready assignment inbox update shape. */
 export interface ReadyAssignmentInboxUpdate {
   agentId: string;
   generation: number;
@@ -86,16 +98,17 @@ export interface ReadyAssignmentInboxUpdate {
   shouldWake: boolean;
 }
 
+/** Normalizes ready assignments workflow snapshot. */
 export function normalizeReadyAssignmentsWorkflowSnapshot(
   value: unknown,
 ): ReadyAssignmentsWorkflowSnapshot | null {
-  if (!isRecord(value) || !Array.isArray(value.items) || !Array.isArray(value.projects)) {
+  if (!isPlainObject(value) || !Array.isArray(value.items) || !Array.isArray(value.projects)) {
     return null;
   }
 
   const projects = value.projects.flatMap((project) => {
     if (
-      !isRecord(project)
+      !isPlainObject(project)
       || typeof project.id !== 'string'
       || typeof project.name !== 'string'
       || (
@@ -119,7 +132,7 @@ export function normalizeReadyAssignmentsWorkflowSnapshot(
   const projectIds = new Set(projects.map((project) => project.id));
   const items = value.items.flatMap((item) => {
     if (
-      !isRecord(item)
+      !isPlainObject(item)
       || typeof item.id !== 'string'
       || typeof item.projectId !== 'string'
       || !projectIds.has(item.projectId)
@@ -135,7 +148,7 @@ export function normalizeReadyAssignmentsWorkflowSnapshot(
 
     const tasks = item.tasks.flatMap((task) => {
       if (
-        !isRecord(task)
+        !isPlainObject(task)
         || typeof task.id !== 'string'
         || typeof task.title !== 'string'
         || typeof task.notes !== 'string'
@@ -183,6 +196,7 @@ export function normalizeReadyAssignmentsWorkflowSnapshot(
   return { items, projects };
 }
 
+/** Synchronizes ready assignment inbox snapshots. */
 export function syncReadyAssignmentInboxSnapshots(options: {
   agents: Agent[];
   homeDir: string;
@@ -287,6 +301,7 @@ export function syncReadyAssignmentInboxSnapshots(options: {
   };
 }
 
+/** Writes ready assignment inbox snapshots. */
 export function writeReadyAssignmentInboxSnapshots(options: {
   agents: Agent[];
   homeDir: string;
@@ -296,6 +311,7 @@ export function writeReadyAssignmentInboxSnapshots(options: {
   syncReadyAssignmentInboxSnapshots(options);
 }
 
+/** Resolves ready assignments inbox file path. */
 function resolveReadyAssignmentsInboxFilePath(options: {
   agent: Agent;
   homeDir: string;
@@ -314,6 +330,7 @@ function resolveReadyAssignmentsInboxFilePath(options: {
   return path.join(rootDir, 'inbox', READY_ASSIGNMENTS_INBOX_FILENAME);
 }
 
+/** Compares ready items. */
 function compareReadyItems(left: WorkflowItemSnapshot, right: WorkflowItemSnapshot) {
   if (left.projectId !== right.projectId) {
     return left.projectId.localeCompare(right.projectId);
@@ -326,6 +343,7 @@ function compareReadyItems(left: WorkflowItemSnapshot, right: WorkflowItemSnapsh
   return right.updatedAt - left.updatedAt;
 }
 
+/** Returns whether the previous IDs is a removal only queue change. */
 function isRemovalOnlyQueueChange(previousIds: string[], nextIds: string[]) {
   if (nextIds.length > previousIds.length) {
     return false;
@@ -346,8 +364,4 @@ function isRemovalOnlyQueueChange(previousIds: string[], nextIds: string[]) {
   }
 
   return true;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

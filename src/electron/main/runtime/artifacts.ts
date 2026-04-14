@@ -1,3 +1,5 @@
+// Bundled agent artifact helpers.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,20 +50,24 @@ export function copyDirRecursive(src: string, dst: string): void {
 const SOURCE_DIR = resolveBundledAgentDir();
 const PROMPTS_SUBDIR = 'prompts';
 
+/** Artifact files constant. */
 export const ARTIFACT_FILES = {
   agentInstructions: 'dune-agent-instructions.md',
   ipcGuide: 'ipc-guide.md',
   projectMainInstructions: 'project-main-instructions.md',
 } as const;
 
+/** Resolves artifacts dir. */
 export function resolveArtifactsDir(homeDir: string = os.homedir()): string {
   return path.join(homeDir, '.dune', ARTIFACTS_DIR_NAME);
 }
 
+/** Resolves prompt source. */
 function resolvePromptSource(sourceDir: string, filename: string): string {
   return path.join(sourceDir, PROMPTS_SUBDIR, filename);
 }
 
+/** Reads source file. */
 function readSourceFile(filename: string, sourceDir: string = SOURCE_DIR): string {
   return fs.readFileSync(resolvePromptSource(sourceDir, filename), 'utf-8');
 }
@@ -113,6 +119,7 @@ export function readAgentInstructions(
   }
 }
 
+/** IPC guide options. */
 export interface IpcGuideOptions {
   ipcMountPath?: string;
   rootMountPath?: string;

@@ -1,3 +1,5 @@
+// Network settings tests.
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,13 +10,16 @@ import {
   validateNetworkSettings,
 } from '@/renderer/features/settings/model/network-settings';
 
+/** Memory store. */
 class MemoryStore {
   private readonly data = new Map<string, unknown>();
 
+  /** Returns memory store. */
   async get<T>(key: string): Promise<T | null> {
     return (this.data.get(key) as T | undefined) ?? null;
   }
 
+  /** Sets memory store. */
   async set<T>(key: string, value: T) {
     this.data.set(key, value);
   }

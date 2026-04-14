@@ -1,3 +1,5 @@
+// Telegram channel setup card UI.
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Check, Copy, RefreshCw } from 'lucide-react';
 
@@ -13,18 +15,22 @@ import { Input } from '@/renderer/shared/ui/input';
 
 const BOTFATHER_URL = 'https://t.me/BotFather';
 
+/** Feedback state. */
 type FeedbackState =
   | { kind: 'error'; message: string }
   | { kind: 'success'; message: string }
   | null;
 
+/** Wizard step shape. */
 type WizardStep = 'botfather' | 'pairing' | 'summary' | 'token';
 
+/** Telegram channel setup card props. */
 interface TelegramChannelSetupCardProps {
   agent?: Agent | null;
   onSessionChange?: (session: TelegramSetupSession | null) => void;
 }
 
+/** Telegrams status label. */
 function telegramStatusLabel(status: TelegramConnectionStatus) {
   switch (status) {
     case 'connecting':
@@ -40,6 +46,7 @@ function telegramStatusLabel(status: TelegramConnectionStatus) {
   }
 }
 
+/** Formats pairing countdown. */
 function formatPairingCountdown(pairExpiresAt: number | null, now: number) {
   if (!pairExpiresAt) {
     return null;
@@ -53,6 +60,7 @@ function formatPairingCountdown(pairExpiresAt: number | null, now: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+/** Derives initial step. */
 function deriveInitialStep(agent: Agent | null | undefined) {
   if (!agent || agent.channel.id !== 'telegram') {
     return 'botfather' as const;
@@ -61,6 +69,7 @@ function deriveInitialStep(agent: Agent | null | undefined) {
   return 'summary' as const;
 }
 
+/** Renders the Telegram channel setup card UI. */
 export function TelegramChannelSetupCard({
   agent = null,
   onSessionChange,
@@ -153,10 +162,12 @@ export function TelegramChannelSetupCard({
     };
   }, []);
 
+  /** Synchronizes snapshot. */
   const syncSnapshot = async (reason: string) => {
     return syncAgentRuntimeSnapshot(reason);
   };
 
+  /** Starts setup session. */
   const startSetupSession = async (options: {
     reason: string;
     token?: string;
@@ -194,6 +205,7 @@ export function TelegramChannelSetupCard({
     }
   };
 
+  /** Handles token save. */
   const handleSaveToken = async () => {
     const token = telegramBotToken.trim();
 
@@ -216,6 +228,7 @@ export function TelegramChannelSetupCard({
     }
   };
 
+  /** Handles with existing agent token start. */
   const handleStartWithExistingAgentToken = async () => {
     const nextSessionId = await startSetupSession({
       reason: 'telegram-channel-setup-existing-token',
@@ -226,6 +239,7 @@ export function TelegramChannelSetupCard({
     }
   };
 
+  /** Handles session cancel. */
   const handleCancelSession = async (nextStep: WizardStep) => {
     if (!sessionId || typeof window.duneDesktop?.cancelTelegramSetupSession !== 'function') {
       setStep(nextStep);
@@ -247,6 +261,7 @@ export function TelegramChannelSetupCard({
     setStep(nextStep);
   };
 
+  /** Handles bot father opening. */
   const handleOpenBotFather = () => {
     if (typeof window.duneDesktop?.openExternal === 'function') {
       void window.duneDesktop.openExternal(BOTFATHER_URL);
@@ -256,6 +271,7 @@ export function TelegramChannelSetupCard({
     window.open(BOTFATHER_URL, '_blank', 'noopener,noreferrer');
   };
 
+  /** Handles pair command copy. */
   const handleCopyPairCommand = async () => {
     if (!pairCommand) {
       return;

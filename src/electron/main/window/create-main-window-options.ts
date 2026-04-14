@@ -1,7 +1,10 @@
+// Main-window browser options.
+
 import type { BrowserWindowConstructorOptions } from 'electron';
 
 import { MAC_TITLEBAR_OVERLAY_HEIGHT } from '@/shared/window/titlebar';
 
+/** Creates main window options. */
 export function createMainWindowOptions(
   platform: NodeJS.Platform,
   preloadPath: string,

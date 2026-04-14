@@ -1,3 +1,5 @@
+// Packaged AgentLite runtime preparation.
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -17,6 +19,7 @@ const agentLitePackageRoot = path.join(
 );
 const agentLiteDistEntry = path.join(agentLitePackageRoot, 'dist', 'sdk.js');
 
+/** Runs the process. */
 function run(command, args, cwd = rootDir) {
   const result = spawnSync(command, args, {
     cwd,

@@ -1,3 +1,5 @@
+// Renderer agent runtime tests.
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';

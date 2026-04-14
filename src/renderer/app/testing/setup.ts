@@ -1,3 +1,5 @@
+// Renderer test environment setup.
+
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
@@ -35,15 +37,19 @@ Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
   value: vi.fn(),
 });
 
+/** Resize observer mock. */
 class ResizeObserverMock {
+  /** Observes resize observer mock. */
   observe() {
     // No-op for jsdom tests.
   }
 
+  /** Unobserves resize observer mock. */
   unobserve() {
     // No-op for jsdom tests.
   }
 
+  /** Disconnects resize observer mock. */
   disconnect() {
     // No-op for jsdom tests.
   }

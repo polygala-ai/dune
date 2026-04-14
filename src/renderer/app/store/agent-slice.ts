@@ -1,3 +1,5 @@
+// Agent slice store logic.
+
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { cloneAgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type {
@@ -6,6 +8,7 @@ import type {
   AgentSlice,
 } from './types';
 
+/** Creates initial agent state. */
 export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentState {
   return {
     agents: snapshot.agents,
@@ -20,6 +23,7 @@ export function createInitialAgentState(snapshot: AgentServiceSnapshot): AgentSt
   };
 }
 
+/** Creates agent slice. */
 export function createAgentSlice(initialState: AgentState): AppStoreSlice<AgentSlice> {
   return (set) => ({
     ...initialState,

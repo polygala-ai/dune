@@ -1,8 +1,11 @@
+// Scroll area UI primitive.
+
 import * as React from 'react';
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 
 import { cn } from '@/renderer/shared/lib/utils';
 
+/** Scroll area props. */
 interface ScrollAreaProps
   extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
   contentWidth?: 'auto' | 'fill';

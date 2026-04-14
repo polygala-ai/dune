@@ -1,3 +1,5 @@
+// Settings sections tests.
+
 import { describe, expect, it } from 'vitest';
 
 import type { SettingsRoute } from '@/renderer/features/settings/types';

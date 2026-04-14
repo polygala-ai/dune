@@ -1,3 +1,5 @@
+// Telegram channel setting tests.
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +10,7 @@ import {
   writeTelegramBotToken,
 } from '@/renderer/features/settings/model/telegram-channel';
 
+/** Creates secrets store. */
 function createSecretsStore(initialValue: string | null = null) {
   const values = new Map<string, string>();
 

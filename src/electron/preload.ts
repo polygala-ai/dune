@@ -1,3 +1,5 @@
+// Electron preload bridge exposure.
+
 import {
   contextBridge,
   ipcRenderer,
@@ -50,6 +52,7 @@ const bridge: DesktopBridge = {
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
   subscribe: (listener) => {
+    /** Handles snapshot. */
     const handleSnapshot = (
       _event: Electron.IpcRendererEvent,
       snapshot: Parameters<typeof listener>[0],

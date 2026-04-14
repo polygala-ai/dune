@@ -1,3 +1,5 @@
+// Agent panel UI.
+
 import { type KeyboardEvent, type RefObject, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -10,6 +12,7 @@ import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Agent panel props. */
 interface AgentPanelProps {
   agent: PresentedAgent;
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -19,11 +22,13 @@ interface AgentPanelProps {
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
+/** Timeline item shape. */
 type TimelineItem =
   | { type: 'message'; message: PresentedAgent['messages'][number]; timestamp: number }
   | { type: 'activity'; events: AgentActivityEvent[]; timestamp: number }
   | { type: 'engine'; run: ReturnType<typeof groupEngineRuns>[number]; timestamp: number };
 
+/** Builds timeline. */
 function buildTimeline(agent: PresentedAgent): TimelineItem[] {
   const items: TimelineItem[] = [];
 
@@ -97,6 +102,7 @@ function buildTimeline(agent: PresentedAgent): TimelineItem[] {
   return items;
 }
 
+/** Renders the activity pill UI. */
 function ActivityPill({ event }: { event: AgentActivityEvent }) {
   const [open, setOpen] = useState(false);
   const icon = event.kind === 'tool'
@@ -135,6 +141,7 @@ function ActivityPill({ event }: { event: AgentActivityEvent }) {
   );
 }
 
+/** Roles label. */
 function roleLabel(role: PresentedAgent['messages'][number]['role']) {
   switch (role) {
     case 'assistant':
@@ -146,6 +153,7 @@ function roleLabel(role: PresentedAgent['messages'][number]['role']) {
   }
 }
 
+/** Renders the agent panel UI. */
 export function AgentPanel({
   agent,
   composerRef,
@@ -165,6 +173,7 @@ export function AgentPanel({
     ? 'Message agent...'
     : `Attached to ${attachedLabel}`;
 
+  /** Handles key down composer. */
   const handleComposerKeyDown = async (
     event: KeyboardEvent<HTMLTextAreaElement>,
   ) => {

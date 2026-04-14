@@ -1,3 +1,5 @@
+// Vite configuration for the renderer bundle.
+
 import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';

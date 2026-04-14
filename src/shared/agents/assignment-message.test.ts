@@ -1,3 +1,5 @@
+// Assignment message formatting tests.
+
 import { describe, expect, it } from 'vitest';
 
 import { createAgentAssignmentMessage } from '@/shared/agents/assignment-message';

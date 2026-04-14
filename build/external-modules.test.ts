@@ -1,3 +1,5 @@
+// External module configuration tests.
+
 import { describe, expect, it } from 'vitest';
 
 import { externalModules, isExternalModuleId } from './external-modules';

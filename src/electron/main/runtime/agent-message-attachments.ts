@@ -1,3 +1,5 @@
+// Agent message attachment normalization.
+
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -6,6 +8,7 @@ import { inferAttachmentKind } from '@/shared/agents/message-content';
 
 const WORKSPACE_GROUP_PREFIX = '/workspace/group/';
 
+/** Converts to local attachment path. */
 function toLocalAttachmentPath(
   source: string,
   options: { groupFolder: string; runtimeRoot: string },
@@ -30,6 +33,7 @@ function toLocalAttachmentPath(
   return null;
 }
 
+/** Creates agent attachment from source. */
 export function createAgentAttachmentFromSource(
   source: string,
   options: { groupFolder: string; runtimeRoot: string },
@@ -49,6 +53,7 @@ export function createAgentAttachmentFromSource(
   };
 }
 
+/** Normalizes agent attachments. */
 export function normalizeAgentAttachments(
   attachments: unknown,
   options: { groupFolder: string; runtimeRoot: string },

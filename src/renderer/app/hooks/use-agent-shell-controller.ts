@@ -1,3 +1,5 @@
+// Agent shell controller hook.
+
 import {
   startTransition,
   useEffect,
@@ -11,6 +13,7 @@ import type {
   PresentedAgent,
 } from '@/renderer/features/agents/types';
 
+/** Agent shell controller commands shape. */
 export interface AgentShellControllerCommands {
   createAgent: (input: CreateAgentInput) => Promise<string>;
   openAgent: (agentId: string) => void;
@@ -19,6 +22,7 @@ export interface AgentShellControllerCommands {
   toggleInspector: (force?: boolean) => void;
 }
 
+/** Use agent shell controller options. */
 interface UseAgentShellControllerOptions {
   activeAgent: PresentedAgent | null;
   commands: AgentShellControllerCommands;
@@ -27,6 +31,7 @@ interface UseAgentShellControllerOptions {
   route: AppRoute;
 }
 
+/** Agent shell controller hook. */
 export function useAgentShellController({
   activeAgent,
   commands,

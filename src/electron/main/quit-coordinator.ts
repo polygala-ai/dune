@@ -1,18 +1,24 @@
+// App quit coordination.
+
+/** App lifecycle contract used by the quit coordinator. */
 export interface QuitCoordinatorApp {
   quit: () => void;
   relaunch: () => void;
 }
 
+/** Quit coordinator event shape. */
 export interface QuitCoordinatorEvent {
   preventDefault: () => void;
 }
 
+/** Quit coordinator options. */
 export interface QuitCoordinatorOptions {
   app: QuitCoordinatorApp;
   onShutdownError?: (error: unknown) => void;
   shutdownRuntime: () => Promise<void> | void;
 }
 
+/** Creates quit coordinator. */
 export function createQuitCoordinator({
   app,
   onShutdownError,
@@ -22,6 +28,7 @@ export function createQuitCoordinator({
   let isQuitRequested = false;
   let shutdownPromise: Promise<void> | null = null;
 
+  /** Ensures shutdown. */
   const ensureShutdown = () => {
     if (shutdownPromise) {
       return shutdownPromise;

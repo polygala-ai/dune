@@ -1,3 +1,5 @@
+// Agent chat popover UI.
+
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { GripHorizontal, Maximize2, X } from 'lucide-react';
 
@@ -7,12 +9,14 @@ import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import { cn } from '@/renderer/shared/lib/utils';
 
+/** Agent chat popover props. */
 interface AgentChatPopoverProps {
   agent: PresentedAgent;
   onClose: () => void;
   onExpand: () => void;
 }
 
+/** Renders the agent chat popover UI. */
 export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverProps) {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -61,6 +65,7 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
       origY: currentY,
     };
 
+    /** Handles move. */
     const handleMove = (ev: globalThis.MouseEvent) => {
       if (!dragState.current) return;
       const dx = ev.clientX - dragState.current.startX;
@@ -71,6 +76,7 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
       });
     };
 
+    /** Handles up. */
     const handleUp = () => {
       dragState.current = null;
       window.removeEventListener('mousemove', handleMove);

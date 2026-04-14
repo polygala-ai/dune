@@ -1,3 +1,5 @@
+// Project artifact filesystem helpers.
+
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -6,6 +8,7 @@ import {
   type ProjectArtifactEntry,
 } from '@/shared/workflow/project-artifacts';
 
+/** Reads directory entries. */
 function readDirectoryEntries(rootPath: string) {
   try {
     return fs.readdirSync(rootPath);
@@ -24,10 +27,12 @@ const ignoredProjectRootEntries = new Set([
   'Thumbs.db',
 ]);
 
+/** Lists project root content entries. */
 function listProjectRootContentEntries(rootPath: string) {
   return readDirectoryEntries(rootPath).filter((entry) => !ignoredProjectRootEntries.has(entry));
 }
 
+/** Creates project root Claude md content. */
 function createProjectRootClaudeMdContent() {
   return `# Project Artifact Guide
 
@@ -41,10 +46,12 @@ This directory is mounted inside the agent runtime at \`/workspace/extra/project
 `;
 }
 
+/** Resolves project root path. */
 export function resolveProjectRootPath(rootPath: string): string {
   return path.resolve(rootPath.trim());
 }
 
+/** Asserts empty project root directory. */
 export function assertEmptyProjectRootDirectory(rootPath: string): string {
   const resolvedRootPath = resolveProjectRootPath(rootPath);
   let stats: fs.Stats;
@@ -68,6 +75,7 @@ export function assertEmptyProjectRootDirectory(rootPath: string): string {
   return resolvedRootPath;
 }
 
+/** Ensures project root Claude md. */
 export function ensureProjectRootClaudeMd(rootPath: string): string {
   const resolvedRootPath = resolveProjectRootPath(rootPath);
   const claudeMdPath = path.join(resolvedRootPath, 'CLAUDE.md');
@@ -79,6 +87,7 @@ export function ensureProjectRootClaudeMd(rootPath: string): string {
   return claudeMdPath;
 }
 
+/** Prepares project root path. */
 export function prepareProjectRootPath(
   rootPath: string,
   artifactFolderNames: string[],
@@ -93,6 +102,7 @@ export function prepareProjectRootPath(
   return resolvedRootPath;
 }
 
+/** Ensures project artifact folder. */
 export function ensureProjectArtifactFolder(
   rootPath: string,
   artifactFolderName: string,
@@ -110,6 +120,7 @@ export function ensureProjectArtifactFolder(
   return artifactPath;
 }
 
+/** Resolves project artifact folder path. */
 function resolveProjectArtifactFolderPath(rootPath: string, artifactFolderName: string): string {
   const normalizedRootPath = normalizeProjectRootPath(rootPath);
   const normalizedArtifactFolderName = artifactFolderName.trim();
@@ -121,6 +132,7 @@ function resolveProjectArtifactFolderPath(rootPath: string, artifactFolderName: 
   return path.join(resolveProjectRootPath(normalizedRootPath), normalizedArtifactFolderName);
 }
 
+/** Collects artifact entries. */
 function collectArtifactEntries(
   artifactRootPath: string,
   currentPath: string,
@@ -149,6 +161,7 @@ function collectArtifactEntries(
   }
 }
 
+/** Lists project artifact entries. */
 export function listProjectArtifactEntries(
   rootPath: string,
   artifactFolderName: string,
@@ -180,6 +193,7 @@ export function listProjectArtifactEntries(
     right.modifiedAt - left.modifiedAt || left.relativePath.localeCompare(right.relativePath));
 }
 
+/** Ensures project artifact folders. */
 export function ensureProjectArtifactFolders(
   rootPath: string,
   artifactFolderNames: string[],

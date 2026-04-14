@@ -1,7 +1,10 @@
+// Plugins workspace UI.
+
 import { Blocks } from 'lucide-react';
 
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 
+/** Plugins workspace props. */
 interface PluginsWorkspaceProps {
   isCompactShell: boolean;
   isSidebarOpen: boolean;
@@ -9,6 +12,7 @@ interface PluginsWorkspaceProps {
   showCompactSidebarToggle: boolean;
 }
 
+/** Renders the plugins workspace UI. */
 export function PluginsWorkspace({
   isCompactShell,
   isSidebarOpen,

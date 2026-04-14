@@ -1,3 +1,5 @@
+// Agent IPC manager tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,15 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createAgentIpcDirectoryMetadata,
-  resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
 } from '@/electron/main/agent-ipc/ipc-directory';
+import { resolveAgentIpcDir } from '@/electron/main/dune-paths';
 import { AgentIpcManager } from './agent-ipc-manager';
 
+/** Creates temp home. */
 function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-ipc-mgr-'));
 }
 
+/** Sets up IPC dir. */
 function setupIpcDir(homeDir: string, projectId: string, agentName: string) {
   const ipcDir = path.join(homeDir, '.dune', 'projs', projectId, 'agents', agentName, 'ipc');
   fs.mkdirSync(path.join(ipcDir, 'agent'), { recursive: true });
@@ -21,6 +25,7 @@ function setupIpcDir(homeDir: string, projectId: string, agentName: string) {
   return ipcDir;
 }
 
+/** Sets up sanitized IPC dir. */
 function setupSanitizedIpcDir(
   homeDir: string,
   projectId: string,
@@ -136,7 +141,7 @@ describe('AgentIpcManager', () => {
     expect(files).toHaveLength(1);
   });
 
-  it('replaces a scanned legacy connection when the runtime registers the same agent', () => {
+  it('replaces a scanned connection when the runtime registers the same agent', () => {
     setupIpcDir(homeDir, 'project-2', 'dynamic-agent');
 
     manager = new AgentIpcManager(homeDir);

@@ -1,3 +1,5 @@
+// Workflow presenter helpers.
+
 import {
   formatAgentTimestamp,
   formatMessageTimestamp,
@@ -12,6 +14,7 @@ import type {
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
 
+/** Defines workflow item status labels. */
 export const workflowItemStatusLabels: Record<WorkflowItemStatus, string> = {
   active: 'Active',
   done: 'Done',
@@ -20,6 +23,7 @@ export const workflowItemStatusLabels: Record<WorkflowItemStatus, string> = {
   review: 'Review',
 };
 
+/** Defines workflow task status labels. */
 export const workflowTaskStatusLabels: Record<WorkflowTaskStatus, string> = {
   blocked: 'Blocked',
   doing: 'Doing',
@@ -28,6 +32,7 @@ export const workflowTaskStatusLabels: Record<WorkflowTaskStatus, string> = {
   todo: 'To do',
 };
 
+/** Compares items. */
 function compareItems(left: WorkflowItem, right: WorkflowItem) {
   if (left.sortOrder !== right.sortOrder) {
     return left.sortOrder - right.sortOrder;
@@ -36,14 +41,17 @@ function compareItems(left: WorkflowItem, right: WorkflowItem) {
   return right.updatedAt - left.updatedAt;
 }
 
+/** Formats workflow item status. */
 export function formatWorkflowItemStatus(status: WorkflowItemStatus) {
   return workflowItemStatusLabels[status];
 }
 
+/** Formats workflow task status. */
 export function formatWorkflowTaskStatus(status: WorkflowTaskStatus) {
   return workflowTaskStatusLabels[status];
 }
 
+/** Selects workflow project by ID. */
 export function selectWorkflowProjectById(
   projects: WorkflowProject[],
   selectedProjectId: string | null,
@@ -55,6 +63,7 @@ export function selectWorkflowProjectById(
   return projects.find((project) => project.id === selectedProjectId) ?? null;
 }
 
+/** Selects workflow item by ID. */
 export function selectWorkflowItemById(
   items: WorkflowItem[],
   selectedItemId: string | null,
@@ -66,6 +75,7 @@ export function selectWorkflowItemById(
   return items.find((item) => item.id === selectedItemId) ?? null;
 }
 
+/** Returns project items. */
 export function getProjectItems(
   items: WorkflowItem[],
   projectId: string | null,
@@ -79,6 +89,7 @@ export function getProjectItems(
     .sort(compareItems);
 }
 
+/** Returns project agents. */
 export function getProjectAgents(
   agents: Agent[],
   projectId: string | null,
@@ -90,6 +101,7 @@ export function getProjectAgents(
   return agents.filter((agent) => agent.projectId === projectId);
 }
 
+/** Returns workflow snapshot state. */
 export function getWorkflowSnapshotState(snapshot: WorkflowSnapshot): WorkflowSnapshot {
   return {
     items: snapshot.items.map((item) => ({
@@ -106,6 +118,7 @@ export function getWorkflowSnapshotState(snapshot: WorkflowSnapshot): WorkflowSn
   };
 }
 
+/** Presents workflow item summary. */
 export function presentWorkflowItemSummary(
   item: WorkflowItem,
   agentsById: Map<string, Agent>,
@@ -143,6 +156,7 @@ export function presentWorkflowItemSummary(
   };
 }
 
+/** Presents workflow event timestamp. */
 export function presentWorkflowEventTimestamp(timestamp: number, now: number = Date.now()) {
   return formatMessageTimestamp(timestamp, now);
 }

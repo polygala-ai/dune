@@ -1,3 +1,5 @@
+// Workflow store slice state and reducers.
+
 import type { AppStoreSlice } from '@/renderer/app/store/types';
 import type {
   WorkflowActions,
@@ -27,6 +29,7 @@ import {
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
+/** Creates item event. */
 function createItemEvent(
   kind: WorkflowEventKind,
   description: string,
@@ -41,6 +44,7 @@ function createItemEvent(
   };
 }
 
+/** Sorts items by project status. */
 function sortItemsByProjectStatus(items: WorkflowItem[]) {
   const nextItems = items.map((item) => ({
     ...item,
@@ -72,6 +76,7 @@ function sortItemsByProjectStatus(items: WorkflowItem[]) {
   return nextItems;
 }
 
+/** Ensures selection. */
 function ensureSelection(snapshot: WorkflowSnapshot): WorkflowSnapshot {
   const selectedProjectId =
     snapshot.selectedProjectId &&
@@ -94,6 +99,7 @@ function ensureSelection(snapshot: WorkflowSnapshot): WorkflowSnapshot {
   };
 }
 
+/** Appends item event. */
 function appendItemEvent(
   item: WorkflowItem,
   kind: WorkflowEventKind,
@@ -110,6 +116,7 @@ function appendItemEvent(
   };
 }
 
+/** Wraps selection. */
 function withSelection(
   state: Pick<
     WorkflowState,
@@ -131,6 +138,7 @@ function withSelection(
   });
 }
 
+/** Touches project. */
 function touchProject(
   projects: WorkflowState['projects'],
   projectId: string,
@@ -139,6 +147,7 @@ function touchProject(
   return touchProjects(projects, [projectId], updatedAt);
 }
 
+/** Touches projects. */
 function touchProjects(
   projects: WorkflowState['projects'],
   projectIds: Iterable<string>,
@@ -160,6 +169,7 @@ function touchProjects(
   );
 }
 
+/** Describes item status. */
 function describeItemStatus(status: WorkflowItemStatus) {
   switch (status) {
     case 'inbox':
@@ -175,14 +185,17 @@ function describeItemStatus(status: WorkflowItemStatus) {
   }
 }
 
+/** Items exists. */
 function itemExists(items: WorkflowItem[], itemId: string) {
   return items.some((item) => item.id === itemId);
 }
 
+/** Returns next project color. */
 function getNextProjectColor(projectCount: number) {
   return defaultProjectColors[projectCount % defaultProjectColors.length] ?? '#A86D46';
 }
 
+/** Creates initial workflow state. */
 export function createInitialWorkflowState(): WorkflowState {
   return {
     isWorkflowHydrated: false,
@@ -196,6 +209,7 @@ export function createInitialWorkflowState(): WorkflowState {
   };
 }
 
+/** Creates workflow slice. */
 export function createWorkflowSlice(
   initialState: WorkflowState,
 ): AppStoreSlice<WorkflowSlice> {

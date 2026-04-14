@@ -1,3 +1,5 @@
+// Filesystem IPC connection for a single agent session.
+
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -10,6 +12,7 @@ import {
 const STREAMING_IDLE_WINDOW_MS = 320;
 const STREAMING_SAFETY_TIMEOUT_MS = 30_000;
 
+/** Agent IPC message shape. */
 export interface AgentIpcMessage {
   id: string;
   role: 'assistant' | 'user';
@@ -18,18 +21,21 @@ export interface AgentIpcMessage {
   createdAt: number;
 }
 
+/** Agent IPC error shape. */
 export interface AgentIpcError {
   code: string;
   message: string;
   timestamp: number;
 }
 
+/** Agent IPC connection state. */
 export interface AgentIpcConnectionState {
   messages: AgentIpcMessage[];
   isStreaming: boolean;
   lastError: AgentIpcError | null;
 }
 
+/** Tool handler context shape. */
 export interface ToolHandlerContext {
   agentId: string;
   agentName: string;
@@ -38,12 +44,14 @@ export interface ToolHandlerContext {
   ipcContainerDir: string;
 }
 
+/** Tool message handler function. */
 export type ToolMessageHandler = (
   msg: IpcMessage,
   fileId: string,
   replyFn: (reply: IpcMessage) => void,
 ) => void;
 
+/** Agent IPC connection. */
 export class AgentIpcConnection {
   private watcher: fs.FSWatcher | null = null;
 
@@ -66,10 +74,12 @@ export class AgentIpcConnection {
     private readonly onChange: () => void,
   ) {}
 
+  /** Sets tool message handler. */
   setToolMessageHandler(handler: ToolMessageHandler): void {
     this.toolMessageHandler = handler;
   }
 
+  /** Starts agent IPC connection. */
   start(): void {
     fs.mkdirSync(this.agentDir, { recursive: true });
     fs.mkdirSync(this.hostDir, { recursive: true });
@@ -96,6 +106,7 @@ export class AgentIpcConnection {
     }
   }
 
+  /** Stops agent IPC connection. */
   stop(): void {
     this.clearPendingStream();
     if (this.watcher) {
@@ -104,6 +115,7 @@ export class AgentIpcConnection {
     }
   }
 
+  /** Returns state. */
   getState(): AgentIpcConnectionState {
     return {
       messages: [...this.messages],
@@ -112,6 +124,7 @@ export class AgentIpcConnection {
     };
   }
 
+  /** Delivers message. */
   deliverMessage(text: string): void {
     const fileId = createIpcFileId();
     const msg: IpcMessage<'user-message'> = {

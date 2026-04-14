@@ -1,3 +1,5 @@
+// Telegram bridge and setup-session orchestration.
+
 import { createHash } from 'node:crypto';
 
 import { createId } from '@/shared/id';
@@ -37,6 +39,7 @@ const TELEGRAM_PAIR_CODE_TTL_MS = 10 * 60 * 1000;
 // bridge surfaces a proper error instead of blocking the IPC call.
 const TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS = 15_000;
 
+/** Connects driver with timeout. */
 function connectDriverWithTimeout(
   driver: ChannelDriver,
   timeoutMs: number,
@@ -74,6 +77,7 @@ const TELEGRAM_OBSERVER_GROUP = Object.freeze({
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Fingerprints Telegram token. */
 function fingerprintTelegramToken(token: string) {
   if (!token) {
     return null;
@@ -82,6 +86,7 @@ function fingerprintTelegramToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** Creates Telegram pair code. */
 function createTelegramPairCode(length: number = 6) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -93,15 +98,18 @@ function createTelegramPairCode(length: number = 6) {
   return code;
 }
 
+/** Creates Telegram agent token key. */
 function createTelegramAgentTokenKey(agentId: string) {
   return `agent:${agentId}:telegram:bot-token`;
 }
 
+/** Parses message timestamp. */
 function parseMessageTimestamp(timestamp: string, fallback: number) {
   const parsed = Date.parse(timestamp);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/** Creates external agent copy. */
 function createExternalAgentCopy(attachedLabel: string) {
   return {
     note: `This agent is bound to ${attachedLabel} and mirrors its transcript through the Dune host.`,
@@ -109,6 +117,7 @@ function createExternalAgentCopy(attachedLabel: string) {
   };
 }
 
+/** Maps Telegram channel status. */
 function mapTelegramChannelStatus(
   status: TelegramConnectionStatus,
 ): import('@/renderer/features/agents/types').AgentChannelStatus {
@@ -127,6 +136,7 @@ function mapTelegramChannelStatus(
   }
 }
 
+/** Creates channel binding. */
 function createChannelBinding(
   telegramState: TelegramAgentRuntimeState | null,
   target: AgentExternalTarget | null = null,
@@ -145,6 +155,7 @@ function createChannelBinding(
 // Public types
 // ---------------------------------------------------------------------------
 
+/** Telegram secrets store contract. */
 export interface TelegramSecretsStore {
   delete: (key: string) => Promise<void>;
   get: <T>(key: string) => Promise<T | null>;
@@ -168,6 +179,7 @@ export interface AgentChannelPatch {
   telegram: TelegramAgentRuntimeState;
 }
 
+/** Telegram bridge options. */
 export interface TelegramBridgeOptions {
   callbacks: ChannelBridgeCallbacks;
   createChannelFactory: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
@@ -179,6 +191,7 @@ export interface TelegramBridgeOptions {
 // Internal types
 // ---------------------------------------------------------------------------
 
+/** Telegram observer record shape. */
 interface TelegramObserverRecord {
   botUsername: string | null;
   driver: ChannelDriver | null;
@@ -188,6 +201,7 @@ interface TelegramObserverRecord {
   token: string;
 }
 
+/** Telegram setup session record shape. */
 interface TelegramSetupSessionRecord {
   agentId: string | null;
   botUsername: string | null;
@@ -207,6 +221,7 @@ interface TelegramSetupSessionRecord {
 // TelegramBridge
 // ---------------------------------------------------------------------------
 
+/** Bridges Telegram setup state and channel connections. */
 export class TelegramBridge {
   private readonly callbacks: ChannelBridgeCallbacks;
 
@@ -235,15 +250,18 @@ export class TelegramBridge {
   // Token management
   // -------------------------------------------------------------------------
 
+  /** Reads agent token. */
   async readAgentToken(agentId: string) {
     const value = await this.secretsStore.get<string>(createTelegramAgentTokenKey(agentId));
     return typeof value === 'string' ? value.trim() : '';
   }
 
+  /** Writes agent token. */
   async writeAgentToken(agentId: string, token: string) {
     await this.secretsStore.set(createTelegramAgentTokenKey(agentId), token.trim());
   }
 
+  /** Deletes agent token. */
   async deleteAgentToken(agentId: string) {
     await this.secretsStore.delete(createTelegramAgentTokenKey(agentId));
   }
@@ -252,6 +270,7 @@ export class TelegramBridge {
   // Setup sessions
   // -------------------------------------------------------------------------
 
+  /** Starts setup session. */
   async startSetupSession(input: StartTelegramSetupSessionInput): Promise<string> {
     const agentId = input.agentId?.trim() ?? null;
     const providedToken = input.token?.trim() ?? '';
@@ -311,30 +330,36 @@ export class TelegramBridge {
     return sessionId;
   }
 
+  /** Cancels setup session. */
   async cancelSetupSession(sessionId: string) {
     this.clearSetupSession(sessionId);
     await this.refreshRuntimeState();
   }
 
+  /** Returns setup session. */
   getSetupSession(sessionId: string): TelegramSetupSession | null {
     const session = this.setupSessions.get(sessionId) ?? null;
     return session ? cloneTelegramSetupSession(this.toPublicSetupSession(session)) : null;
   }
 
+  /** Returns setup session record. */
   getSetupSessionRecord(sessionId: string): TelegramSetupSessionRecord | null {
     return this.setupSessions.get(sessionId) ?? null;
   }
 
+  /** Lists setup sessions. */
   listSetupSessions(): TelegramSetupSession[] {
     return [...this.setupSessions.values()].map((session) =>
       this.toPublicSetupSession(session),
     );
   }
 
+  /** Consumes setup session. */
   consumeSetupSession(sessionId: string) {
     this.clearSetupSession(sessionId);
   }
 
+  /** Clears all setup sessions. */
   clearAllSetupSessions() {
     for (const session of [...this.setupSessions.values()]) {
       this.clearSetupSession(session.id);
@@ -345,6 +370,7 @@ export class TelegramBridge {
   // Observer management
   // -------------------------------------------------------------------------
 
+  /** Refreshes runtime state. */
   async refreshRuntimeState(
     options: { forceReconnect?: boolean } = {},
   ) {
@@ -519,18 +545,21 @@ export class TelegramBridge {
 
   // sendReply removed — DuneChannel's external driver handles outbound delivery.
 
+  /** Disconnects all. */
   async disconnectAll() {
     for (const fingerprint of [...this.observers.keys()]) {
       await this.disconnectObserver(fingerprint);
     }
   }
 
+  /** Resets Telegram. */
   reset() {
     this.agentFingerprints.clear();
     this.knownChats.clear();
     this.clearAllSetupSessions();
   }
 
+  /** Deletes agent fingerprint. */
   deleteAgentFingerprint(agentId: string) {
     this.agentFingerprints.delete(agentId);
   }
@@ -552,6 +581,7 @@ export class TelegramBridge {
     }
   }
 
+  /** Clears agent setup sessions. */
   clearAgentSetupSessions(agentId: string) {
     for (const session of [...this.setupSessions.values()]) {
       if (session.agentId === agentId) {
@@ -564,6 +594,7 @@ export class TelegramBridge {
   // Session-to-agent binding
   // -------------------------------------------------------------------------
 
+  /** Applies matched session to agent. */
   async applyMatchedSessionToAgent(session: TelegramSetupSessionRecord) {
     if (!session.agentId || !session.matchedChat) {
       return;

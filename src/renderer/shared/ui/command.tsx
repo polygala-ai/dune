@@ -1,3 +1,5 @@
+// Command UI primitive.
+
 import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 
@@ -31,10 +33,12 @@ const Command = React.forwardRef<
 
 Command.displayName = CommandPrimitive.displayName;
 
+/** Command dialog props. */
 interface CommandDialogProps extends React.ComponentProps<typeof Dialog> {
   children: React.ReactNode;
 }
 
+/** Renders the command dialog UI. */
 function CommandDialog({ children, ...props }: CommandDialogProps) {
   return (
     <Dialog {...props}>
@@ -137,6 +141,7 @@ const CommandItem = React.forwardRef<
 
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
+/** Renders the command shortcut UI. */
 function CommandShortcut({
   children,
   className,

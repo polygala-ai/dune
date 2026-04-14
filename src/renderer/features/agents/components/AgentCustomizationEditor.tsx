@@ -1,3 +1,5 @@
+// Agent customization editor UI.
+
 import {
   type ReactNode,
   useMemo,
@@ -26,6 +28,7 @@ import { Input } from '@/renderer/shared/ui/input';
 import { Separator } from '@/renderer/shared/ui/separator';
 import { Textarea } from '@/renderer/shared/ui/textarea';
 
+/** Agent customization editor props. */
 interface AgentCustomizationEditorProps {
   agentRole?: AgentRole;
   artifactsPath?: string | undefined;
@@ -34,6 +37,7 @@ interface AgentCustomizationEditorProps {
   onChange: (value: AgentCustomizationDraft) => void;
 }
 
+/** Section props. */
 interface SectionProps {
   children: ReactNode;
   description: string;
@@ -41,6 +45,7 @@ interface SectionProps {
   title: string;
 }
 
+/** Renders the section UI. */
 function Section({
   children,
   description,
@@ -65,6 +70,7 @@ function Section({
   );
 }
 
+/** Renders the field label UI. */
 function FieldLabel({
   children,
   htmlFor,
@@ -82,6 +88,7 @@ function FieldLabel({
   );
 }
 
+/** Renders the field error UI. */
 function FieldError({ children }: { children: ReactNode }) {
   return (
     <p className="text-xs leading-5 text-red-600 dark:text-red-300">
@@ -90,6 +97,7 @@ function FieldError({ children }: { children: ReactNode }) {
   );
 }
 
+/** Renders the empty shell UI. */
 function EmptyShell({
   title,
   body,
@@ -105,6 +113,7 @@ function EmptyShell({
   );
 }
 
+/** Returns server name error. */
 function getServerNameError(
   server: AgentMcpServerDraft,
   duplicateIds: Set<string>,
@@ -120,6 +129,7 @@ function getServerNameError(
   return null;
 }
 
+/** Returns source error. */
 function getSourceError(server: AgentMcpServerDraft) {
   if (!server.source.trim()) {
     return 'Source folder is required.';
@@ -128,6 +138,7 @@ function getSourceError(server: AgentMcpServerDraft) {
   return null;
 }
 
+/** Returns command error. */
 function getCommandError(server: AgentMcpServerDraft) {
   if (!server.command.trim()) {
     return 'Command is required.';
@@ -136,12 +147,14 @@ function getCommandError(server: AgentMcpServerDraft) {
   return null;
 }
 
+/** Returns instructions template filename. */
 function getInstructionsTemplateFilename(role: AgentRole) {
   return role === 'project-main'
     ? 'project-main-instructions.md'
     : 'dune-agent-instructions.md';
 }
 
+/** Joins path. */
 function joinPath(basePath: string, filename: string) {
   if (basePath.endsWith('/') || basePath.endsWith('\\')) {
     return `${basePath}${filename}`;
@@ -150,6 +163,7 @@ function joinPath(basePath: string, filename: string) {
   return `${basePath}${basePath.includes('\\') ? '\\' : '/'}${filename}`;
 }
 
+/** Renders the agent customization editor UI. */
 export function AgentCustomizationEditor({
   agentRole = 'custom',
   artifactsPath,
@@ -171,10 +185,12 @@ export function AgentCustomizationEditor({
     instructionsTemplatePath && typeof window.duneDesktop?.openPath === 'function',
   );
 
+  /** Updates value. */
   const updateValue = (nextValue: AgentCustomizationDraft) => {
     onChange(nextValue);
   };
 
+  /** Updates skill. */
   const updateSkill = (
     skillId: string,
     updater: (skill: AgentCustomizationDraft['skills'][number]) => AgentCustomizationDraft['skills'][number],
@@ -192,6 +208,7 @@ export function AgentCustomizationEditor({
     });
   };
 
+  /** Updates server. */
   const updateServer = (
     serverId: string,
     updater: (server: AgentCustomizationDraft['mcpServers'][number]) => AgentCustomizationDraft['mcpServers'][number],
@@ -209,6 +226,7 @@ export function AgentCustomizationEditor({
     });
   };
 
+  /** Opens instructions template. */
   const openInstructionsTemplate = () => {
     if (!instructionsTemplatePath) {
       return;

@@ -1,3 +1,5 @@
+// Workflow project actions menu UI.
+
 import {
   MoreHorizontal,
   PanelRight,
@@ -7,12 +9,14 @@ import { useAppCommands } from '@/renderer/app/store/app-commands';
 import { useWorkflowSession } from '@/renderer/app/store/selectors';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Workflow project actions menu props. */
 interface WorkflowProjectActionsMenuProps {
   className?: string;
   dataTestId?: string;
   presentation?: 'popover' | 'drawer';
 }
 
+/** Renders the workflow project actions menu UI. */
 export function WorkflowProjectActionsMenu({
   className,
   dataTestId = 'project-actions-button',

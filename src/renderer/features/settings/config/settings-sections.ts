@@ -1,3 +1,5 @@
+// Settings section configuration.
+
 import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
@@ -18,6 +20,7 @@ import type {
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
 
+/** Settings section component props. */
 export interface SettingsSectionComponentProps {
   agents: Agent[];
   externalChannels: ExternalChannelsState;
@@ -26,10 +29,12 @@ export interface SettingsSectionComponentProps {
   themePreference: ThemePreference;
 }
 
+/** Settings section definition shape. */
 interface SettingsSectionDefinition extends SettingsSection {
   Component: (props: SettingsSectionComponentProps) => JSX.Element;
 }
 
+/** Lists settings sections. */
 export const settingsSections: SettingsSectionDefinition[] = [
   {
     id: 'appearance',
@@ -69,6 +74,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
   },
 ];
 
+/** Settings section registry constant. */
 export const settingsSectionRegistry = Object.fromEntries(
   settingsSections.map((section) => [section.id, section]),
 ) as Record<SettingsRoute, SettingsSectionDefinition>;

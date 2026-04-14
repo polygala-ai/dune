@@ -1,3 +1,5 @@
+// Tools handler tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import { createToolHandler } from './tools';
 
+/** Creates memory store. */
 function createMemoryStore(initialData: Record<string, unknown> = {}): AppStorage {
   const data = new Map<string, unknown>(Object.entries(initialData));
   return {
@@ -20,10 +23,12 @@ function createMemoryStore(initialData: Record<string, unknown> = {}): AppStorag
   };
 }
 
+/** Flushes handler. */
 async function flushHandler() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/** Creates runtime controller mock. */
 function createRuntimeControllerMock() {
   const snapshot = {
     agents: [
@@ -139,6 +144,7 @@ function createRuntimeControllerMock() {
   };
 }
 
+/** Creates workflow snapshot. */
 function createWorkflowSnapshot() {
   return {
     items: [
@@ -260,6 +266,7 @@ function createWorkflowSnapshot() {
   };
 }
 
+/** Creates handler dependencies. */
 function createHandlerDependencies() {
   const runtimeController = createRuntimeControllerMock();
   const workflowStore = createMemoryStore({ snapshot: createWorkflowSnapshot() });

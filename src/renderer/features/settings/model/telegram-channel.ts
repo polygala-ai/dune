@@ -1,11 +1,16 @@
+// Telegram channel settings helpers.
+
+/** Storage key for Telegram bot token secret. */
 export const TELEGRAM_BOT_TOKEN_SECRET_KEY = 'channel:telegram:bot-token';
 
+/** Telegram channel secrets store contract. */
 export interface TelegramChannelSecretsStore {
   delete: (key: string) => Promise<void>;
   get: <T>(key: string) => Promise<T | null>;
   set: <T>(key: string, value: T) => Promise<void>;
 }
 
+/** Reads Telegram bot token. */
 export async function readTelegramBotToken(
   secretsStore: TelegramChannelSecretsStore,
 ) {
@@ -13,6 +18,7 @@ export async function readTelegramBotToken(
   return typeof value === 'string' ? value : '';
 }
 
+/** Writes Telegram bot token. */
 export async function writeTelegramBotToken(
   secretsStore: TelegramChannelSecretsStore,
   token: string,
@@ -27,6 +33,7 @@ export async function writeTelegramBotToken(
   await secretsStore.set(TELEGRAM_BOT_TOKEN_SECRET_KEY, trimmedToken);
 }
 
+/** Deletes Telegram bot token. */
 export async function deleteTelegramBotToken(
   secretsStore: TelegramChannelSecretsStore,
 ) {

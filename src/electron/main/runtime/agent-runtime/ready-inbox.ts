@@ -1,3 +1,5 @@
+// Ready-assignment inbox tracking.
+
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 /**
@@ -26,10 +28,12 @@ export class ReadyInbox {
     this.delivered.delete(agentId);
   }
 
+  /** Returns pending. */
   getPending(agentId: string): ReadyAssignmentsInboxSignal | null {
     return this.pending.get(agentId) ?? null;
   }
 
+  /** Returns delivered generation. */
   getDeliveredGeneration(agentId: string): number {
     return this.delivered.get(agentId) ?? 0;
   }

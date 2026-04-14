@@ -1,3 +1,5 @@
+// Dune external-channel integration.
+
 import type {
   ChannelDriver,
   ChannelDriverConfig,
@@ -6,6 +8,7 @@ import type {
 
 import { isDuneAgentChatJid } from '@/shared/agents/agent-id';
 
+/** Dune channel options. */
 export interface DuneChannelOptions {
   boundExternalJid?: string | undefined;
   config: ChannelDriverConfig;
@@ -15,6 +18,7 @@ export interface DuneChannelOptions {
   primaryJid: string;
 }
 
+/** Implements Dune channel behavior. */
 export class DuneChannel implements ChannelDriver {
   private connected = false;
 
@@ -41,6 +45,7 @@ export class DuneChannel implements ChannelDriver {
     this.boundExternalJid = options.boundExternalJid;
   }
 
+  /** Connects Dune. */
   async connect() {
     if (this.externalChannelFactory && !this.externalDriver) {
       this.externalDriver = await this.createWrappedDriver(this.externalChannelFactory);
@@ -65,6 +70,7 @@ export class DuneChannel implements ChannelDriver {
     await this.externalDriver.connect();
   }
 
+  /** Detaches external channel. */
   async detachExternalChannel() {
     if (this.externalDriver) {
       await this.externalDriver.disconnect();
@@ -106,20 +112,24 @@ export class DuneChannel implements ChannelDriver {
     return factory(wrappedConfig);
   }
 
+  /** Disconnects Dune. */
   async disconnect() {
     await this.detachExternalChannel();
 
     this.connected = false;
   }
 
+  /** Returns whether connected. */
   isConnected() {
     return this.connected;
   }
 
+  /** Ownses jid. */
   ownsJid(jid: string) {
     return isDuneAgentChatJid(jid);
   }
 
+  /** Sends message. */
   async sendMessage(jid: string, text: string) {
     const timestamp = new Date().toISOString();
     const group = this.config.registeredGroups()[jid];
@@ -149,6 +159,7 @@ export class DuneChannel implements ChannelDriver {
     await this.onOutboundMessage(jid, text);
   }
 
+  /** Pushes inbound message. */
   async pushInboundMessage(jid: string, text: string, senderName: string = 'You') {
     const timestamp = new Date().toISOString();
     const group = this.config.registeredGroups()[jid];

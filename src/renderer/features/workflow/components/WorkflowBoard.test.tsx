@@ -1,9 +1,12 @@
+// Workflow board UI tests.
+
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkflowBoard } from '@/renderer/features/workflow/components/WorkflowBoard';
 import type { WorkflowItemSummary } from '@/renderer/features/workflow/types';
 
+/** Bases item. */
 const baseItem = (
   id: string,
   title: string,

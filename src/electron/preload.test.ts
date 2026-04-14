@@ -1,3 +1,5 @@
+// Electron preload bridge tests.
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';

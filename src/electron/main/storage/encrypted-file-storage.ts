@@ -1,9 +1,12 @@
+// Encrypted file storage implementation.
+
 import { safeStorage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import type { AppStorage } from './app-storage';
 
+/** Persists encrypted file. */
 export class EncryptedFileStorage implements AppStorage {
   private data: Record<string, string>;
 
@@ -14,6 +17,7 @@ export class EncryptedFileStorage implements AppStorage {
     this.data = this.readFile();
   }
 
+  /** Returns encrypted file. */
   async get<T>(key: string): Promise<T | null> {
     const encoded = this.data[key];
     if (encoded === undefined) return null;
@@ -28,6 +32,7 @@ export class EncryptedFileStorage implements AppStorage {
     }
   }
 
+  /** Sets encrypted file. */
   async set<T>(key: string, value: T): Promise<void> {
     const serialized = JSON.stringify(value);
     this.data[key] = safeStorage.isEncryptionAvailable()
@@ -36,11 +41,13 @@ export class EncryptedFileStorage implements AppStorage {
     this.writeFile();
   }
 
+  /** Deletes encrypted file. */
   async delete(key: string): Promise<void> {
     delete this.data[key];
     this.writeFile();
   }
 
+  /** Keyses encrypted file. */
   async keys(): Promise<string[]> {
     return Object.keys(this.data);
   }

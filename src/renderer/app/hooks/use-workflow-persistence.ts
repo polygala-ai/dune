@@ -1,3 +1,5 @@
+// Workflow persistence hook.
+
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -17,16 +19,14 @@ import {
   createArtifactFolderName,
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
+import { isPlainObject } from '@/shared/is-record';
 
 const STORE_NAME = 'workflow';
 const STORE_KEY = 'snapshot';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
+/** Normalizes task. */
 function normalizeTask(value: unknown): WorkflowTask | null {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return null;
   }
 
@@ -51,8 +51,9 @@ function normalizeTask(value: unknown): WorkflowTask | null {
   };
 }
 
+/** Normalizes work product. */
 function normalizeWorkProduct(value: unknown): WorkflowWorkProduct | null {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return null;
   }
 
@@ -73,8 +74,9 @@ function normalizeWorkProduct(value: unknown): WorkflowWorkProduct | null {
   };
 }
 
+/** Normalizes event. */
 function normalizeEvent(value: unknown): WorkflowEvent | null {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return null;
   }
 
@@ -102,8 +104,9 @@ function normalizeEvent(value: unknown): WorkflowEvent | null {
   };
 }
 
+/** Normalizes current snapshot. */
 function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return null;
   }
 
@@ -113,7 +116,7 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
 
   const projects = value.projects.flatMap((project) => {
     if (
-      !isRecord(project) ||
+      !isPlainObject(project) ||
       typeof project.id !== 'string' ||
       typeof project.name !== 'string' ||
       typeof project.description !== 'string' ||
@@ -143,7 +146,7 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
   const projectIds = new Set(projects.map((project) => project.id));
   const items = value.items.flatMap((item) => {
     if (
-      !isRecord(item) ||
+      !isPlainObject(item) ||
       typeof item.id !== 'string' ||
       typeof item.projectId !== 'string' ||
       !projectIds.has(item.projectId) ||
@@ -225,136 +228,12 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
   };
 }
 
-function migrateLegacySnapshot(value: unknown): WorkflowSnapshot | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  if (!Array.isArray(value.projects) || !Array.isArray(value.missions)) {
-    return null;
-  }
-
-  const projects = value.projects.map((project) => {
-    if (
-      !isRecord(project) ||
-      typeof project.id !== 'string' ||
-      typeof project.name !== 'string' ||
-      typeof project.description !== 'string' ||
-      typeof project.color !== 'string' ||
-      typeof project.createdAt !== 'number' ||
-      typeof project.updatedAt !== 'number'
-    ) {
-      return null;
-    }
-
-    return {
-      color: project.color,
-      createdAt: project.createdAt,
-      description: project.description,
-      id: project.id,
-      name: project.name,
-      rootPath: null,
-      updatedAt: project.updatedAt,
-    };
-  });
-
-  if (projects.some((project) => project === null)) {
-    return null;
-  }
-
-  const items = value.missions.flatMap((mission) => {
-    if (
-      !isRecord(mission) ||
-      typeof mission.id !== 'string' ||
-      typeof mission.projectId !== 'string' ||
-      typeof mission.title !== 'string' ||
-      typeof mission.brief !== 'string' ||
-      typeof mission.sortOrder !== 'number' ||
-      typeof mission.createdAt !== 'number' ||
-      typeof mission.updatedAt !== 'number' ||
-      !Array.isArray(mission.tasks) ||
-      !Array.isArray(mission.workProducts) ||
-      !Array.isArray(mission.workflowEvents)
-    ) {
-      return [];
-    }
-
-    const tasks = mission.tasks.map(normalizeTask);
-    const workProducts = mission.workProducts.map(normalizeWorkProduct);
-    const workflowEvents = mission.workflowEvents.map((event) => {
-      const normalized = normalizeEvent(event);
-
-      if (!normalized) {
-        return null;
-      }
-
-      return {
-        ...normalized,
-        kind: normalized.kind === 'item'
-          ? 'item'
-          : normalized.kind === 'assignment'
-            ? 'assignment'
-            : normalized.kind,
-      };
-    });
-
-    if (
-      tasks.some((task) => task === null) ||
-      workProducts.some((product) => product === null) ||
-      workflowEvents.some((event) => event === null)
-    ) {
-      return [];
-    }
-
-    const linkedAgents = Array.isArray(mission.linkedAgents)
-      ? mission.linkedAgents.filter(isRecord)
-      : [];
-    const primaryAgentId = linkedAgents.find(
-      (agent): agent is Record<string, string> => typeof agent.agentId === 'string',
-    )?.agentId ?? null;
-    const legacyStatus = mission.status === 'planned' ? 'ready' : mission.status;
-
-    if (!workflowItemStatuses.includes(legacyStatus as (typeof workflowItemStatuses)[number])) {
-      return [];
-    }
-
-    return [{
-      artifactFolderName: createArtifactFolderName(mission.title, mission.id),
-      brief: mission.brief,
-      createdAt: mission.createdAt,
-      id: mission.id,
-      primaryAgentId,
-      projectId: mission.projectId,
-      sortOrder: mission.sortOrder,
-      status: legacyStatus as WorkflowSnapshot['items'][number]['status'],
-      tasks: tasks as WorkflowTask[],
-      title: mission.title,
-      updatedAt: mission.updatedAt,
-      workProducts: workProducts as WorkflowWorkProduct[],
-      workflowEvents: workflowEvents as WorkflowEvent[],
-    }];
-  });
-
-  return {
-    items,
-    projects: projects as WorkflowSnapshot['projects'],
-    selectedItemId:
-      typeof value.selectedMissionId === 'string' || value.selectedMissionId === null
-        ? value.selectedMissionId
-        : null,
-    selectedProjectFilter: 'all',
-    selectedProjectId:
-      typeof value.selectedProjectId === 'string' || value.selectedProjectId === null
-        ? value.selectedProjectId
-        : null,
-    selectedProjectView: 'board',
-  };
-}
-
+/** Normalizes workflow snapshot. */
 function normalizeWorkflowSnapshot(value: unknown): WorkflowSnapshot | null {
-  return normalizeCurrentSnapshot(value) ?? migrateLegacySnapshot(value);
+  return normalizeCurrentSnapshot(value);
 }
 
+/** Workflow persistence hook. */
 export function useWorkflowPersistence() {
   const hydrateWorkflow = useAppStore((state) => state.hydrateWorkflow);
   const {
@@ -380,6 +259,7 @@ export function useWorkflowPersistence() {
   useEffect(() => {
     let isDisposed = false;
 
+    /** Loads . */
     const load = async () => {
       const rawSnapshot = await window.duneDesktop?.storageGet?.(STORE_NAME, STORE_KEY);
       const normalizedSnapshot = normalizeWorkflowSnapshot(rawSnapshot);

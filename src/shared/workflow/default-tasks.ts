@@ -1,5 +1,8 @@
+// Default workflow task builders.
+
 import { createId } from '@/shared/id';
 
+/** Default task shape. */
 export interface DefaultTask {
   createdAt: number;
   id: string;
@@ -16,6 +19,7 @@ const DEFAULT_TASK_TITLES = [
   'Execute — Implement the plan. Only start after the above steps are done.',
 ] as const;
 
+/** Creates default tasks. */
 export function createDefaultTasks(now: number): DefaultTask[] {
   return DEFAULT_TASK_TITLES.map((title) => ({
     createdAt: now,

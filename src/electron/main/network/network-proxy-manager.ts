@@ -1,25 +1,31 @@
+// Network proxy coordination.
+
 import type { ProxyConfig } from 'electron';
 import { createGlobalProxyAgent } from 'global-agent';
 import { Agent, ProxyAgent, setGlobalDispatcher, type Dispatcher } from 'undici';
 
 import type { NetworkSettings } from '@/renderer/features/settings/model/network-settings';
 
+/** Proxy controller contract. */
 export interface ProxyController {
   HTTP_PROXY: string | null;
   HTTPS_PROXY: string | null;
   NO_PROXY: string | null;
 }
 
+/** Electron session proxy contract. */
 interface ProxySession {
   forceReloadProxyConfig?: () => Promise<void>;
   resolveProxy: (url: string) => Promise<string>;
   setProxy: (config: ProxyConfig) => Promise<void>;
 }
 
+/** Logger-like contract. */
 interface LoggerLike {
   info?: (message: string, ...args: unknown[]) => void;
 }
 
+/** Network proxy manager options. */
 export interface NetworkProxyManagerOptions {
   createProxyController?: () => ProxyController;
   env?: NodeJS.ProcessEnv;
@@ -28,13 +34,16 @@ export interface NetworkProxyManagerOptions {
   setDispatcher?: (dispatcher: Dispatcher) => void;
 }
 
+/** Loopback bypass rules constant. */
 export const LOOPBACK_BYPASS_RULES = ['localhost', '127.0.0.1', '::1'] as const;
+/** Dune proxy env namespace constant. */
 export const DUNE_PROXY_ENV_NAMESPACE = 'DUNE_PROXY_';
 
 // Representative URL used to ask Electron's session for the PAC-resolved proxy
 // when the app runs without HTTP_PROXY in its env (e.g. launched from Finder).
 const SYSTEM_PROXY_PROBE_URL = 'https://api.telegram.org';
 
+/** Splits bypass rules. */
 function splitBypassRules(value: string | null | undefined) {
   if (!value) {
     return [];
@@ -46,10 +55,12 @@ function splitBypassRules(value: string | null | undefined) {
     .filter(Boolean);
 }
 
+/** Merges bypass rules. */
 function mergeBypassRules(...ruleSets: Array<readonly string[]>) {
   return [...new Set(ruleSets.flatMap((rules) => rules.map((rule) => rule.trim()).filter(Boolean)))];
 }
 
+/** Picks env value. */
 function pickEnvValue(
   env: NodeJS.ProcessEnv,
   ...keys: string[]
@@ -65,6 +76,7 @@ function pickEnvValue(
   return null;
 }
 
+/** Redacts proxy URL. */
 function redactProxyUrl(url: string | null) {
   if (!url) {
     return null;
@@ -84,6 +96,7 @@ function redactProxyUrl(url: string | null) {
   }
 }
 
+/** Builds proxy rules. */
 function buildProxyRules(proxyUrl: string) {
   return `http=${proxyUrl};https=${proxyUrl}`;
 }
@@ -91,6 +104,7 @@ function buildProxyRules(proxyUrl: string) {
 // PAC results look like "PROXY host:port; DIRECT" or "DIRECT". Pick the first
 // HTTP PROXY entry if there is one, otherwise null. SOCKS is not supported by
 // global-agent or undici ProxyAgent, so SOCKS entries are treated as direct.
+/** Parses PAC proxy result. */
 export function parsePacProxyResult(pac: string | null | undefined): string | null {
   if (!pac) {
     return null;
@@ -109,6 +123,7 @@ export function parsePacProxyResult(pac: string | null | undefined): string | nu
   return null;
 }
 
+/** Manages network proxy. */
 export class NetworkProxyManager {
   private readonly env: NodeJS.ProcessEnv;
 
@@ -133,6 +148,7 @@ export class NetworkProxyManager {
     this.setDispatcher = options.setDispatcher ?? setGlobalDispatcher;
   }
 
+  /** Applies network proxy. */
   async apply(settings: NetworkSettings) {
     const electronProxyConfig = this.buildElectronProxyConfig(settings);
 

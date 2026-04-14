@@ -1,3 +1,5 @@
+// Workflow board drag-and-drop UI.
+
 import { useState } from 'react';
 import {
   type DragEndEvent,
@@ -37,6 +39,7 @@ const workflowColumns: WorkflowItemStatus[] = [
   'done',
 ];
 
+/** Workflow board props. */
 interface WorkflowBoardProps {
   items: WorkflowItemSummary[];
   onMoveItem: (itemId: string, status: WorkflowItemStatus, index: number) => void;
@@ -44,6 +47,7 @@ interface WorkflowBoardProps {
   selectedItemId: string | null;
 }
 
+/** Returns column items. */
 function getColumnItems(
   items: WorkflowItemSummary[],
   status: WorkflowItemStatus,
@@ -51,6 +55,7 @@ function getColumnItems(
   return items.filter((item) => item.status === status);
 }
 
+/** Renders the item card UI. */
 function ItemCard({
   active,
   item,
@@ -127,6 +132,7 @@ function ItemCard({
   );
 }
 
+/** Renders the sortable item card UI. */
 function SortableItemCard({
   item,
   onSelect,
@@ -166,6 +172,7 @@ function SortableItemCard({
   );
 }
 
+/** Renders the column UI. */
 function Column({
   items,
   onSelectItem,
@@ -233,6 +240,7 @@ function Column({
   );
 }
 
+/** Renders the workflow board UI. */
 export function WorkflowBoard({
   items,
   onMoveItem,
@@ -254,10 +262,12 @@ export function WorkflowBoard({
   const activeItem =
     items.find((item) => item.id === activeItemId) ?? null;
 
+  /** Handles start drag. */
   const handleDragStart = ({ active }: DragStartEvent) => {
     setActiveItemId(String(active.id));
   };
 
+  /** Handles end drag. */
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     setActiveItemId(null);
 

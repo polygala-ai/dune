@@ -1,3 +1,5 @@
+// Shared Electron desktop bridge contract.
+
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
   CreateAgentInput,

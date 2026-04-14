@@ -1,3 +1,5 @@
+// Workflow workspace UI.
+
 import {
   Plus,
   X,
@@ -36,6 +38,7 @@ const projectHeaderTabs = [
   { label: 'Agents', value: 'agents' },
 ] as const;
 
+/** Workflow workspace props. */
 interface WorkflowWorkspaceProps {
   isCompactShell: boolean;
   isCreateProjectOpen: boolean;
@@ -51,6 +54,7 @@ interface WorkflowWorkspaceProps {
   showTitlebarProjectActions: boolean;
 }
 
+/** Renders the workflow workspace UI. */
 export function WorkflowWorkspace({
   isCompactShell,
   isCreateProjectOpen,
@@ -133,6 +137,7 @@ export function WorkflowWorkspace({
     );
   }
 
+  /** Handles primary agent assignment. */
   const handleAssignPrimaryAgent = async (
     itemId: string,
     input: { agentId: string | null; agentName?: string | null },
@@ -169,6 +174,7 @@ export function WorkflowWorkspace({
     }
   };
 
+  /** Handles agent for item creation. */
   const handleCreateAgentForItem = async (itemId: string) => {
     const state = useAppStore.getState();
     const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
@@ -196,6 +202,7 @@ export function WorkflowWorkspace({
     });
   };
 
+  /** Handles project from settings deletion. */
   const handleDeleteProjectFromSettings = async () => {
     if (!selectedProject) {
       return;

@@ -1,3 +1,5 @@
+// Models settings UI.
+
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -28,17 +30,20 @@ import { SettingsSectionIntro } from './SettingsSectionIntro';
 const STORE_NAME = 'settings';
 const SECRETS_STORE_NAME = 'secrets';
 
+/** Masks secret. */
 function maskSecret(key: string) {
   if (key.length <= 8) return '••••••••';
   return `${key.slice(0, 4)}...${key.slice(-4)}`;
 }
 
+/** Default switch props. */
 interface DefaultSwitchProps {
   checked: boolean;
   onToggle: () => void;
   providerName: string;
 }
 
+/** Renders the default switch UI. */
 function DefaultSwitch({ checked, onToggle, providerName }: DefaultSwitchProps) {
   return (
     <button
@@ -73,6 +78,7 @@ function DefaultSwitch({ checked, onToggle, providerName }: DefaultSwitchProps) 
   );
 }
 
+/** Creates bridge store. */
 function createBridgeStore(storeName: string) {
   return {
     delete: async (key: string) => {
@@ -91,10 +97,12 @@ function createBridgeStore(storeName: string) {
 const settingsStore = createBridgeStore(STORE_NAME);
 const secretsStore = createBridgeStore(SECRETS_STORE_NAME);
 
+/** Finds default provider ID. */
 function findDefaultProviderId(providers: ModelProvider[]) {
   return providers.find((provider) => provider.isDefault)?.id ?? null;
 }
 
+/** Loads providers with secrets. */
 async function loadProvidersWithSecrets() {
   const providers = await loadModelProviders({ secretsStore, settingsStore });
   const secrets = Object.fromEntries(
@@ -109,6 +117,7 @@ async function loadProvidersWithSecrets() {
   return { providers, secrets };
 }
 
+/** Provider form props. */
 interface ProviderFormProps {
   initial?: {
     authType: ModelAuthType;
@@ -125,6 +134,7 @@ interface ProviderFormProps {
   }) => void;
 }
 
+/** Renders the provider form UI. */
 function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
   const [form, setForm] = useState(initial ?? {
     authType: 'api-key' as ModelAuthType,
@@ -194,6 +204,7 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
   );
 }
 
+/** Renders the models settings UI. */
 export function ModelsSettings(props: SettingsSectionComponentProps) {
   void props;
   const [providers, setProviders] = useState<ModelProvider[]>([]);
@@ -211,12 +222,14 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
       .catch((err) => console.error('Failed to load providers:', err));
   }, []);
 
+  /** Persists . */
   const persist = async (next: ModelProvider[], nextSecrets: Record<string, string> = providerSecrets) => {
     const persistedProviders = await saveModelProviders(settingsStore, next);
     setProviders(persistedProviders);
     setProviderSecrets(nextSecrets);
   };
 
+  /** Handles add. */
   const handleAdd = async (data: {
     authType: ModelAuthType;
     baseUrl: string;
@@ -238,6 +251,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     setIsAdding(false);
   };
 
+  /** Handles update. */
   const handleUpdate = async (id: string, data: {
     authType: ModelAuthType;
     baseUrl: string;
@@ -260,6 +274,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     setEditingId(null);
   };
 
+  /** Handles default toggle. */
   const handleToggleDefault = async (id: string) => {
     const previousDefaultId = findDefaultProviderId(providers);
     const nextProviders = providers.map((provider) => ({
@@ -278,6 +293,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     }
   };
 
+  /** Handles remove. */
   const handleRemove = async (id: string) => {
     await deleteModelProviderSecret(secretsStore, id);
     const nextSecrets = { ...providerSecrets };

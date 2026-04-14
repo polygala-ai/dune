@@ -1,3 +1,5 @@
+// Network settings tests.
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +9,7 @@ import { createDefaultExternalChannelsState } from '@/renderer/features/agents/m
 
 import { NetworkSettings } from './NetworkSettings';
 
+/** Creates runtime snapshot. */
 function createRuntimeSnapshot(): AgentServiceSnapshot {
   return {
     agents: [],
@@ -22,6 +25,7 @@ function createRuntimeSnapshot(): AgentServiceSnapshot {
   };
 }
 
+/** Creates desktop bridge. */
 function createDesktopBridge(
   storedSettings: Record<string, unknown>,
   runtimeSnapshot: AgentServiceSnapshot = createRuntimeSnapshot(),
@@ -37,6 +41,7 @@ function createDesktopBridge(
   };
 }
 
+/** Renders network settings. */
 function renderNetworkSettings() {
   render(
     <NetworkSettings

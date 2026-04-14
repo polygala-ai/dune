@@ -1,3 +1,5 @@
+// Items IPC tool handlers.
+
 import { createId } from '@/shared/id';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
@@ -35,6 +37,7 @@ import {
 } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Lists item tools. */
 export const itemTools: RegisteredTool[] = [
   {
     definition: {

@@ -1,28 +1,27 @@
+// Agent runtime filesystem layout helpers.
+
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
+import { createAgentIpcDirectoryMetadata, resolveAgentIpcMetadataPath } from '@/electron/main/agent-ipc/ipc-directory';
 import {
-  createAgentIpcDirectoryMetadata,
+  findAgentDuneDirs,
+  findProjectDuneDirs,
   resolveAgentDuneDir,
   resolveAgentIpcDir,
-  resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
-} from '@/electron/main/agent-ipc/ipc-directory';
+} from '@/electron/main/dune-paths';
 import type { AgentRole } from '@/renderer/features/agents/types';
-import { toAgentPathId } from '@/shared/agents/agent-id';
 
 import { copyDirRecursive, readIpcGuide } from '../artifacts';
+
+export { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 
 const AGENT_IPC_SOURCE_NAMES = [
   'skills/dune',
   'skills/dune-project-kickoff',
   'mcp',
 ] as const;
-
-export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()): string {
-  return path.join(homeDir, '.dune', 'agentlite');
-}
 
 /**
  * Extract agent-ipc source directories from the bundled location (which may
@@ -47,6 +46,7 @@ export function seedAgentIpcSources(bundledDir: string, homeDir: string): string
   return stagingDir;
 }
 
+/** Creates IPC layout. */
 export function createIpcLayout(
   homeDir: string,
   projectId: string,
@@ -98,74 +98,4 @@ export function createIpcLayout(
     duneMountRoot: agentRole === 'project-main' ? projectDir : agentDir,
     ipcDir,
   };
-}
-
-export function sanitizeRuntimePathSegment(value: string, fallback: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || fallback;
-}
-
-export function findProjectDuneDirs(
-  homeDir: string,
-  projectId: string,
-): string[] {
-  const projsDir = path.join(homeDir, '.dune', 'projs');
-
-  if (!fs.existsSync(projsDir)) {
-    return [];
-  }
-
-  const projectIdSegment = sanitizeRuntimePathSegment(projectId, 'project');
-  const matchingProjectDirs: string[] = [];
-
-  for (const entry of fs.readdirSync(projsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-
-    if (entry.name === projectIdSegment || entry.name.endsWith(`-${projectIdSegment}`)) {
-      matchingProjectDirs.push(path.join(projsDir, entry.name));
-    }
-  }
-
-  return matchingProjectDirs;
-}
-
-export function findAgentDuneDirs(
-  homeDir: string,
-  projectId: string,
-  agentId: string,
-): string[] {
-  const agentIdSegments = new Set([
-    sanitizeRuntimePathSegment(agentId, 'agent'),
-    sanitizeRuntimePathSegment(toAgentPathId(agentId), 'agent'),
-  ]);
-  const matchingAgentDirs: string[] = [];
-
-  for (const projectDir of findProjectDuneDirs(homeDir, projectId)) {
-    const agentsDir = path.join(projectDir, 'agents');
-
-    if (!fs.existsSync(agentsDir)) {
-      continue;
-    }
-
-    for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      if (
-        [...agentIdSegments].some((agentIdSegment) =>
-          entry.name === agentIdSegment || entry.name.endsWith(`-${agentIdSegment}`),
-        )
-      ) {
-        matchingAgentDirs.push(path.join(agentsDir, entry.name));
-      }
-    }
-  }
-
-  return matchingAgentDirs;
 }

@@ -1,3 +1,5 @@
+// Desktop bridge tests.
+
 import { describe, expect, it } from 'vitest';
 
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';

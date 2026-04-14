@@ -1,3 +1,5 @@
+// Context panel host.
+
 import {
   type HTMLAttributes,
   useEffect,
@@ -40,6 +42,7 @@ import type {
   TelegramSetupSession,
 } from '@/renderer/features/agents/types';
 
+/** Context panel host props. */
 interface ContextPanelHostProps {
   agent: PresentedAgent | null;
   customization: AgentCustomizationDraft | null;
@@ -50,6 +53,7 @@ interface ContextPanelHostProps {
   onDeleteAgent?: () => Promise<void> | void;
 }
 
+/** Customization surface props. */
 interface CustomizationSurfaceProps {
   agentRole: PresentedAgent['role'];
   artifactsPath?: string | undefined;
@@ -61,6 +65,7 @@ interface CustomizationSurfaceProps {
   onSave: () => void;
 }
 
+/** Telegram setup surface props. */
 interface TelegramSetupSurfaceProps {
   agent: PresentedAgent;
   errorMessage?: string | null;
@@ -72,6 +77,7 @@ interface TelegramSetupSurfaceProps {
   session: TelegramSetupSession | null;
 }
 
+/** Renders the agent customization surface UI. */
 function AgentCustomizationSurface({
   agentRole,
   artifactsPath,
@@ -154,6 +160,7 @@ function AgentCustomizationSurface({
   );
 }
 
+/** Renders the Telegram setup surface UI. */
 function TelegramSetupSurface({
   agent,
   errorMessage = null,
@@ -229,6 +236,7 @@ function TelegramSetupSurface({
   );
 }
 
+/** Renders the context panel host UI. */
 export function ContextPanelHost({
   agent,
   customization,
@@ -266,6 +274,7 @@ export function ContextPanelHost({
     setTelegramMatchedChat(null);
   }, [agent?.id, agent?.channel.id, mode]);
 
+  /** Opens customization editor. */
   const openCustomizationEditor = () => {
     setDraft(cloneAgentCustomizationDraft(customization));
     setEditingCustomization(true);
@@ -276,6 +285,7 @@ export function ContextPanelHost({
     setDraft(cloneAgentCustomizationDraft(customization));
   };
 
+  /** Handles customization save. */
   const handleSaveCustomization = () => {
     if (!agent) {
       return;
@@ -290,6 +300,7 @@ export function ContextPanelHost({
     setEditingCustomization(false);
   };
 
+  /** Handles customization reset. */
   const handleResetCustomization = () => {
     if (!agent) {
       return;
@@ -309,6 +320,7 @@ export function ContextPanelHost({
     setTelegramMatchedChat(null);
   };
 
+  /** Handles setup session change telegram. */
   const handleTelegramSetupSessionChange = (session: TelegramSetupSession | null) => {
     setTelegramSetupSession(session);
     setTelegramSetupError(null);
@@ -327,6 +339,7 @@ export function ContextPanelHost({
     }
   };
 
+  /** Handles Telegram channel application. */
   const handleApplyTelegramChannel = async () => {
     const setupSessionId = telegramSetupSession?.id ?? telegramSetupSessionId;
 

@@ -1,3 +1,5 @@
+// Telegram channel setup card tests.
+
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +10,7 @@ import { createDefaultExternalChannelsState } from '@/renderer/features/agents/m
 import type { TelegramSetupSession } from '@/renderer/features/agents/types';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 
+/** Creates snapshot. */
 function createSnapshot(
   overrides: Partial<AgentServiceSnapshot> = {},
 ): AgentServiceSnapshot {

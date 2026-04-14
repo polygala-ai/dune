@@ -1,3 +1,5 @@
+// Shared Playwright helpers.
+
 import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,24 +8,30 @@ import path from 'node:path';
 import { _electron as electron } from 'playwright';
 import { expect, type Locator } from '@playwright/test';
 
+/** Electron app shape. */
 export type ElectronApp = Awaited<ReturnType<typeof electron.launch>>;
 
+/** Creates temp home. */
 export function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-e2e-home-'));
 }
 
+/** Cleans up temp home. */
 export function cleanupTempHome(dir: string) {
   fs.rmSync(dir, { force: true, recursive: true });
 }
 
+/** Returns user data dir. */
 export function getUserDataDir(runtimeHome: string) {
   return path.join(runtimeHome, 'userdata');
 }
 
+/** Returns agent lite runtime root. */
 export function getAgentLiteRuntimeRoot(runtimeHome: string) {
   return path.join(runtimeHome, '.dune', 'agentlite');
 }
 
+/** Reads desktop runtime chunk. */
 export function readDesktopRuntimeChunk() {
   const appRoot = path.resolve(__dirname, '../../');
   const buildDir = path.join(appRoot, '.vite', 'build');
@@ -38,12 +46,14 @@ export function readDesktopRuntimeChunk() {
   return fs.readFileSync(path.join(buildDir, chunkName), 'utf-8');
 }
 
+/** Reads user data JSON. */
 export function readUserDataJson(runtimeHome: string, fileName: string) {
   return JSON.parse(
     fs.readFileSync(path.join(getUserDataDir(runtimeHome), fileName), 'utf-8'),
   ) as Record<string, unknown>;
 }
 
+/** Seeds agent store. */
 export function seedAgentStore(
   runtimeHome: string,
   data: {
@@ -59,6 +69,7 @@ export function seedAgentStore(
   );
 }
 
+/** Seeds workflow store. */
 export function seedWorkflowStore(
   runtimeHome: string,
   snapshot: {
@@ -78,6 +89,7 @@ export function seedWorkflowStore(
   );
 }
 
+/** Seeds agent attachment. */
 export function seedAgentAttachment(
   runtimeHome: string,
   input: {
@@ -96,6 +108,7 @@ export function seedAgentAttachment(
   fs.writeFileSync(path.join(attachmentDir, input.fileName), input.content);
 }
 
+/** Launches app. */
 export async function launchApp(runtimeHome: string): Promise<ElectronApp> {
   const appRoot = path.resolve(__dirname, '../../');
   const userDataDir = getUserDataDir(runtimeHome);
@@ -110,12 +123,15 @@ export async function launchApp(runtimeHome: string): Promise<ElectronApp> {
   });
 }
 
+/** Returns modifier. */
 export function getModifier() {
   return process.platform === 'darwin' ? 'Meta' : 'Control';
 }
 
+/** App page shape. */
 type AppPage = Awaited<ReturnType<ElectronApp['firstWindow']>>;
 
+/** Dispatches window key. */
 export async function dispatchWindowKey(
   page: AppPage,
   key: string,
@@ -144,6 +160,7 @@ export async function dispatchWindowKey(
   );
 }
 
+/** Dispatches primary shortcut. */
 export async function dispatchPrimaryShortcut(page: AppPage, key: string) {
   const usesMeta = process.platform === 'darwin';
   await dispatchWindowKey(page, key, {
@@ -152,6 +169,7 @@ export async function dispatchPrimaryShortcut(page: AppPage, key: string) {
   });
 }
 
+/** Resizes window. */
 export async function resizeWindow(app: ElectronApp, width: number, height: number) {
   await app.evaluate(
     ({ BrowserWindow }, bounds) => {
@@ -165,6 +183,7 @@ export async function resizeWindow(app: ElectronApp, width: number, height: numb
   );
 }
 
+/** Asserts right edge within. */
 export async function expectRightEdgeWithin(container: Locator, item: Locator) {
   const [containerBox, itemBox] = await Promise.all([
     container.boundingBox(),
@@ -180,6 +199,7 @@ export async function expectRightEdgeWithin(container: Locator, item: Locator) {
   );
 }
 
+/** Asserts bounding box within. */
 export async function expectBoundingBoxWithin(container: Locator, item: Locator) {
   const [containerBox, itemBox] = await Promise.all([
     container.boundingBox(),
@@ -200,6 +220,7 @@ export async function expectBoundingBoxWithin(container: Locator, item: Locator)
   );
 }
 
+/** Navigates to settings. */
 export async function navigateToSettings(page: AppPage) {
   await page.waitForFunction(
     () => Boolean(document.querySelector('[data-testid="app-shell-layout"]')),
@@ -208,6 +229,7 @@ export async function navigateToSettings(page: AppPage) {
   await expect(page.getByTestId('settings-view')).toBeVisible();
 }
 
+/** Navigates to workflow. */
 export async function navigateToWorkflow(page: AppPage) {
   await page.waitForFunction(
     () => Boolean(document.querySelector('[data-testid="app-shell-layout"]')),
@@ -236,6 +258,7 @@ export async function navigateToWorkflow(page: AppPage) {
   await expect(page.getByRole('heading', { name: 'No projects yet' })).toBeVisible();
 }
 
+/** Creates project. */
 export async function createProject(
   page: AppPage,
   input: {
@@ -262,16 +285,19 @@ export async function createProject(
   await expect(page.getByTestId('workflow-board')).toBeVisible();
 }
 
+/** Clicks settings nav. */
 export async function clickSettingsNav(page: Awaited<ReturnType<ElectronApp['firstWindow']>>, sectionTitle: string) {
   await page.getByTestId('settings-nav').getByText(sectionTitle, { exact: true }).click();
 }
 
+/** Navigates to models. */
 export async function navigateToModels(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
   await navigateToSettings(page);
   await clickSettingsNav(page, 'Models');
   await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
 }
 
+/** Adds provider. */
 export async function addProvider(
   page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
   input: {
@@ -301,6 +327,7 @@ export async function addProvider(
   await expect(page.locator('[data-testid^="provider-card"]', { hasText: input.name })).toBeVisible();
 }
 
+/** Toggles default provider. */
 export async function toggleDefaultProvider(
   page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
   name: string,
@@ -308,10 +335,12 @@ export async function toggleDefaultProvider(
   await providerCard(page, name).getByRole('switch', { name: `Default provider ${name}` }).click();
 }
 
+/** Restarts dialog. */
 export function restartDialog(page: Awaited<ReturnType<ElectronApp['firstWindow']>>) {
   return page.getByRole('dialog', { name: 'Restart to enable the new default model' });
 }
 
+/** Cancels restart dialog. */
 export async function cancelRestartDialog(
   page: Awaited<ReturnType<ElectronApp['firstWindow']>>,
 ) {
@@ -321,6 +350,7 @@ export async function cancelRestartDialog(
   await expect(dialog).toHaveCount(0);
 }
 
+/** Adds workflow item. */
 export async function addWorkflowItem(
   page: AppPage,
   title: string,
@@ -339,10 +369,12 @@ export async function addWorkflowItem(
   await expect(page.locator(`input[value="${title}"]`).first()).toBeVisible();
 }
 
+/** Provides card. */
 export function providerCard(page: Awaited<ReturnType<ElectronApp['firstWindow']>>, name: string) {
   return page.locator('[data-testid^="provider-card"]', { hasText: name });
 }
 
+/** Closes Electron app. */
 export async function closeElectronApp(app: ElectronApp) {
   const child = app.process();
   const closePromise = app.close().catch(() => undefined);

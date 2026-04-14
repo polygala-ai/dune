@@ -17,6 +17,7 @@ export interface PendingAssistantMessage {
   safetyTimer: ReturnType<typeof globalThis.setTimeout> | null;
 }
 
+/** Tracks message state. */
 export class MessageStream {
   private readonly pending = new Map<string, PendingAssistantMessage>();
 

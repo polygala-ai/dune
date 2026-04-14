@@ -1,3 +1,5 @@
+// Agent runtime channel helpers.
+
 import type {
   AgentChannelBinding,
   AgentChannelId,
@@ -7,6 +9,7 @@ import type {
   TelegramConnectionStatus,
 } from '@/renderer/features/agents/types';
 
+/** Maps Telegram channel status. */
 export function mapTelegramChannelStatus(status: TelegramConnectionStatus): AgentChannelStatus {
   switch (status) {
     case 'connected':
@@ -23,6 +26,7 @@ export function mapTelegramChannelStatus(status: TelegramConnectionStatus): Agen
   }
 }
 
+/** Creates channel binding. */
 export function createChannelBinding(
   channelId: AgentChannelId,
   telegramState: TelegramAgentRuntimeState | null,

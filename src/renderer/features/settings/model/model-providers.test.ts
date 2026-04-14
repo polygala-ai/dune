@@ -1,32 +1,36 @@
+// Model provider helper tests.
+
 import { describe, expect, it } from 'vitest';
 
 import {
   MODEL_PROVIDERS_KEY,
   deleteModelProviderSecret,
   getModelProviderSecretKey,
-  migrateModelProviders,
-  readModelProviderSecret,
   resolveDefaultModelCredentials,
   saveModelProviders,
-  type ModelProvider,
 } from './model-providers';
 
+/** Memory store. */
 class MemoryStore {
   private readonly data = new Map<string, unknown>();
 
+  /** Deletes memory store. */
   async delete(key: string) {
     this.data.delete(key);
   }
 
+  /** Returns memory store. */
   async get<T>(key: string): Promise<T | null> {
     return (this.data.get(key) as T | undefined) ?? null;
   }
 
+  /** Sets memory store. */
   async set<T>(key: string, value: T) {
     this.data.set(key, value);
   }
 }
 
+/** Creates stores. */
 function createStores() {
   return {
     secretsStore: new MemoryStore(),
@@ -35,61 +39,6 @@ function createStores() {
 }
 
 describe('model provider storage', () => {
-  it('migrates legacy plaintext api keys into secrets and default state', async () => {
-    const stores = createStores();
-
-    await stores.settingsStore.set(MODEL_PROVIDERS_KEY, [
-      {
-        apiKey: 'sk-legacy-secret',
-        baseUrl: 'https://api.openai.com/v1',
-        enabled: true,
-        id: 'provider-1',
-        name: 'Legacy',
-      },
-    ]);
-
-    const providers = await migrateModelProviders(stores);
-
-    expect(providers).toEqual<ModelProvider[]>([
-      {
-        authType: 'api-key',
-        baseUrl: 'https://api.openai.com/v1',
-        id: 'provider-1',
-        isDefault: true,
-        name: 'Legacy',
-      },
-    ]);
-    expect(await readModelProviderSecret(stores.secretsStore, 'provider-1')).toBe('sk-legacy-secret');
-    expect(await stores.settingsStore.get(MODEL_PROVIDERS_KEY)).toEqual(providers);
-  });
-
-  it('does not auto-select a default when multiple legacy providers were enabled', async () => {
-    const stores = createStores();
-
-    await stores.settingsStore.set(MODEL_PROVIDERS_KEY, [
-      {
-        apiKey: 'first-secret',
-        baseUrl: 'https://first.com',
-        enabled: true,
-        id: 'provider-1',
-        name: 'First',
-      },
-      {
-        apiKey: 'second-secret',
-        baseUrl: 'https://second.com',
-        enabled: true,
-        id: 'provider-2',
-        name: 'Second',
-      },
-    ]);
-
-    const providers = await migrateModelProviders(stores);
-
-    expect(providers.map((provider) => provider.isDefault)).toEqual([false, false]);
-    expect(await readModelProviderSecret(stores.secretsStore, 'provider-1')).toBe('first-secret');
-    expect(await readModelProviderSecret(stores.secretsStore, 'provider-2')).toBe('second-secret');
-  });
-
   it('keeps only the first default provider when saving', async () => {
     const stores = createStores();
 

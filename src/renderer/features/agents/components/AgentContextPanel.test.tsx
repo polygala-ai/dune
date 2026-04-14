@@ -1,3 +1,5 @@
+// Agent context panel tests.
+
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,6 +8,7 @@ import { AgentContextPanel } from '@/renderer/features/agents/components/AgentCo
 import { createEmptyAgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
 
+/** Creates agent. */
 function createAgent(
   overrides: Partial<PresentedAgent> = {},
 ): PresentedAgent {

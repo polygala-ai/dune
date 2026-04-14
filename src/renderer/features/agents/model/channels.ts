@@ -1,3 +1,5 @@
+// Agent channel helpers.
+
 import type {
   AgentChannelBinding,
   AgentChannelId,
@@ -10,6 +12,7 @@ import type {
   TelegramSetupSession,
 } from '@/renderer/features/agents/types';
 
+/** Agent channel option shape. */
 export interface AgentChannelOption {
   description: string;
   id: AgentChannelId;
@@ -44,19 +47,23 @@ const channelCatalog: Record<AgentChannelId, AgentChannelOption> = {
   },
 };
 
+/** Built in channel option constant. */
 export const builtInChannelOption = channelCatalog['dune-chat'];
 
+/** Lists external channel options. */
 export const externalChannelOptions = [
   channelCatalog.telegram,
   channelCatalog.slack,
   channelCatalog.discord,
 ];
 
+/** Lists create agent channel options. */
 export const createAgentChannelOptions = [
   builtInChannelOption,
   ...externalChannelOptions,
 ];
 
+/** Returns channel badge label. */
 export function getChannelBadgeLabel(channelId: AgentChannelId) {
   if (channelId === builtInChannelOption.id) {
     return 'Default';
@@ -69,20 +76,24 @@ export function getChannelBadgeLabel(channelId: AgentChannelId) {
   return 'Soon';
 }
 
+/** Returns whether the channel ID is a channel selectable. */
 export function isChannelSelectable(channelId: AgentChannelId) {
   return channelId === 'dune-chat' || channelId === 'telegram';
 }
 
+/** Creates default external channels state. */
 export function createDefaultExternalChannelsState(): ExternalChannelsState {
   return {};
 }
 
+/** Clones external channels state. */
 export function cloneExternalChannelsState(
   state: ExternalChannelsState,
 ): ExternalChannelsState {
   return { ...state };
 }
 
+/** Creates default Telegram agent runtime state. */
 export function createDefaultTelegramAgentRuntimeState(
   overrides: Partial<TelegramAgentRuntimeState> = {},
 ): TelegramAgentRuntimeState {
@@ -98,6 +109,7 @@ export function createDefaultTelegramAgentRuntimeState(
   };
 }
 
+/** Clones Telegram agent runtime state. */
 export function cloneTelegramAgentRuntimeState(
   state: TelegramAgentRuntimeState | null | undefined,
 ): TelegramAgentRuntimeState | null {
@@ -111,6 +123,7 @@ export function cloneTelegramAgentRuntimeState(
   };
 }
 
+/** Clones Telegram setup session. */
 export function cloneTelegramSetupSession(
   session: TelegramSetupSession,
 ): TelegramSetupSession {
@@ -120,10 +133,12 @@ export function cloneTelegramSetupSession(
   };
 }
 
+/** Returns channel option. */
 export function getChannelOption(channelId: AgentChannelId): AgentChannelOption {
   return channelCatalog[channelId];
 }
 
+/** Formats channel status. */
 export function formatChannelStatus(status: AgentChannelStatus) {
   switch (status) {
     case 'connecting':
@@ -141,6 +156,7 @@ export function formatChannelStatus(status: AgentChannelStatus) {
   }
 }
 
+/** Maps Telegram channel status. */
 function mapTelegramChannelStatus(
   status: TelegramConnectionStatus,
 ): AgentChannelStatus {
@@ -159,6 +175,7 @@ function mapTelegramChannelStatus(
   }
 }
 
+/** Creates channel binding. */
 export function createChannelBinding(
   channelId: AgentChannelId,
   options: {

@@ -1,7 +1,10 @@
+// Global shortcuts hook.
+
 import { useEffect, useEffectEvent } from 'react';
 
 import type { AppRoute } from '@/renderer/app/store/types';
 
+/** Use global shortcuts options. */
 interface UseGlobalShortcutsOptions {
   isCommandOpen: boolean;
   isMac: boolean;
@@ -18,6 +21,7 @@ interface UseGlobalShortcutsOptions {
   usesOverlayContext: boolean;
 }
 
+/** Returns whether the target is an editable target. */
 function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -33,6 +37,7 @@ function isEditableTarget(target: EventTarget | null) {
   );
 }
 
+/** Global shortcuts hook. */
 export function useGlobalShortcuts({
   isCommandOpen,
   isMac,

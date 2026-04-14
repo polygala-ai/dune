@@ -1,3 +1,5 @@
+// Create agent dialog UI.
+
 import {
   type KeyboardEvent,
   type FormEvent,
@@ -48,6 +50,7 @@ import {
 } from '@/renderer/shared/ui/popover';
 import { Separator } from '@/renderer/shared/ui/separator';
 
+/** Create agent dialog props. */
 interface CreateAgentDialogProps {
   defaultProjectId: string | null;
   existingAgents: Agent[];
@@ -58,6 +61,7 @@ interface CreateAgentDialogProps {
   projects: WorkflowProject[];
 }
 
+/** Renders the create agent dialog UI. */
 export function CreateAgentDialog({
   defaultProjectId,
   existingAgents: _existingAgents,
@@ -127,6 +131,7 @@ export function CreateAgentDialog({
     actions[nextIndex]?.focus();
   };
 
+  /** Handles list key down channel. */
   const handleChannelListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'ArrowDown':
@@ -150,6 +155,7 @@ export function CreateAgentDialog({
     }
   };
 
+  /** Handles submit. */
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedValue = value.trim();

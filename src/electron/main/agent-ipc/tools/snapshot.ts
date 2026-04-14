@@ -1,3 +1,5 @@
+// Agent IPC snapshot tool handlers.
+
 import { createId } from '@/shared/id';
 import {
   createArtifactFolderName,
@@ -7,9 +9,12 @@ import type { AppStorage } from '@/electron/main/storage/app-storage';
 
 import { ToolHandlerError } from './types';
 
+/** Workflow item statuses constant. */
 export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'done'] as const;
+/** Workflow item status. */
 export type WorkflowItemStatus = (typeof workflowItemStatuses)[number];
 
+/** Workflow snapshot. */
 export interface WorkflowSnapshot {
   items: WorkflowItem[];
   projects: WorkflowProject[];
@@ -19,6 +24,7 @@ export interface WorkflowSnapshot {
   selectedProjectView: string;
 }
 
+/** Workflow item shape. */
 export interface WorkflowItem {
   artifactFolderName: string;
   brief: string;
@@ -35,6 +41,7 @@ export interface WorkflowItem {
   workflowEvents: WorkflowEvent[];
 }
 
+/** Workflow task shape. */
 export interface WorkflowTask {
   createdAt: number;
   id: string;
@@ -44,6 +51,7 @@ export interface WorkflowTask {
   updatedAt: number;
 }
 
+/** Workflow work product shape. */
 export interface WorkflowWorkProduct {
   body: string;
   createdAt: number;
@@ -51,6 +59,7 @@ export interface WorkflowWorkProduct {
   title: string;
 }
 
+/** Workflow event shape. */
 export interface WorkflowEvent {
   actor?: string;
   createdAt: number;
@@ -59,6 +68,7 @@ export interface WorkflowEvent {
   kind: string;
 }
 
+/** Workflow project shape. */
 export interface WorkflowProject {
   color: string;
   createdAt: number;
@@ -69,6 +79,7 @@ export interface WorkflowProject {
   updatedAt: number;
 }
 
+/** Creates empty workflow snapshot. */
 export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   return {
     items: [],
@@ -80,12 +91,14 @@ export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   };
 }
 
+/** Reads workflow snapshot. */
 export async function readWorkflowSnapshot(store: AppStorage): Promise<WorkflowSnapshot> {
   const snapshot = await store.get<WorkflowSnapshot>('snapshot');
 
   return snapshot ? cloneWorkflowSnapshot(snapshot) : createEmptyWorkflowSnapshot();
 }
 
+/** Writes workflow snapshot. */
 export async function writeWorkflowSnapshot(
   store: AppStorage,
   snapshot: WorkflowSnapshot,
@@ -96,6 +109,7 @@ export async function writeWorkflowSnapshot(
   onWorkflowChanged();
 }
 
+/** Clones workflow snapshot. */
 export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnapshot {
   return {
     items: snapshot.items.map((item) => ({
@@ -119,6 +133,7 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
   };
 }
 
+/** Normalizes workflow snapshot. */
 export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
   for (const project of snapshot.projects) {
     project.rootPath = normalizeProjectRootPath(project.rootPath);
@@ -164,10 +179,12 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
   }
 }
 
+/** Returns whether the value is a workflow item status. */
 export function isWorkflowItemStatus(value: string): value is WorkflowItemStatus {
   return workflowItemStatuses.includes(value as WorkflowItemStatus);
 }
 
+/** Compares items. */
 export function compareItems(left: WorkflowItem, right: WorkflowItem): number {
   if (left.sortOrder !== right.sortOrder) {
     return left.sortOrder - right.sortOrder;
@@ -176,6 +193,7 @@ export function compareItems(left: WorkflowItem, right: WorkflowItem): number {
   return right.updatedAt - left.updatedAt;
 }
 
+/** Reindexes project status group. */
 export function reindexProjectStatusGroup(
   items: WorkflowItem[],
   projectId: string,
@@ -193,6 +211,7 @@ export function reindexProjectStatusGroup(
     });
 }
 
+/** Creates workflow event. */
 export function createWorkflowEvent(
   kind: string,
   description: string,
@@ -213,6 +232,7 @@ export function createWorkflowEvent(
   return event;
 }
 
+/** Touches project. */
 export function touchProject(snapshot: WorkflowSnapshot, projectId: string, updatedAt: number): void {
   for (const project of snapshot.projects) {
     if (project.id === projectId) {
@@ -221,6 +241,7 @@ export function touchProject(snapshot: WorkflowSnapshot, projectId: string, upda
   }
 }
 
+/** Finds item. */
 export function findItem(snapshot: WorkflowSnapshot, itemId: string): WorkflowItem {
   const item = snapshot.items.find((candidate) => candidate.id === itemId) ?? null;
 

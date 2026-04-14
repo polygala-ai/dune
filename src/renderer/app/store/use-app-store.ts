@@ -1,3 +1,5 @@
+// Zustand store setup and desktop runtime synchronization.
+
 import { create } from 'zustand';
 
 import {
@@ -23,6 +25,7 @@ import type {
   AppStoreState,
 } from './types';
 
+/** Creates initial state. */
 function createInitialState(): AppStoreState {
   const agentState = createInitialAgentState(agentRuntime.getSnapshot());
 
@@ -34,6 +37,7 @@ function createInitialState(): AppStoreState {
   };
 }
 
+/** Shared app store hook. */
 export const useAppStore = create<AppStore>((set, get, store) => {
   const initialState = createInitialState();
 
@@ -78,6 +82,7 @@ agentRuntime.subscribe((snapshot) => {
   useAppStore.getState().setAgentsSnapshot(snapshot);
 });
 
+/** Resets app store. */
 export function resetAppStore() {
   agentRuntime.reset();
   useAppStore.setState(createInitialState());

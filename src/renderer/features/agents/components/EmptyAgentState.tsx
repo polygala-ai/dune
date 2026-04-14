@@ -1,13 +1,17 @@
+// Empty agent state UI.
+
 import { Bot, Plus } from 'lucide-react';
 
 import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Empty agent state props. */
 interface EmptyAgentStateProps {
   onCreateAgent: () => void;
   runtimeInfo: AgentRuntimeInfo;
 }
 
+/** Renders the empty agent state UI. */
 export function EmptyAgentState({
   onCreateAgent,
   runtimeInfo,

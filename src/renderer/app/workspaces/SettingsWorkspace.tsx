@@ -1,3 +1,5 @@
+// Settings workspace UI.
+
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { SettingsView } from '@/renderer/features/settings/components/SettingsView';
 
@@ -11,6 +13,7 @@ import type {
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
 
+/** Settings workspace props. */
 interface SettingsWorkspaceProps {
   agents: Agent[];
   externalChannels: ExternalChannelsState;
@@ -25,6 +28,7 @@ interface SettingsWorkspaceProps {
   themePreference: ThemePreference;
 }
 
+/** Renders the settings workspace UI. */
 export function SettingsWorkspace({
   agents,
   externalChannels,

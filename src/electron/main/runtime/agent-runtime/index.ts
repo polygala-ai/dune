@@ -1,3 +1,5 @@
+// AgentLite-backed desktop runtime orchestration.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,12 +54,10 @@ import {
   normalizeAgentAttachments,
 } from '../agent-message-attachments';
 import {
-  createAgentIpcDirectoryMetadata,
-  resolveAgentDuneDir,
-  resolveAgentIpcDir,
-  resolveAgentIpcMetadataPath,
-  resolveProjectDuneDir,
-} from '@/electron/main/agent-ipc/ipc-directory';
+  findAgentDuneDirs,
+  findProjectDuneDirs,
+  resolveAgentLiteRuntimeRoot,
+} from '@/electron/main/dune-paths';
 import { DuneAgent } from '../dune-agent';
 import { TelegramBridge } from '../telegram-bridge';
 import type { TelegramSecretsStore } from '../telegram-bridge';
@@ -78,10 +78,6 @@ import {
 } from './records';
 import {
   createIpcLayout,
-  findAgentDuneDirs,
-  findProjectDuneDirs,
-  resolveAgentLiteRuntimeRoot,
-  sanitizeRuntimePathSegment,
   seedAgentIpcSources,
 } from './paths';
 import {
@@ -106,7 +102,7 @@ import type {
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
 
-export { resolveAgentLiteRuntimeRoot } from './paths';
+export { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 export type {
   AgentRuntimeContract,
   AgentService,
@@ -114,11 +110,13 @@ export type {
   AgentServiceSnapshot,
 };
 
+/** Agent store contract. */
 export interface AgentStore {
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T): Promise<void>;
 }
 
+/** Telegram module shape. */
 type TelegramModule = typeof import('@boxlite-ai/agentlite/channels/telegram');
 
 // eslint-disable-next-line no-new-func
@@ -129,6 +127,7 @@ const importTelegramModule = globalThis.Function(
 
 export type { TelegramSecretsStore };
 
+/** Agent runtime options. */
 export interface AgentRuntimeOptions {
   agentStore: AgentStore;
   bundledAgentDir?: string;
@@ -157,6 +156,7 @@ import {
   seedArtifacts,
 } from '../artifacts';
 
+/** Implements agent runtime behavior. */
 export class AgentRuntime implements AgentRuntimeContract {
   private readonly listeners = new Set<AgentServiceListener>();
 
@@ -205,8 +205,6 @@ export class AgentRuntime implements AgentRuntimeContract {
   private snapshot: AgentServiceSnapshot;
 
   private shutdownPromise: Promise<void> | null = null;
-
-  private blockedMessage: string | null = null;
 
   readonly service: AgentService;
 
@@ -278,7 +276,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     };
     this.service = {
       cancelTelegramSetupSession: async (sessionId) => {
-        this.assertWritableRuntime();
         await this.telegram.cancelSetupSession(sessionId);
       },
       createAgent: async (input) => this.createAgent(input),
@@ -295,22 +292,21 @@ export class AgentRuntime implements AgentRuntimeContract {
       sendMessage: async (agentId, text) => this.sendMessage(agentId, text),
       signalReadyAssignmentInbox: async (agentId, signal) =>
         this.signalReadyAssignmentInbox(agentId, signal),
-      startTelegramSetupSession: async (input) => {
-        this.assertWritableRuntime();
-        return this.telegram.startSetupSession(input);
-      },
+      startTelegramSetupSession: async (input) =>
+        this.telegram.startSetupSession(input),
       subscribe: (listener) => this.subscribe(listener),
       updateAgentChannel: async (input) => {
-        this.assertWritableRuntime();
         await this.updateAgentChannel(input);
       },
     };
   }
 
+  /** Returns snapshot. */
   getSnapshot() {
     return cloneSnapshot(this.snapshot);
   }
 
+  /** Subscribes to agent updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
     return () => {
@@ -318,16 +314,10 @@ export class AgentRuntime implements AgentRuntimeContract {
     };
   }
 
+  /** Starts agent. */
   async start() {
     seedArtifacts(this.homeDir, this.bundledAgentDir);
     await this.loadPersistedState();
-
-    const persistedAgentValidationError = this.validatePersistedAgents();
-
-    if (persistedAgentValidationError) {
-      this.blockRuntime(persistedAgentValidationError);
-      return;
-    }
 
     const credentials = await this.resolveModelCredentials();
     this.startupModelCredentials = { ...credentials };
@@ -362,6 +352,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     await this.reloadExternalChannels();
   }
 
+  /** Shuts down agent. */
   shutdown(): Promise<void> {
     if (this.shutdownPromise) {
       return this.shutdownPromise;
@@ -381,10 +372,12 @@ export class AgentRuntime implements AgentRuntimeContract {
     return this.shutdownPromise;
   }
 
+  /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.telegram.refreshRuntimeState({ forceReconnect: true });
   }
 
+  /** Resets agent. */
   reset() {
     this.messageStream.clear();
     this.readyInbox.clear();
@@ -397,8 +390,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       externalChannels: createDefaultExternalChannelsState(),
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
-        message: this.blockedMessage ?? 'AgentLite runtime state was cleared in-process.',
-        status: this.blockedMessage ? 'error' : this.lifecycle.isEngineReady() ? 'ready' : 'starting',
+        message: 'AgentLite runtime state was cleared in-process.',
+        status: this.lifecycle.isEngineReady() ? 'ready' : 'starting',
       }),
       selectedAgentId: null,
       telegramSetupSessions: [],
@@ -413,8 +406,6 @@ export class AgentRuntime implements AgentRuntimeContract {
   // -------------------------------------------------------------------------
 
   private async createAgent(input: CreateAgentInput) {
-    this.assertWritableRuntime();
-
     const trimmedName = input.name.trim();
     const projectId = input.projectId?.trim() ?? '';
     const projectName = input.projectName?.trim() || null;
@@ -603,8 +594,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     projectName: string,
     projectRootPath?: string | null,
   ) {
-    this.assertWritableRuntime();
-
     const trimmedProjectId = projectId.trim();
     const trimmedProjectName = projectName.trim();
     const hasProjectRootPathOverride = projectRootPath !== undefined;
@@ -812,8 +801,6 @@ export class AgentRuntime implements AgentRuntimeContract {
   // -------------------------------------------------------------------------
 
   private async sendMessage(agentId: string, text: string) {
-    this.assertWritableRuntime();
-
     const trimmedText = text.trim();
 
     if (!trimmedText || this.messageStream.has(agentId)) {
@@ -1080,6 +1067,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
+  /** Pushes coding engine event. */
   pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
     this.snapshot = {
       ...this.snapshot,
@@ -1246,40 +1234,6 @@ export class AgentRuntime implements AgentRuntimeContract {
   // -------------------------------------------------------------------------
   // Runtime lifecycle
   // -------------------------------------------------------------------------
-
-  private assertWritableRuntime() {
-    if (this.blockedMessage) {
-      throw new Error(this.blockedMessage);
-    }
-  }
-
-  private blockRuntime(message: string) {
-    this.blockedMessage = message;
-    this.snapshot = {
-      ...this.snapshot,
-      runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
-        message,
-        status: 'error',
-      }),
-    };
-    this.emit();
-  }
-
-  private validatePersistedAgents() {
-    const unscopedAgents = [...this.records.values()]
-      .filter((record) => record.agent.projectId === null)
-      .map((record) => record.agent.id);
-
-    if (unscopedAgents.length > 0) {
-      return [
-        'Legacy Dune agent state contains agents without project ownership.',
-        `Affected agents: ${unscopedAgents.join(', ')}.`,
-        'Automatic migration is disabled. Clear or fix the persisted Dune agent state before restarting.',
-      ].join(' ');
-    }
-
-    return null;
-  }
 
   private async ensureAgentLiteReady(): Promise<AgentLite> {
     const existing = this.lifecycle.getEngine();
