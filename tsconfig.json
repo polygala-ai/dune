@@ -42,6 +42,6 @@
     "tests"
   ],
   "exclude": [
-    "agent/dune-mcp-server"
+    "agent/mcp"
   ]
 }
