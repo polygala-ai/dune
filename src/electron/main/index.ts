@@ -7,9 +7,18 @@ import {
   shell,
   session,
 } from 'electron';
+import fixPath from 'fix-path';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+
+// Packaged macOS .app bundles launched from Finder/Dock inherit the login
+// PATH, which does not include user-local bins like ~/.local/bin or
+// ~/.nvm/.../bin where `claude` / `codex` typically live. Rescue PATH from
+// the user's shell before any binary detection runs.
+if (app.isPackaged) {
+  fixPath();
+}
 
 import { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 import { createToolHandler } from '@/electron/main/agent-ipc/tools-handler';
@@ -388,8 +397,8 @@ void app.whenReady().then(async () => {
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
         },
-        onIpcDirCreated: (agentId, agentName, projectId, ipcHostPath) => {
-          agentIpcManager.addConnection(agentId, agentName, projectId, ipcHostPath);
+        onIpcDirCreated: (agentId, agentName, projectId, ipcHostPath, ipcContainerPath) => {
+          agentIpcManager.addConnection(agentId, agentName, projectId, ipcHostPath, ipcContainerPath);
         },
         resolveProjectName: async (projectId) => {
           const snapshot = await stores.workflow.get<{

@@ -21,6 +21,8 @@ interface ManagedAgent {
   agentId: string;
   agentName: string;
   projectId: string;
+  ipcHostDir: string;
+  ipcContainerDir: string;
   connection: AgentIpcConnection;
 }
 
@@ -42,12 +44,26 @@ export class AgentIpcManager {
     }
   }
 
+  /**
+   * Container-side path to the scanned agent's IPC directory. Scans only walk
+   * non-project-main agent dirs (`<projsDir>/<proj>/agents/<agent>/ipc/`), where
+   * `duneMountRoot === agentDir` and the IPC subdir is always `ipc`, so the
+   * container path is always `/workspace/extra/dune/ipc/`.
+   */
+  private static readonly SCANNED_IPC_CONTAINER_PATH = '/workspace/extra/dune/ipc/';
+
   start(): void {
     this.scanForAgents();
   }
 
   /** Register a new IPC connection for a dynamically created agent. */
-  addConnection(agentId: string, agentName: string, projectId: string, ipcHostPath: string): void {
+  addConnection(
+    agentId: string,
+    agentName: string,
+    projectId: string,
+    ipcHostPath: string,
+    ipcContainerPath: string,
+  ): void {
     const existing = this.findManagedAgent(projectId, agentName);
 
     if (existing) {
@@ -59,13 +75,29 @@ export class AgentIpcManager {
       return;
     }
 
-    const connection = this.createConnection(agentId, agentName, projectId, ipcHostPath);
+    // Wipe stale coding-engine logs from prior sessions. One call at startup,
+    // no retention timer or LRU.
+    try {
+      fs.rmSync(path.join(ipcHostPath, 'coding-engines'), { force: true, recursive: true });
+    } catch {
+      // Ignore — directory may not exist yet.
+    }
+
+    const connection = this.createConnection(
+      agentId,
+      agentName,
+      projectId,
+      ipcHostPath,
+      ipcContainerPath,
+    );
     connection.scan();
 
     this.managedAgents.set(agentId, {
       agentId,
       agentName,
       projectId,
+      ipcHostDir: ipcHostPath,
+      ipcContainerDir: ipcContainerPath,
       connection,
     });
   }
@@ -148,12 +180,15 @@ export class AgentIpcManager {
           identity.agentName,
           identity.projectId,
           ipcDir,
+          AgentIpcManager.SCANNED_IPC_CONTAINER_PATH,
         );
 
         this.managedAgents.set(agentId, {
           agentId,
           agentName: identity.agentName,
           projectId: identity.projectId,
+          ipcHostDir: ipcDir,
+          ipcContainerDir: AgentIpcManager.SCANNED_IPC_CONTAINER_PATH,
           connection,
         });
       }
@@ -171,6 +206,7 @@ export class AgentIpcManager {
     agentName: string,
     projectId: string,
     ipcHostPath: string,
+    ipcContainerPath: string,
   ): AgentIpcConnection {
     const agentSubDir = path.join(ipcHostPath, 'agent');
     const hostSubDir = path.join(ipcHostPath, 'host');
@@ -186,6 +222,8 @@ export class AgentIpcManager {
           agentId,
           agentName,
           projectId,
+          ipcHostDir: ipcHostPath,
+          ipcContainerDir: ipcContainerPath,
         }),
       );
     }
@@ -210,6 +248,8 @@ function createToolHandlerContext(managed: ManagedAgent): ToolHandlerContext {
     agentId: managed.agentId,
     agentName: managed.agentName,
     projectId: managed.projectId,
+    ipcHostDir: managed.ipcHostDir,
+    ipcContainerDir: managed.ipcContainerDir,
   };
 }
 

@@ -34,6 +34,8 @@ export interface ToolHandlerContext {
   agentId: string;
   agentName: string;
   projectId: string;
+  ipcHostDir: string;
+  ipcContainerDir: string;
 }
 
 export type ToolMessageHandler = (

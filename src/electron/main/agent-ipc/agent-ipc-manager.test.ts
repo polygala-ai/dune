@@ -125,7 +125,7 @@ describe('AgentIpcManager', () => {
     expect(manager.toSnapshotAgents()).toHaveLength(0);
 
     const ipcDir = setupIpcDir(homeDir, 'project-2', 'dynamic-agent');
-    manager.addConnection('ipc:project-2:dynamic-agent', 'dynamic-agent', 'project-2', ipcDir);
+    manager.addConnection('ipc:project-2:dynamic-agent', 'dynamic-agent', 'project-2', ipcDir, '/workspace/extra/dune/ipc/');
 
     expect(manager.toSnapshotAgents()).toHaveLength(1);
     expect(manager.toSnapshotAgents()[0]!.id).toBe('ipc:project-2:dynamic-agent');
@@ -150,7 +150,7 @@ describe('AgentIpcManager', () => {
       'dune:agent:dynamic-agent',
       'dynamic-agent',
     );
-    manager.addConnection('dune:agent:runtime', 'dynamic-agent', 'project-2', sanitizedIpcDir);
+    manager.addConnection('dune:agent:runtime', 'dynamic-agent', 'project-2', sanitizedIpcDir, '/workspace/extra/dune/ipc/');
 
     expect(manager.toSnapshotAgents()).toEqual([
       expect.objectContaining({
@@ -168,7 +168,7 @@ describe('AgentIpcManager', () => {
     const ipcDir = setupIpcDir(homeDir, 'project-3', 'new-agent');
     manager = new AgentIpcManager(homeDir);
     manager.start();
-    manager.addConnection('ipc:project-3:new-agent', 'new-agent', 'project-3', ipcDir);
+    manager.addConnection('ipc:project-3:new-agent', 'new-agent', 'project-3', ipcDir, '/workspace/extra/dune/ipc/');
 
     expect(manager.toSnapshotAgents()).toHaveLength(1);
   });
@@ -199,11 +199,14 @@ describe('AgentIpcManager', () => {
     manager.setToolMessageHandler(toolHandlerFactory);
     manager.start();
 
-    expect(toolHandlerFactory).toHaveBeenCalledWith({
-      agentId: 'ipc:project-1:board-agent',
-      agentName: 'board-agent',
-      projectId: 'project-1',
-    });
+    expect(toolHandlerFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'ipc:project-1:board-agent',
+        agentName: 'board-agent',
+        projectId: 'project-1',
+        ipcContainerDir: '/workspace/extra/dune/ipc/',
+      }),
+    );
 
     // Write a tool message directly.
     fs.writeFileSync(
