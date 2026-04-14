@@ -91,6 +91,7 @@ import {
   type AgentServiceSnapshot,
 } from './snapshot';
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
+import { ReadyInbox } from './ready-inbox';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
@@ -187,9 +188,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly pendingAssistantMessages = new Map<string, PendingAssistantMessage>();
 
-  private readonly pendingReadyInboxSignals = new Map<string, ReadyAssignmentsInboxSignal>();
-
-  private readonly deliveredReadyInboxGenerations = new Map<string, number>();
+  private readonly readyInbox = new ReadyInbox();
 
   private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
 
@@ -422,8 +421,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   reset() {
     this.clearPendingAssistantMessages();
-    this.pendingReadyInboxSignals.clear();
-    this.deliveredReadyInboxGenerations.clear();
+    this.readyInbox.clear();
     this.telegram.reset();
     this.persistedAgents.clear();
     this.agentRuntimes.clear();
@@ -766,8 +764,7 @@ export class AgentLiteHost implements AgentRuntime {
     }
 
     this.clearPendingAssistantMessage(agentId);
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.delete(agentId);
+    this.readyInbox.forget(agentId);
     const deletedRecord = this.persistedAgents.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
     this.persistedAgents.delete(agentId);
@@ -882,7 +879,7 @@ export class AgentLiteHost implements AgentRuntime {
     const itemCount = Math.max(0, signal.itemCount);
 
     if (itemCount === 0) {
-      this.pendingReadyInboxSignals.delete(agentId);
+      this.readyInbox.forget(agentId);
       return;
     }
 
@@ -890,8 +887,8 @@ export class AgentLiteHost implements AgentRuntime {
       generation: signal.generation,
       itemCount,
     } satisfies ReadyAssignmentsInboxSignal;
-    const deliveredGeneration = this.deliveredReadyInboxGenerations.get(agentId) ?? 0;
-    const pendingGeneration = this.pendingReadyInboxSignals.get(agentId)?.generation ?? 0;
+    const deliveredGeneration = this.readyInbox.getDeliveredGeneration(agentId);
+    const pendingGeneration = this.readyInbox.getPending(agentId)?.generation ?? 0;
 
     if (
       normalizedSignal.generation <= deliveredGeneration
@@ -907,7 +904,7 @@ export class AgentLiteHost implements AgentRuntime {
     }
 
     if (this.pendingAssistantMessages.has(agentId)) {
-      this.pendingReadyInboxSignals.set(agentId, normalizedSignal);
+      this.readyInbox.queue(agentId, normalizedSignal);
       return;
     }
 
@@ -927,8 +924,7 @@ export class AgentLiteHost implements AgentRuntime {
     const duneAgent = this.agentRuntimes.get(agentId)
       ?? await this.ensureAgentRuntime(persistedRecord);
 
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.set(agentId, signal.generation);
+    this.readyInbox.markDelivered(agentId, signal.generation);
 
     await duneAgent.pushControlMessage(
       toAgentChatJid(agentId),
@@ -1206,7 +1202,7 @@ export class AgentLiteHost implements AgentRuntime {
 
     // Outbound Telegram delivery is handled by DuneChannel's external driver.
 
-    const pendingReadyInboxSignal = this.pendingReadyInboxSignals.get(agentId) ?? null;
+    const pendingReadyInboxSignal = this.readyInbox.getPending(agentId);
 
     if (pendingReadyInboxSignal) {
       void this.dispatchReadyAssignmentInboxSignal(agentId, pendingReadyInboxSignal);
@@ -1675,8 +1671,7 @@ export class AgentLiteHost implements AgentRuntime {
   private rollbackOptimisticAgent(agentId: string) {
     this.persistedAgents.delete(agentId);
     this.agentRuntimes.delete(agentId);
-    this.pendingReadyInboxSignals.delete(agentId);
-    this.deliveredReadyInboxGenerations.delete(agentId);
+    this.readyInbox.forget(agentId);
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
     const nextSelectedAgentId = this.snapshot.selectedAgentId === agentId
