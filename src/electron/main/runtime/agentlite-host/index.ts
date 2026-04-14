@@ -94,6 +94,7 @@ import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from '
 import { ReadyInbox } from './ready-inbox';
 import { MessageStream, type PendingAssistantMessage } from './message-stream';
 import { Lifecycle } from './lifecycle';
+import { AgentRecords } from './agent-records';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
@@ -186,7 +187,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly readyInbox = new ReadyInbox();
 
-  private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
+  private readonly records = new AgentRecords();
 
   private readonly lifecycle = new Lifecycle();
 
@@ -360,7 +361,7 @@ export class AgentLiteHost implements AgentRuntime {
     const codingEngines = await detectCodingEngines();
     this.snapshot = { ...this.snapshot, codingEngines };
 
-    for (const record of this.persistedAgents.values()) {
+    for (const record of this.records.values()) {
       try {
         await this.ensureAgentRuntime(record);
       } catch (error) {
@@ -409,7 +410,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.messageStream.clear();
     this.readyInbox.clear();
     this.telegram.reset();
-    this.persistedAgents.clear();
+    this.records.clear();
     this.lifecycle.clearRuntimes();
     this.snapshot = {
       agents: [],
@@ -495,7 +496,7 @@ export class AgentLiteHost implements AgentRuntime {
       projectName,
       projectRootPath,
     } satisfies PersistedAgentRecord;
-    this.persistedAgents.set(agentId, persistedRecord);
+    this.records.set(persistedRecord);
     this.snapshot = {
       ...this.snapshot,
       agents: [nextAgent, ...this.snapshot.agents],
@@ -527,7 +528,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async updateAgentChannel(input: UpdateAgentChannelInput) {
     const agentId = input.agentId.trim();
-    const record = this.persistedAgents.get(agentId);
+    const record = this.records.get(agentId);
 
     if (!record) {
       throw new Error(`Agent "${input.agentId}" was not found.`);
@@ -644,7 +645,7 @@ export class AgentLiteHost implements AgentRuntime {
     const expectedName = createProjectMainAgentName(trimmedProjectId);
 
     if (existingAgent) {
-      const persistedRecord = this.persistedAgents.get(existingAgent.id);
+      const persistedRecord = this.records.get(existingAgent.id);
       const shouldRefreshProjectRuntimes = Boolean(
         persistedRecord && (
           persistedRecord.projectName !== trimmedProjectName ||
@@ -724,7 +725,7 @@ export class AgentLiteHost implements AgentRuntime {
       projectRootPath: normalizedProjectRootPath,
     } satisfies PersistedAgentRecord;
 
-    this.persistedAgents.set(agentId, persistedRecord);
+    this.records.set(persistedRecord);
     this.snapshot = {
       ...this.snapshot,
       agents: [nextAgent, ...this.snapshot.agents],
@@ -744,15 +745,15 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private async deleteAgent(agentId: string) {
-    if (!this.persistedAgents.has(agentId)) {
+    if (!this.records.has(agentId)) {
       return;
     }
 
     this.messageStream.forget(agentId);
     this.readyInbox.forget(agentId);
-    const deletedRecord = this.persistedAgents.get(agentId)!;
+    const deletedRecord = this.records.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
-    this.persistedAgents.delete(agentId);
+    this.records.delete(agentId);
 
     const duneAgent = this.lifecycle.getRuntime(agentId);
 
@@ -797,7 +798,7 @@ export class AgentLiteHost implements AgentRuntime {
         fs.rmSync(agentDir, { force: true, recursive: true });
       }
 
-      const hasRemainingProjectAgents = [...this.persistedAgents.values()]
+      const hasRemainingProjectAgents = [...this.records.values()]
         .some((record) => record.agent.projectId === agent.projectId);
 
       if (hasRemainingProjectAgents) {
@@ -884,7 +885,7 @@ export class AgentLiteHost implements AgentRuntime {
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
 
-    if (!agent?.channel.canCompose || !this.persistedAgents.has(agentId)) {
+    if (!agent?.channel.canCompose || !this.records.has(agentId)) {
       return;
     }
 
@@ -900,7 +901,7 @@ export class AgentLiteHost implements AgentRuntime {
     agentId: string,
     signal: ReadyAssignmentsInboxSignal,
   ) {
-    const persistedRecord = this.persistedAgents.get(agentId);
+    const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
       return;
@@ -929,7 +930,7 @@ export class AgentLiteHost implements AgentRuntime {
       transcriptText: string;
     },
   ) {
-    const persistedRecord = this.persistedAgents.get(agentId);
+    const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
       throw new Error(`Agent runtime "${agentId}" is unavailable.`);
@@ -1237,7 +1238,7 @@ export class AgentLiteHost implements AgentRuntime {
         continue;
       }
 
-      const record = this.persistedAgents.get(patch.agentId);
+      const record = this.records.get(patch.agentId);
 
       if (!record) {
         continue;
@@ -1286,7 +1287,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private validatePersistedAgents() {
-    const unscopedAgents = [...this.persistedAgents.values()]
+    const unscopedAgents = [...this.records.values()]
       .filter((record) => record.agent.projectId === null)
       .map((record) => record.agent.id);
 
@@ -1597,7 +1598,7 @@ export class AgentLiteHost implements AgentRuntime {
         this.persistState();
       }
 
-      if (!this.persistedAgents.has(agentId)) {
+      if (!this.records.has(agentId)) {
         await this.cleanupFailedAgentRuntime(record);
         throw new Error(`Agent runtime "${agentId}" was removed before startup completed.`);
       }
@@ -1616,7 +1617,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private async refreshProjectAgentRuntimes(projectId: string) {
-    const projectAgentRecords = [...this.persistedAgents.values()]
+    const projectAgentRecords = [...this.records.values()]
       .filter((record) => record.agent.projectId === projectId);
 
     for (const record of projectAgentRecords) {
@@ -1643,7 +1644,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private rollbackOptimisticAgent(agentId: string) {
-    this.persistedAgents.delete(agentId);
+    this.records.delete(agentId);
     this.lifecycle.deleteRuntime(agentId);
     this.readyInbox.forget(agentId);
 
@@ -1662,7 +1663,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private resolveAgentIdByChatJid(chatJid: string): string | null {
-    for (const record of this.persistedAgents.values()) {
+    for (const record of this.records.values()) {
       if (toAgentChatJid(record.agent.id) === chatJid) {
         return record.agent.id;
       }
@@ -1705,7 +1706,7 @@ export class AgentLiteHost implements AgentRuntime {
     const projectNameCache = new Map<string, string | null>();
     let didPrune = false;
 
-    for (const [agentId, record] of [...this.persistedAgents.entries()]) {
+    for (const [agentId, record] of [...this.records.entries()]) {
       const projectId = record.agent.projectId;
 
       if (!projectId) {
@@ -1725,7 +1726,7 @@ export class AgentLiteHost implements AgentRuntime {
         continue;
       }
 
-      this.persistedAgents.delete(agentId);
+      this.records.delete(agentId);
       this.cleanupDeletedAgentPaths(record.agent);
       this.cleanupPersistedAgentRuntimeState(record);
       didPrune = true;
@@ -1743,15 +1744,15 @@ export class AgentLiteHost implements AgentRuntime {
       const agents = (await this.agentStore.get<PersistedAgentRecord[]>('agents')) ?? [];
       const selectedAgentId = await this.agentStore.get<string | null>('selectedAgentId');
 
-      this.persistedAgents.clear();
+      this.records.clear();
 
       for (const record of agents.map((item) => normalizePersistedAgentRecord(item, this.runtimeRoot))) {
-        this.persistedAgents.set(record.agent.id, record);
+        this.records.set(record);
       }
 
       const didPruneOrphans = await this.pruneOrphanedPersistedAgents();
 
-      const snapshotAgents = [...this.persistedAgents.values()].map((record) => record.agent);
+      const snapshotAgents = [...this.records.values()].map((record) => record.agent);
       const hasSelectedAgent = selectedAgentId
         ? snapshotAgents.some((agent) => agent.id === selectedAgentId)
         : false;
@@ -1780,7 +1781,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private persistState() {
     for (const agent of this.snapshot.agents) {
-      const record = this.persistedAgents.get(agent.id);
+      const record = this.records.get(agent.id);
 
       if (record) {
         record.agent = {
@@ -1801,7 +1802,7 @@ export class AgentLiteHost implements AgentRuntime {
       }
     }
 
-    void this.agentStore.set('agents', [...this.persistedAgents.values()]);
+    void this.agentStore.set('agents', [...this.records.values()]);
     void this.agentStore.set('selectedAgentId', this.snapshot.selectedAgentId);
   }
 
