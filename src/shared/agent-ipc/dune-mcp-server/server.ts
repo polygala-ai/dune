@@ -419,7 +419,7 @@ server.tool(
 if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true') {
   server.tool(
     'coding_engine_claude_code',
-    'Start a coding task with Claude Code (Anthropic). Returns a jobId immediately. Use coding_engine_poll to check progress and get results. Claude Code can read files, write files, run shell commands, and use other tools autonomously. To resume a previous session, pass args: ["--resume", "<session_id>"] with or without a prompt.',
+    'Start a coding task with Claude Code (Anthropic). Returns { jobId, status, logPath, errPath } immediately — logPath is a file the host streams stdout into. Use coding_engine_poll to check status; read logPath with Read/Grep only when you need details. To resume a previous session, pass args: ["--resume", "<session_id>"] with or without a prompt.',
     {
       prompt: z.string().describe('What to ask Claude Code to do (be specific about files and goals)'),
       args: z.array(z.string()).optional().describe('Additional CLI arguments (e.g. ["--model", "sonnet"], ["--resume", "<session_id>"])'),
@@ -435,7 +435,7 @@ if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true') {
 if (process.env.DUNE_CODEX_AVAILABLE === 'true') {
   server.tool(
     'coding_engine_codex',
-    'Start a coding task with Codex (OpenAI). Returns a jobId immediately. Use coding_engine_poll to check progress and get results. Codex runs in a sandbox with full-auto approval.',
+    'Start a coding task with Codex (OpenAI). Returns { jobId, status, logPath, errPath } immediately. Codex runs in a sandbox with full-auto approval. Use coding_engine_poll to check status; read logPath with Read/Grep only when you need details.',
     {
       prompt: z.string().describe('What to ask Codex to do (be specific about files and goals)'),
       args: z.array(z.string()).optional().describe('Additional CLI arguments'),
@@ -452,7 +452,7 @@ if (process.env.DUNE_CODEX_AVAILABLE === 'true') {
 if (process.env.DUNE_CLAUDE_CODE_AVAILABLE === 'true' || process.env.DUNE_CODEX_AVAILABLE === 'true') {
   server.tool(
     'coding_engine_poll',
-    'Poll a running coding engine job. Returns status (running/completed/error), steps taken, raw output (stream-json messages), and the result when complete. The output field contains the raw CLI output so you can see exactly what the engine did and resume sessions if needed. Call periodically after starting a job — you are free to do other work between polls.',
+    'Poll a running coding engine job. Returns { status, logPath, errPath, stepCount, result?, error? }. The response is intentionally small — no full log is returned. If you need details, use Read or Grep on logPath. On status:"completed" the short `result` summary is usually enough; on "error" check the `error` field and optionally grep errPath. Call periodically while doing other work.',
     { jobId: z.string().describe('The jobId returned by coding_engine_claude_code or coding_engine_codex') },
     async (args) => {
       try { return mcpResult(await callTool('coding_engine.poll', args)); }

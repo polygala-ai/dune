@@ -273,6 +273,8 @@ function createHandlerDependencies() {
     agentId: 'agent-ctx',
     agentName: 'Worker',
     projectId: 'proj-1',
+    ipcHostDir: '/tmp/dune-test-ipc',
+    ipcContainerDir: '/workspace/extra/dune/ipc/',
   });
   const replyFn = vi.fn();
 
@@ -517,6 +519,8 @@ describe('tools-handler', () => {
       agentId: 'agent-other',
       agentName: 'Other Worker',
       projectId: 'proj-1',
+      ipcHostDir: '/tmp/dune-test-ipc-other',
+      ipcContainerDir: '/workspace/extra/dune/ipc/',
     });
     const replyFn = vi.fn();
 
@@ -647,6 +651,8 @@ describe('tools-handler', () => {
       agentId: 'agent-ctx',
       agentName: 'Worker',
       projectId: 'proj-1',
+      ipcHostDir: '/tmp/dune-test-ipc',
+      ipcContainerDir: '/workspace/extra/dune/ipc/',
     });
     const replyFn = vi.fn();
 
@@ -788,6 +794,8 @@ describe('tools-handler', () => {
       agentId: 'agent-ctx',
       agentName: 'Worker',
       projectId: 'proj-1',
+      ipcHostDir: '/tmp/dune-test-ipc',
+      ipcContainerDir: '/workspace/extra/dune/ipc/',
     });
     const replyFn = vi.fn();
 
@@ -911,6 +919,8 @@ describe('tools-handler', () => {
       agentId: 'agent-ctx',
       agentName: 'Worker',
       projectId: 'proj-1',
+      ipcHostDir: '/tmp/dune-test-ipc',
+      ipcContainerDir: '/workspace/extra/dune/ipc/',
     });
     const replyFn = vi.fn();
 

@@ -24,17 +24,22 @@ You have Dune workflow tools available as MCP tools (prefixed `mcp__dune__`). Ke
 
 ### Coding engines (if available)
 
-Coding engines use an **async job pattern** — they return immediately with a `jobId`. Poll for results while doing other work.
+Coding engines use an **async job pattern** with a log file on disk — start returns a `jobId` + `logPath` immediately, and poll returns a tiny status payload. Read the log file yourself only when you actually need details.
 
-- `mcp__dune__coding_engine_claude_code` — start a task with Claude Code. Returns `{ jobId, status: "running" }`.
+- `mcp__dune__coding_engine_claude_code` — start a task with Claude Code. Returns `{ jobId, status: "running", logPath, errPath }`.
   - `prompt` (required): be specific — file paths, what to change, why.
   - `args` (optional): extra CLI args, e.g. `["--model", "sonnet"]`.
 - `mcp__dune__coding_engine_codex` — start a task with Codex. Same interface.
-- `mcp__dune__coding_engine_poll` — check job progress.
-  - `jobId` (required): the ID from the start call.
-  - Returns `{ status, engineId, steps, result?, error? }`.
+- `mcp__dune__coding_engine_poll` — check job status. Returns `{ status, logPath, errPath, stepCount, result?, error? }`. No raw log is returned — use `Read`/`Grep` on `logPath` if you need details.
 
-**Workflow:** start engine → do other work → poll → if `"running"` keep working and poll again → if `"completed"` read `result`.
+**Workflow:**
+1. Start the engine — note the `logPath`.
+2. Do other work.
+3. Poll periodically.
+   - `status: "running"` → nothing new to read. Poll again later.
+   - `status: "completed"` → the short `result` string is usually enough. If you need more, `Read(logPath, offset=-50)` or `Grep(pattern, logPath)`.
+   - `status: "error"` → inspect `error`; optionally `Grep("error|panic|failed", errPath)` for context.
+4. **Do not read the full log by default.** The log can be large. Prefer `Grep` for targeted searches and `Read` with `offset`/`limit` for tail slices. Only read everything when you truly need it.
 
 See the `/dune` skill for the full tool reference.
 

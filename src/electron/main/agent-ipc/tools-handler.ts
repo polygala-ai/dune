@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
@@ -812,7 +814,7 @@ const registeredTools: RegisteredTool[] = [
   },
   {
     definition: {
-      description: 'Start a coding task with Claude Code (Anthropic). Returns a jobId immediately — use coding_engine.poll to check progress. Claude Code can read files, write files, run shell commands, and use other tools autonomously. To resume a previous session, pass args: ["--resume", "<session_id>"].',
+      description: 'Start a coding task with Claude Code (Anthropic). Returns { jobId, status, logPath, errPath } immediately — logPath points at a file this process streams stdout into. Use coding_engine.poll to check status; read logPath with Read/Grep only when you need details. To resume a previous session, pass args: ["--resume", "<session_id>"].',
       inputSchema: objectSchema(
         {
           prompt: { ...stringSchema, description: 'What to ask Claude Code to do' },
@@ -832,7 +834,7 @@ const registeredTools: RegisteredTool[] = [
   },
   {
     definition: {
-      description: 'Start a coding task with Codex (OpenAI). Returns a jobId immediately — use coding_engine.poll to check progress. Codex runs in a sandbox with full-auto approval.',
+      description: 'Start a coding task with Codex (OpenAI). Returns { jobId, status, logPath, errPath } immediately. Codex runs in a sandbox with full-auto approval. Use coding_engine.poll to check status; read logPath with Read/Grep only when you need details.',
       inputSchema: objectSchema(
         {
           prompt: { ...stringSchema, description: 'What to ask Codex to do' },
@@ -852,7 +854,7 @@ const registeredTools: RegisteredTool[] = [
   },
   {
     definition: {
-      description: 'Poll a running coding engine job. Returns current status, steps taken so far, and the result when complete. Call this periodically after starting a coding engine job.',
+      description: 'Poll a running coding engine job. Returns { status, logPath, errPath, stepCount, result?, error? }. The response is intentionally small — no full log is returned. If you need details, use Read or Grep on logPath. On status:"completed" the short `result` summary is usually enough; on "error" check the `error` field and optionally grep errPath. Call this periodically while doing other work.',
       inputSchema: objectSchema(
         { jobId: { ...stringSchema, description: 'The jobId returned by coding_engine.claude_code or coding_engine.codex' } },
         ['jobId'],
@@ -879,12 +881,16 @@ interface CodingEngineJob {
   jobId: string;
   engineId: CodingEngineId;
   status: 'running' | 'completed' | 'error';
-  output: string;
   steps: string[];
+  logPathHost: string;
+  logPathContainer: string;
+  errPathContainer: string;
   result?: string;
   error?: string;
   startedAt: number;
 }
+
+const LOG_TAIL_READ_BYTES = 64 * 1024;
 
 /** Global registry of running/completed coding engine jobs. */
 const engineJobs = new Map<string, CodingEngineJob>();
@@ -978,11 +984,33 @@ function parseStreamedSteps(
   return null;
 }
 
+function readLogTail(logPathHost: string, maxBytes: number): string {
+  try {
+    const stat = fs.statSync(logPathHost);
+    const start = stat.size > maxBytes ? stat.size - maxBytes : 0;
+    const length = stat.size - start;
+    if (length <= 0) return '';
+    const buffer = Buffer.alloc(length);
+    const fd = fs.openSync(logPathHost, 'r');
+    try {
+      fs.readSync(fd, buffer, 0, length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return buffer.toString('utf-8');
+  } catch {
+    return '';
+  }
+}
+
 function extractFinalResult(
   engineId: CodingEngineId,
-  allOutput: string,
+  logPathHost: string,
 ): string {
-  const lines = allOutput.trim().split('\n');
+  const tail = readLogTail(logPathHost, LOG_TAIL_READ_BYTES);
+  if (!tail) return 'Completed';
+
+  const lines = tail.trim().split('\n');
 
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
@@ -1011,7 +1039,7 @@ function startCodingEngine(
   prompt: string,
   extraArgs?: string[],
   cwd?: string,
-): { jobId: string; status: 'running' } {
+): { jobId: string; status: 'running'; logPath: string; errPath: string } {
   const snapshot = services.getRuntimeController().getSnapshot();
   const engine = snapshot.codingEngines.find((e) => e.id === engineId);
 
@@ -1023,12 +1051,23 @@ function startCodingEngine(
   const { command, args } = buildEngineCommand(engineId, prompt, extraArgs);
   const jobId = createJobId();
 
+  const { ipcHostDir, ipcContainerDir } = services.agentContext;
+  const logDirHost = path.join(ipcHostDir, 'coding-engines');
+  fs.mkdirSync(logDirHost, { recursive: true });
+
+  const logPathHost = path.join(logDirHost, `${jobId}.log`);
+  const errPathHost = path.join(logDirHost, `${jobId}.err.log`);
+  const logPathContainer = `${ipcContainerDir.replace(/\/$/, '')}/coding-engines/${jobId}.log`;
+  const errPathContainer = `${ipcContainerDir.replace(/\/$/, '')}/coding-engines/${jobId}.err.log`;
+
   const job: CodingEngineJob = {
     jobId,
     engineId,
     status: 'running',
-    output: '',
     steps: [],
+    logPathHost,
+    logPathContainer,
+    errPathContainer,
     startedAt: Date.now(),
   };
   engineJobs.set(jobId, job);
@@ -1041,9 +1080,26 @@ function startCodingEngine(
     timestamp: Date.now(),
   });
 
-  // Fire and forget — the job runs in the background.
-  // No explicit cwd: spawn inherits the Electron main process cwd,
-  // which is the project root. This keeps session IDs resumable.
+  const outStream = fs.createWriteStream(logPathHost);
+  const errStream = fs.createWriteStream(errPathHost);
+  const markJobError = (message: string) => {
+    if (job.status !== 'running') return;
+    job.status = 'error';
+    job.error = message;
+    emitEngineEvent(services, {
+      id: createEngineEventId(),
+      engineId,
+      kind: 'error',
+      error: message,
+      timestamp: Date.now(),
+    });
+  };
+  outStream.on('error', (err) => markJobError(`Log write failed: ${err.message}`));
+  errStream.on('error', (err) => markJobError(`Error log write failed: ${err.message}`));
+
+  // Fire and forget — the job runs in the background. `cwd` is passed through
+  // as-is; callers inside a container namespace must ensure the path is valid
+  // on the host.
   const seenSteps = new Set<string>();
   const child = spawn(command, args, {
     cwd: cwd ?? undefined,
@@ -1051,10 +1107,11 @@ function startCodingEngine(
     timeout: CODING_ENGINE_TIMEOUT_MS,
   });
 
+  child.stdout.pipe(outStream);
+  child.stderr.pipe(errStream);
+
   child.stdout.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
-    job.output += text;
-
     for (const line of text.split('\n')) {
       if (!line.trim()) continue;
 
@@ -1074,13 +1131,14 @@ function startCodingEngine(
     }
   });
 
-  child.stderr.on('data', (chunk: Buffer) => {
-    job.output += chunk.toString();
-  });
-
   child.on('close', (code) => {
+    outStream.end();
+    errStream.end();
+
+    if (job.status === 'error') return;
+
     if (code === 0) {
-      const result = extractFinalResult(engineId, job.output);
+      const result = extractFinalResult(engineId, logPathHost);
       job.status = 'completed';
       job.result = result;
       emitEngineEvent(services, {
@@ -1091,39 +1149,23 @@ function startCodingEngine(
         timestamp: Date.now(),
       });
     } else {
-      const errorMessage = `Process exited with code ${code}`;
-      job.status = 'error';
-      job.error = errorMessage;
-      emitEngineEvent(services, {
-        id: createEngineEventId(),
-        engineId,
-        kind: 'error',
-        error: errorMessage,
-        timestamp: Date.now(),
-      });
+      markJobError(`Process exited with code ${code}`);
     }
   });
 
   child.on('error', (err) => {
-    job.status = 'error';
-    job.error = err.message;
-    emitEngineEvent(services, {
-      id: createEngineEventId(),
-      engineId,
-      kind: 'error',
-      error: err.message,
-      timestamp: Date.now(),
-    });
+    markJobError(err.message);
   });
 
-  return { jobId, status: 'running' };
+  return { jobId, status: 'running', logPath: logPathContainer, errPath: errPathContainer };
 }
 
 function pollCodingEngineJob(jobId: string): {
   status: 'running' | 'completed' | 'error';
   engineId: CodingEngineId;
-  steps: string[];
-  output: string;
+  logPath: string;
+  errPath: string;
+  stepCount: number;
   result?: string;
   error?: string;
 } {
@@ -1135,15 +1177,17 @@ function pollCodingEngineJob(jobId: string): {
   const poll: {
     status: 'running' | 'completed' | 'error';
     engineId: CodingEngineId;
-    steps: string[];
-    output: string;
+    logPath: string;
+    errPath: string;
+    stepCount: number;
     result?: string;
     error?: string;
   } = {
     status: job.status,
     engineId: job.engineId,
-    steps: job.steps,
-    output: job.output,
+    logPath: job.logPathContainer,
+    errPath: job.errPathContainer,
+    stepCount: job.steps.length,
   };
 
   if (job.result !== undefined) poll.result = job.result;

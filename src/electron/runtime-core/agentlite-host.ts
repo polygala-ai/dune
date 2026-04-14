@@ -169,7 +169,13 @@ export interface AgentLiteHostOptions {
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
-  onIpcDirCreated?: (agentId: string, agentName: string, projectId: string, ipcHostPath: string) => void;
+  onIpcDirCreated?: (
+    agentId: string,
+    agentName: string,
+    projectId: string,
+    ipcHostPath: string,
+    ipcContainerPath: string,
+  ) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
@@ -775,6 +781,13 @@ export class AgentLiteHost implements AgentRuntime {
     this.startupModelCredentials = { ...credentials };
     await this.ensureAgentLiteReady();
 
+    // Detect coding engines before starting agent runtimes so the env vars
+    // passed to each agent's dune-mcp-server reflect real availability.
+    // Otherwise the MCP server starts with DUNE_*_AVAILABLE='false' and never
+    // registers the coding_engine_* tools.
+    const codingEngines = await detectCodingEngines();
+    this.snapshot = { ...this.snapshot, codingEngines };
+
     for (const record of this.persistedAgents.values()) {
       try {
         await this.ensureAgentRuntime(record);
@@ -786,11 +799,8 @@ export class AgentLiteHost implements AgentRuntime {
       }
     }
 
-    const codingEngines = await detectCodingEngines();
-
     this.snapshot = {
       ...this.snapshot,
-      codingEngines,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
         message: createRuntimeReadyMessage(credentials),
         status: 'ready',
@@ -2018,8 +2028,14 @@ export class AgentLiteHost implements AgentRuntime {
         }
       });
 
-      if (ipcHostPath && record.agent.projectId) {
-        this.onIpcDirCreated?.(agentId, record.agent.name, record.agent.projectId, ipcHostPath);
+      if (ipcHostPath && ipcContainerPath && record.agent.projectId) {
+        this.onIpcDirCreated?.(
+          agentId,
+          record.agent.name,
+          record.agent.projectId,
+          ipcHostPath,
+          ipcContainerPath,
+        );
       }
 
       if (didUpdateRecord) {
