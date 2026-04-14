@@ -93,6 +93,7 @@ import {
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
 import { ReadyInbox } from './ready-inbox';
 import { MessageStream, type PendingAssistantMessage } from './message-stream';
+import { Lifecycle } from './lifecycle';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
@@ -187,9 +188,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly persistedAgents = new Map<string, PersistedAgentRecord>();
 
-  private readonly agentRuntimes = new Map<string, DuneAgent>();
-
-  private readonly agentRuntimeStarts = new Map<string, Promise<DuneAgent>>();
+  private readonly lifecycle = new Lifecycle();
 
   private readonly agentStore: AgentStore;
 
@@ -208,10 +207,6 @@ export class AgentLiteHost implements AgentRuntime {
   private readonly duneMcpServerDir: string;
 
   private readonly bundledAgentDir: string;
-
-  private agentLite: AgentLite | null = null;
-
-  private agentLiteStartPromise: Promise<AgentLite> | null = null;
 
   private readonly loadAgentLiteModule: () => Promise<typeof import('@boxlite-ai/agentlite')>;
 
@@ -398,12 +393,8 @@ export class AgentLiteHost implements AgentRuntime {
 
       try {
         await this.telegram.disconnectAll();
-        await this.agentLite?.stop();
       } finally {
-        this.agentLite = null;
-        this.agentLiteStartPromise = null;
-        this.agentRuntimes.clear();
-        this.agentRuntimeStarts.clear();
+        await this.lifecycle.stop();
       }
     })();
 
@@ -419,8 +410,7 @@ export class AgentLiteHost implements AgentRuntime {
     this.readyInbox.clear();
     this.telegram.reset();
     this.persistedAgents.clear();
-    this.agentRuntimes.clear();
-    this.agentRuntimeStarts.clear();
+    this.lifecycle.clearRuntimes();
     this.snapshot = {
       agents: [],
       codingEngines: [],
@@ -428,7 +418,7 @@ export class AgentLiteHost implements AgentRuntime {
       isStreaming: false,
       runtimeInfo: createRuntimeInfo(this.runtimeRoot, this.homeDir, {
         message: this.blockedMessage ?? 'AgentLite runtime state was cleared in-process.',
-        status: this.blockedMessage ? 'error' : this.agentLite ? 'ready' : 'starting',
+        status: this.blockedMessage ? 'error' : this.lifecycle.isEngineReady() ? 'ready' : 'starting',
       }),
       selectedAgentId: null,
       telegramSetupSessions: [],
@@ -557,7 +547,7 @@ export class AgentLiteHost implements AgentRuntime {
         throw new Error('Telegram is not connected.');
       }
 
-      const duneAgent = this.agentRuntimes.get(agentId)
+      const duneAgent = this.lifecycle.getRuntime(agentId)
         ?? await this.ensureAgentRuntime(record);
       const channelFactory = await this.createTelegramChannelFactory(setupSession.token);
 
@@ -600,7 +590,7 @@ export class AgentLiteHost implements AgentRuntime {
       throw new Error(`${input.channelId} is not available yet.`);
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(record);
 
     await duneAgent.detachExternalChannel();
@@ -764,11 +754,11 @@ export class AgentLiteHost implements AgentRuntime {
     const deletedAgent = deletedRecord.agent;
     this.persistedAgents.delete(agentId);
 
-    const duneAgent = this.agentRuntimes.get(agentId);
+    const duneAgent = this.lifecycle.getRuntime(agentId);
 
     if (duneAgent) {
-      this.agentRuntimes.delete(agentId);
-      await this.agentLite?.deleteAgent(deletedRecord.groupFolder);
+      this.lifecycle.deleteRuntime(agentId);
+      await this.lifecycle.deleteSdkAgent(deletedRecord.groupFolder);
     }
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
@@ -916,7 +906,7 @@ export class AgentLiteHost implements AgentRuntime {
       return;
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(persistedRecord);
 
     this.readyInbox.markDelivered(agentId, signal.generation);
@@ -945,7 +935,7 @@ export class AgentLiteHost implements AgentRuntime {
       throw new Error(`Agent runtime "${agentId}" is unavailable.`);
     }
 
-    const duneAgent = this.agentRuntimes.get(agentId)
+    const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(persistedRecord);
 
     const assistantMessage = createAssistantMessage(options.timestamp);
@@ -1254,7 +1244,7 @@ export class AgentLiteHost implements AgentRuntime {
       }
 
       try {
-        const duneAgent = this.agentRuntimes.get(patch.agentId)
+        const duneAgent = this.lifecycle.getRuntime(patch.agentId)
           ?? await this.ensureAgentRuntime(record);
         const channelFactory = await this.resolveExternalChannelFactory(
           patch.channel.id,
@@ -1312,15 +1302,16 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   private async ensureAgentLiteReady(): Promise<AgentLite> {
-    if (this.agentLite) {
-      return this.agentLite;
+    const existing = this.lifecycle.getEngine();
+    if (existing) {
+      return existing;
     }
 
     if (this.shutdownPromise) {
       throw new Error('AgentLite runtime is shutting down.');
     }
 
-    const inFlight = this.agentLiteStartPromise;
+    const inFlight = this.lifecycle.getInFlightEngineStart();
 
     if (inFlight) {
       return inFlight;
@@ -1335,7 +1326,7 @@ export class AgentLiteHost implements AgentRuntime {
           const agentLite = await agentLiteModule.createAgentLite({
             workdir: this.runtimeRoot,
           });
-          this.agentLite = agentLite;
+          this.lifecycle.setEngine(agentLite);
           return agentLite;
         } catch (error) {
           lastError = error;
@@ -1354,14 +1345,12 @@ export class AgentLiteHost implements AgentRuntime {
       throw lastError instanceof Error ? lastError : new Error(String(lastError));
     })();
 
-    this.agentLiteStartPromise = startPromise;
+    this.lifecycle.beginEngineStart(startPromise);
 
     try {
       return await startPromise;
     } finally {
-      if (this.agentLiteStartPromise === startPromise) {
-        this.agentLiteStartPromise = null;
-      }
+      this.lifecycle.endEngineStart(startPromise);
     }
   }
 
@@ -1385,20 +1374,20 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async ensureAgentRuntime(record: PersistedAgentRecord): Promise<DuneAgent> {
     const agentId = record.agent.id;
-    const existing = this.agentRuntimes.get(agentId);
+    const existing = this.lifecycle.getRuntime(agentId);
 
     if (existing) {
       return existing;
     }
 
-    const inFlight = this.agentRuntimeStarts.get(agentId);
+    const inFlight = this.lifecycle.getInFlightRuntimeStart(agentId);
 
     if (inFlight) {
       return inFlight;
     }
 
     const startPromise = (async () => {
-      const agentLite = this.agentLite ?? await this.ensureAgentLiteReady();
+      const agentLite = this.lifecycle.getEngine() ?? await this.ensureAgentLiteReady();
       let ipcHostPath: string | undefined;
       let ipcContainerPath: string | undefined;
       const mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }> = [];
@@ -1613,18 +1602,16 @@ export class AgentLiteHost implements AgentRuntime {
         throw new Error(`Agent runtime "${agentId}" was removed before startup completed.`);
       }
 
-      this.agentRuntimes.set(agentId, duneAgent);
+      this.lifecycle.setRuntime(agentId, duneAgent);
       return duneAgent;
     })();
 
-    this.agentRuntimeStarts.set(agentId, startPromise);
+    this.lifecycle.beginRuntimeStart(agentId, startPromise);
 
     try {
       return await startPromise;
     } finally {
-      if (this.agentRuntimeStarts.get(agentId) === startPromise) {
-        this.agentRuntimeStarts.delete(agentId);
-      }
+      this.lifecycle.endRuntimeStart(agentId, startPromise);
     }
   }
 
@@ -1634,17 +1621,17 @@ export class AgentLiteHost implements AgentRuntime {
 
     for (const record of projectAgentRecords) {
       const agentId = record.agent.id;
-      const hasRuntime = this.agentRuntimes.has(agentId);
+      const hasRuntime = this.lifecycle.hasRuntime(agentId);
 
       if (!hasRuntime) {
         continue;
       }
 
       this.messageStream.forget(agentId);
-      this.agentRuntimes.delete(agentId);
+      this.lifecycle.deleteRuntime(agentId);
 
       try {
-        await this.agentLite?.deleteAgent(record.groupFolder);
+        await this.lifecycle.deleteSdkAgent(record.groupFolder);
       } catch (error) {
         console.error(`Failed to refresh runtime mounts for "${record.agent.name}".`, error);
       }
@@ -1657,7 +1644,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private rollbackOptimisticAgent(agentId: string) {
     this.persistedAgents.delete(agentId);
-    this.agentRuntimes.delete(agentId);
+    this.lifecycle.deleteRuntime(agentId);
     this.readyInbox.forget(agentId);
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
@@ -1686,7 +1673,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private async cleanupFailedAgentRuntime(record: PersistedAgentRecord) {
     try {
-      await this.agentLite?.deleteAgent(record.groupFolder);
+      await this.lifecycle.deleteSdkAgent(record.groupFolder);
     } catch (cleanupError) {
       console.error(
         `Failed to clean up agent runtime for "${record.agent.name}" after startup failed.`,

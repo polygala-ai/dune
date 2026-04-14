@@ -598,7 +598,7 @@ describe('AgentLiteHost', () => {
     });
 
     await host.start();
-    (host as any).agentLite = null;
+    (host as any).lifecycle.engine = null;
 
     const agentId = await host.service.createAgent({
       channelId: 'dune-chat',
