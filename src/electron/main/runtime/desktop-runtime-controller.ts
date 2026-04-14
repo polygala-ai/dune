@@ -14,7 +14,7 @@ import {
   AgentLiteHost,
   resolveAgentLiteRuntimeRoot,
   type AgentLiteHostOptions,
-} from '@/electron/runtime-core/agentlite-host';
+} from './agentlite-host';
 import type { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 
 type ActiveRuntime = AgentRuntime & {

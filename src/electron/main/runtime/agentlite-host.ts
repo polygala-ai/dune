@@ -26,28 +26,28 @@ import type {
   TelegramConnectionStatus,
   TelegramSetupSession,
   UpdateAgentChannelInput,
-} from '../../renderer/features/agents/types';
+} from '@/renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
   createDefaultTelegramAgentRuntimeState,
   createDefaultExternalChannelsState,
-} from '../../renderer/features/agents/model/channels';
+} from '@/renderer/features/agents/model/channels';
 import {
   createAgentId,
   toAgentChatJid,
   toAgentPathId,
-} from '../../shared/agents/agent-id';
-import { createProjectMainAgentName } from '../../shared/agents/project-main-name';
+} from '@/shared/agents/agent-id';
+import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import {
   summarizeMessagePreview,
-} from '../../shared/agents/message-content';
+} from '@/shared/agents/message-content';
 import {
   createReadyAssignmentsInboxSignalMessage,
   type ReadyAssignmentsInboxSignal,
-} from '../../shared/agents/ready-assignments';
-import { normalizeProjectRootPath } from '../../shared/workflow/project-artifacts';
+} from '@/shared/agents/ready-assignments';
+import { normalizeProjectRootPath } from '@/shared/workflow/project-artifacts';
 import {
   normalizeAgentAttachments,
 } from './agent-message-attachments';

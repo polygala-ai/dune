@@ -18,12 +18,12 @@ import type {
   TelegramConnectionStatus,
   TelegramPairingStatus,
   TelegramSetupSession,
-} from '../../renderer/features/agents/types';
+} from '@/renderer/features/agents/types';
 import {
   cloneTelegramSetupSession,
   createDefaultTelegramAgentRuntimeState,
-} from '../../renderer/features/agents/model/channels';
-import { extractWorkspaceAttachmentPaths } from '../../shared/agents/message-content';
+} from '@/renderer/features/agents/model/channels';
+import { extractWorkspaceAttachmentPaths } from '@/shared/agents/message-content';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,7 +111,7 @@ function createExternalAgentCopy(attachedLabel: string) {
 
 function mapTelegramChannelStatus(
   status: TelegramConnectionStatus,
-): import('../../renderer/features/agents/types').AgentChannelStatus {
+): import('@/renderer/features/agents/types').AgentChannelStatus {
   switch (status) {
     case 'connected':
       return 'connected';

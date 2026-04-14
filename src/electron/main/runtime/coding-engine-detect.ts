@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type { CodingEngineId, CodingEngineStatus } from '../../renderer/features/agents/types';
+import type { CodingEngineId, CodingEngineStatus } from '@/renderer/features/agents/types';
 
 const execFileAsync = promisify(execFile);
 const DETECT_TIMEOUT_MS = 5_000;

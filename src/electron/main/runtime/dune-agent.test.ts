@@ -5,7 +5,7 @@ import type {
 } from '@boxlite-ai/agentlite';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DuneAgent } from '@/electron/runtime-core/dune-agent';
+import { DuneAgent } from './dune-agent';
 
 function createMockAgent(): AgentLiteAgent {
   return {

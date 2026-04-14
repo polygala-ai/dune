@@ -19,14 +19,14 @@ import {
   resolveAgentLiteRuntimeRoot,
   type AgentStore,
   type TelegramSecretsStore,
-} from '@/electron/runtime-core/agentlite-host';
+} from './agentlite-host';
 import {
   resolveAgentDuneDir,
   resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
 } from '@/electron/main/agent-ipc/ipc-directory';
-import type { DuneChannel } from '@/electron/runtime-core/dune-channel';
+import type { DuneChannel } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import { createReadyAssignmentsInboxSignalMessage } from '@/shared/agents/ready-assignments';

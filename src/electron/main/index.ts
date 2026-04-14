@@ -29,7 +29,7 @@ import {
   pushCurrentRuntimeSnapshot,
 } from '@/electron/main/runtime/runtime-snapshot';
 import { resetLocalData } from '@/electron/main/reset-local-data';
-import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/main/runtime/agentlite-host';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
 import type {
   CreateAgentInput,

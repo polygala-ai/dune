@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import { resolveAgentLiteRuntimeRoot } from '@/electron/runtime-core/agentlite-host';
+import { resolveAgentLiteRuntimeRoot } from './agentlite-host';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 
