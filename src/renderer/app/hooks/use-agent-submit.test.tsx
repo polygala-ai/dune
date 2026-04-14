@@ -1,3 +1,5 @@
+// Agent submit hook tests.
+
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +8,7 @@ import { useAppStore, resetAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import type { Agent } from '@/renderer/features/agents/types';
 
+/** Creates agent. */
 function createAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     channel: {

@@ -1,3 +1,5 @@
+// Command menu UI.
+
 import { startTransition } from 'react';
 import {
   Bot,
@@ -19,6 +21,7 @@ import {
   CommandShortcut,
 } from '@/renderer/shared/ui/command';
 
+/** Command agent shape. */
 interface CommandAgent {
   id: string;
   name: string;
@@ -29,6 +32,7 @@ interface CommandAgent {
   workspace: string;
 }
 
+/** Command item record shape. */
 interface CommandItemRecord {
   id: string;
   statusLabel: string;
@@ -36,12 +40,14 @@ interface CommandItemRecord {
   updatedLabel: string;
 }
 
+/** Command project shape. */
 interface CommandProject {
   description: string;
   id: string;
   name: string;
 }
 
+/** Command menu props. */
 interface CommandMenuProps {
   agents: CommandAgent[];
   isContextPanelOpen: boolean;
@@ -60,6 +66,7 @@ interface CommandMenuProps {
   projects: CommandProject[];
 }
 
+/** Renders the command menu UI. */
 export function CommandMenu({
   agents,
   isContextPanelOpen,

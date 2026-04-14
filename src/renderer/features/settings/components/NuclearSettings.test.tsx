@@ -1,3 +1,5 @@
+// Nuclear settings tests.
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,6 +8,7 @@ import { createDefaultExternalChannelsState } from '@/renderer/features/agents/m
 
 import { NuclearSettings } from './NuclearSettings';
 
+/** Renders nuclear settings. */
 function renderNuclearSettings() {
   render(
     <NuclearSettings

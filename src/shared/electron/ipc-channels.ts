@@ -1,3 +1,6 @@
+// Shared Electron IPC channel names.
+
+/** Shared IPC channel names. */
 export const ipcChannels = {
   applyNetworkSettings: 'dune:runtime:apply-network-settings',
   cancelTelegramSetupSession: 'dune:runtime:cancel-telegram-setup-session',

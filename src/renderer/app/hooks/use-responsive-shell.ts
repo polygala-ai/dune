@@ -1,10 +1,14 @@
+// Responsive shell hook.
+
 import { useEffect, useState } from 'react';
 
 const COMPACT_SHELL_BREAKPOINT = 1240;
 const INLINE_CONTEXT_BREAKPOINT = 1440;
 
+/** Shell layout mode shape. */
 export type ShellLayoutMode = 'compact' | 'medium' | 'wide';
 
+/** Returns layout mode. */
 function getLayoutMode(windowWidth: number): ShellLayoutMode {
   if (windowWidth < COMPACT_SHELL_BREAKPOINT) {
     return 'compact';
@@ -17,6 +21,7 @@ function getLayoutMode(windowWidth: number): ShellLayoutMode {
   return 'wide';
 }
 
+/** Responsive shell hook. */
 export function useResponsiveShell(
   showContextPanel: boolean,
   lockCompactShell = false,
@@ -24,6 +29,7 @@ export function useResponsiveShell(
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
 
   useEffect(() => {
+    /** Handles resize. */
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
     };

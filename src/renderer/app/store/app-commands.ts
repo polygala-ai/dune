@@ -1,3 +1,5 @@
+// Cross-slice app command helpers.
+
 import type { NavigationSnapshot } from '@/renderer/app/store/types';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
@@ -9,6 +11,7 @@ import type {
   ThemePreference,
 } from '@/renderer/features/settings/types';
 
+/** Returns agent by offset. */
 function getAgentByOffset(
   agentIds: string[],
   selectedAgentId: string | null,
@@ -29,6 +32,7 @@ function getAgentByOffset(
   return agentIds[nextIndex] ?? null;
 }
 
+/** Returns navigation snapshot. */
 function getNavigationSnapshot(): NavigationSnapshot {
   const state = useAppStore.getState();
 
@@ -42,6 +46,7 @@ function getNavigationSnapshot(): NavigationSnapshot {
   };
 }
 
+/** Ares navigation snapshots equal. */
 function areNavigationSnapshotsEqual(
   left: NavigationSnapshot | undefined,
   right: NavigationSnapshot,
@@ -55,6 +60,7 @@ function areNavigationSnapshotsEqual(
     left.settingsRoute === right.settingsRoute;
 }
 
+/** Commits navigation state. */
 function commitNavigationState(
   previous: NavigationSnapshot,
   current: NavigationSnapshot,
@@ -75,6 +81,7 @@ function commitNavigationState(
   });
 }
 
+/** Wraps navigation change. */
 function withNavigationChange(run: () => void) {
   const previous = getNavigationSnapshot();
 
@@ -83,6 +90,7 @@ function withNavigationChange(run: () => void) {
   commitNavigationState(previous, getNavigationSnapshot());
 }
 
+/** Wraps navigation change async. */
 async function withNavigationChangeAsync(run: () => Promise<void>) {
   const previous = getNavigationSnapshot();
 
@@ -91,6 +99,7 @@ async function withNavigationChangeAsync(run: () => Promise<void>) {
   commitNavigationState(previous, getNavigationSnapshot());
 }
 
+/** Applies navigation snapshot. */
 function applyNavigationSnapshot(snapshot: NavigationSnapshot) {
   const state = useAppStore.getState();
 
@@ -120,6 +129,7 @@ function applyNavigationSnapshot(snapshot: NavigationSnapshot) {
   state.setRoute(snapshot.route);
 }
 
+/** Opens project view. */
 function openProjectView(view: WorkflowProjectView, projectId?: string | null) {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -135,10 +145,12 @@ function openProjectView(view: WorkflowProjectView, projectId?: string | null) {
   });
 }
 
+/** Creates agent. */
 export async function createAgent(input: CreateAgentInput) {
   return createAgentWithOptions(input, { openRoute: true });
 }
 
+/** Creates agent with options. */
 export async function createAgentWithOptions(
   input: CreateAgentInput,
   options: { openRoute: boolean },
@@ -161,6 +173,7 @@ export async function createAgentWithOptions(
   return nextAgentId;
 }
 
+/** Opens agent. */
 export function openAgent(agentId: string) {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -176,10 +189,12 @@ export function openAgent(agentId: string) {
   });
 }
 
+/** Opens agents. */
 export function openAgents(projectId?: string | null) {
   openProjectView('agents', projectId);
 }
 
+/** Cycles agent. */
 export function cycleAgent(direction: -1 | 1) {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -205,6 +220,7 @@ export function cycleAgent(direction: -1 | 1) {
   });
 }
 
+/** Opens settings. */
 export function openSettings() {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -214,6 +230,7 @@ export function openSettings() {
   });
 }
 
+/** Opens plugins. */
 export function openPlugins() {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -223,10 +240,12 @@ export function openPlugins() {
   });
 }
 
+/** Opens workflow. */
 export function openWorkflow(projectId?: string | null) {
   openProjectView('board', projectId);
 }
 
+/** Opens item. */
 export function openItem(itemId: string) {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -238,10 +257,12 @@ export function openItem(itemId: string) {
   });
 }
 
+/** Opens project activity. */
 export function openProjectActivity(projectId?: string | null) {
   openProjectView('activity', projectId);
 }
 
+/** Opens project settings. */
 export function openProjectSettings() {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -252,6 +273,7 @@ export function openProjectSettings() {
   });
 }
 
+/** Goes back. */
 export function goBack() {
   const state = useAppStore.getState();
   const target = state.navigationBackStack[state.navigationBackStack.length - 1];
@@ -273,6 +295,7 @@ export function goBack() {
   applyNavigationSnapshot(target);
 }
 
+/** Goes forward. */
 export function goForward() {
   const state = useAppStore.getState();
   const target = state.navigationForwardStack[state.navigationForwardStack.length - 1];
@@ -294,26 +317,31 @@ export function goForward() {
   applyNavigationSnapshot(target);
 }
 
+/** Sets command open. */
 export function setCommandOpen(isOpen: boolean) {
   useAppStore.getState().setCommandOpen(isOpen);
 }
 
+/** Sets popover agent ID. */
 export function setPopoverAgentId(agentId: string | null) {
   useAppStore.getState().setPopoverAgentId(agentId);
 }
 
+/** Toggles inspector. */
 export function toggleInspector(force?: boolean) {
   const state = useAppStore.getState();
 
   state.setContextPanelOpen(typeof force === 'boolean' ? force : !state.isContextPanelOpen);
 }
 
+/** Sets draft. */
 export function setDraft(draft: string) {
   const state = useAppStore.getState();
 
   state.setDraft(state.selectedAgentId, draft);
 }
 
+/** Sets settings route. */
 export function setSettingsRoute(route: SettingsRoute) {
   withNavigationChange(() => {
     const state = useAppStore.getState();
@@ -324,10 +352,12 @@ export function setSettingsRoute(route: SettingsRoute) {
   });
 }
 
+/** Sets theme preference. */
 export function setThemePreference(preference: ThemePreference) {
   useAppStore.getState().setThemePreference(preference);
 }
 
+/** App commands hook. */
 export function useAppCommands() {
   return {
     createAgent,

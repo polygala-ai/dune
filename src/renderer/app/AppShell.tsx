@@ -1,3 +1,5 @@
+// Main app shell UI and workspace routing.
+
 import {
   type CSSProperties,
   useEffect,
@@ -56,12 +58,14 @@ import {
   MAC_TITLEBAR_SIDEBAR_TOGGLE_SIZE,
 } from '@/shared/window/titlebar';
 
+/** Window shell style shape. */
 type WindowShellStyle = CSSProperties & {
   '--app-drag-strip-height'?: string;
   '--app-shell-titlebar-toggle-left'?: string;
   '--app-shell-titlebar-toggle-top'?: string;
 };
 
+/** Renders the app shell UI. */
 export default function AppShell() {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const [isCreateWorkItemOpen, setCreateWorkItemOpen] = useState(false);
@@ -158,6 +162,7 @@ export default function AppShell() {
     isCompactShell,
     route,
   });
+  /** Handles active agent deletion. */
   const handleDeleteActiveAgent = async () => {
     if (!activeAgent) {
       return;

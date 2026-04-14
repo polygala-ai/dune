@@ -1,3 +1,5 @@
+// Workflow item detail and checklist UI.
+
 import { type ReactNode, useEffect, useState } from 'react';
 import {
   Bot,
@@ -28,6 +30,7 @@ import {
 const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'done'];
 const taskStatuses: WorkflowTaskStatus[] = ['todo', 'doing', 'blocked', 'review', 'done'];
 
+/** Workflow item inspector props. */
 interface WorkflowItemInspectorProps {
   item: (Omit<WorkflowItem, 'workflowEvents'> & {
     primaryAgentName: string | null;
@@ -48,6 +51,7 @@ interface WorkflowItemInspectorProps {
   projectAgents: Array<{ id: string; name: string }>;
 }
 
+/** Renders the inspector section UI. */
 function InspectorSection({
   actions,
   badge,
@@ -84,6 +88,7 @@ function InspectorSection({
   );
 }
 
+/** Formats artifact size. */
 function formatArtifactSize(size: number | null) {
   if (size === null) {
     return 'Folder';
@@ -104,6 +109,7 @@ function formatArtifactSize(size: number | null) {
   return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/** Renders the workflow item inspector UI. */
 export function WorkflowItemInspector({
   item,
   onAddTask,
@@ -139,6 +145,7 @@ export function WorkflowItemInspector({
   useEffect(() => {
     let cancelled = false;
 
+    /** Loads artifacts. */
     const loadArtifacts = async () => {
       if (!item) {
         setArtifactEntries([]);

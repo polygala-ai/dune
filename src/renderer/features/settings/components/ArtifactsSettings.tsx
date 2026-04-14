@@ -1,3 +1,5 @@
+// Artifacts settings UI.
+
 import { FileText, FolderOpen } from 'lucide-react';
 
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
@@ -5,10 +7,12 @@ import { Button } from '@/renderer/shared/ui/button';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
+/** Opens file. */
 function openFile(filePath: string) {
   void window.duneDesktop?.openPath?.(filePath);
 }
 
+/** Renders the artifacts settings UI. */
 export function ArtifactsSettings({ runtimeInfo }: SettingsSectionComponentProps) {
   const artifactsPath = runtimeInfo.artifactsPath;
 

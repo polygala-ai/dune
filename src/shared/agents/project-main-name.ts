@@ -1,3 +1,5 @@
+// Project-main agent naming helpers.
+
 const PROJECT_MAIN_AGENT_NAMES = [
   'Paul Atreides',
   'Lady Jessica',
@@ -13,6 +15,7 @@ const PROJECT_MAIN_AGENT_NAMES = [
   'Reverend Mother Mohiam',
 ] as const;
 
+/** Hashes project ID. */
 function hashProjectId(projectId: string) {
   let hash = 0;
 
@@ -23,6 +26,7 @@ function hashProjectId(projectId: string) {
   return hash;
 }
 
+/** Creates project main agent name. */
 export function createProjectMainAgentName(projectId: string) {
   return PROJECT_MAIN_AGENT_NAMES[
     hashProjectId(projectId) % PROJECT_MAIN_AGENT_NAMES.length

@@ -1,3 +1,5 @@
+// Indexed agent-record collection helpers.
+
 import type { PersistedAgentRecord } from './records';
 
 /**
@@ -17,24 +19,29 @@ export class AgentRecords {
 
   // ---------- Lookup ----------
 
+  /** Returns agent. */
   get(agentId: string): PersistedAgentRecord | undefined {
     return this.records.get(agentId);
   }
 
+  /** Returns whether agent exist. */
   has(agentId: string): boolean {
     return this.records.has(agentId);
   }
 
   // ---------- Iteration ----------
 
+  /** Valueses agent. */
   values(): IterableIterator<PersistedAgentRecord> {
     return this.records.values();
   }
 
+  /** Entrieses agent. */
   entries(): IterableIterator<[string, PersistedAgentRecord]> {
     return this.records.entries();
   }
 
+  /** Converts to array. */
   toArray(): PersistedAgentRecord[] {
     return [...this.records.values()];
   }
@@ -56,10 +63,12 @@ export class AgentRecords {
     this.records.set(record.agent.id, record);
   }
 
+  /** Deletes agent. */
   delete(agentId: string): void {
     this.records.delete(agentId);
   }
 
+  /** Clears agent. */
   clear(): void {
     this.records.clear();
   }

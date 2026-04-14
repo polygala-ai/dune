@@ -1,3 +1,5 @@
+// Agent runtime snapshot builders.
+
 import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
@@ -8,6 +10,7 @@ import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 
 import { resolveArtifactsDir } from '../artifacts';
 
+/** Clones snapshot. */
 export function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
@@ -36,12 +39,14 @@ export function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnaps
   };
 }
 
+/** Creates runtime ready message. */
 export function createRuntimeReadyMessage(credentials: Record<string, string>): string {
   return Object.keys(credentials).length > 0
     ? 'AgentLite is running with saved model credentials.'
     : 'AgentLite is running without saved model credentials; replies will fail.';
 }
 
+/** Creates runtime info. */
 export function createRuntimeInfo(
   runtimeRoot: string,
   homeDir: string,

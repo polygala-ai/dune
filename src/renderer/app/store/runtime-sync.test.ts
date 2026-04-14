@@ -1,3 +1,5 @@
+// Runtime synchronization tests.
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';

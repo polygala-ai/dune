@@ -1,13 +1,17 @@
+// Agent submit hook.
+
 import { useEffectEvent } from 'react';
 
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { selectAgentById } from '@/renderer/features/agents/model/agent-presenters';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 
+/** Use agent submit options. */
 interface UseAgentSubmitOptions {
   focusComposer: () => void;
 }
 
+/** Agent submit hook. */
 export function useAgentSubmit({ focusComposer }: UseAgentSubmitOptions) {
   return useEffectEvent(async (rawValue: string) => {
     const value = rawValue.trim();

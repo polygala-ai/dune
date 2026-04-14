@@ -1,3 +1,5 @@
+// JSON file storage tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { JsonFileStorage } from './json-file-storage';
 
+/** Creates temp dir. */
 function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-storage-'));
 }

@@ -1,3 +1,5 @@
+// Textarea UI primitive.
+
 import * as React from 'react';
 
 import { cn } from '@/renderer/shared/lib/utils';

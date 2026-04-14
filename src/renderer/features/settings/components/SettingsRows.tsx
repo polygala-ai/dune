@@ -1,10 +1,14 @@
+// Settings rows UI.
+
 import type { SettingsRow } from '@/renderer/features/settings/types';
 import { Separator } from '@/renderer/shared/ui/separator';
 
+/** Settings rows props. */
 interface SettingsRowsProps {
   rows: SettingsRow[];
 }
 
+/** Renders the settings rows UI. */
 export function SettingsRows({ rows }: SettingsRowsProps) {
   return (
     <div className="mt-6 border-y border-app-border">

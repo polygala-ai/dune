@@ -1,6 +1,9 @@
+// Agent IPC tool helper functions.
+
 import { ToolHandlerError } from './types';
 import type { WorkflowSnapshot } from './snapshot';
 
+/** Returns string or throws. */
 export function requireString(value: unknown, field: string): string {
   const normalized = optionalString(value);
 
@@ -11,6 +14,7 @@ export function requireString(value: unknown, field: string): string {
   return normalized;
 }
 
+/** Optionals string. */
 export function optionalString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -20,6 +24,7 @@ export function optionalString(value: unknown): string | null {
   return normalized ? normalized : null;
 }
 
+/** Reads record. */
 export function readRecord(value: unknown, field: string): Record<string, unknown> {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -28,6 +33,7 @@ export function readRecord(value: unknown, field: string): Record<string, unknow
   throw new ToolHandlerError('validation-error', `${field} must be an object.`);
 }
 
+/** Resolves project ID. */
 export function resolveProjectId(projectIdValue: unknown, fallbackProjectId: string): string {
   const projectId = optionalString(projectIdValue) ?? fallbackProjectId;
 
@@ -38,6 +44,7 @@ export function resolveProjectId(projectIdValue: unknown, fallbackProjectId: str
   return projectId;
 }
 
+/** Asserts project exists. */
 export function assertProjectExists(snapshot: WorkflowSnapshot, projectId: string): void {
   if (!snapshot.projects.some((project) => project.id === projectId)) {
     throw new ToolHandlerError('not-found', `Project ${projectId} not found.`);

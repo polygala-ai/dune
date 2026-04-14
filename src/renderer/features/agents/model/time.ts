@@ -1,3 +1,5 @@
+// Agent time-formatting helpers.
+
 import type {
   AgentStatus,
   MessageStatus,
@@ -23,20 +25,24 @@ const dateWithYearFormatter = new Intl.DateTimeFormat('en', {
   year: 'numeric',
 });
 
+/** Starts of day. */
 function startOfDay(timestamp: number) {
   const date = new Date(timestamp);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
 }
 
+/** Returns whether the left is a same day. */
 function isSameDay(left: number, right: number) {
   return startOfDay(left) === startOfDay(right);
 }
 
+/** Returns whether the timestamp is a yesterday. */
 function isYesterday(timestamp: number, now: number) {
   return startOfDay(now) - startOfDay(timestamp) === DAY_IN_MS;
 }
 
+/** Formats calendar date. */
 function formatCalendarDate(timestamp: number, now: number) {
   const formatter =
     new Date(timestamp).getFullYear() === new Date(now).getFullYear()
@@ -46,6 +52,7 @@ function formatCalendarDate(timestamp: number, now: number) {
   return formatter.format(timestamp);
 }
 
+/** Formats agent timestamp. */
 export function formatAgentTimestamp(timestamp: number, now: number = Date.now()) {
   if (now - timestamp < 2 * MINUTE_IN_MS) {
     return 'Now';
@@ -62,6 +69,7 @@ export function formatAgentTimestamp(timestamp: number, now: number = Date.now()
   return formatCalendarDate(timestamp, now);
 }
 
+/** Formats message timestamp. */
 export function formatMessageTimestamp(timestamp: number, now: number = Date.now()) {
   if (now - timestamp < 2 * MINUTE_IN_MS) {
     return 'Now';
@@ -78,6 +86,7 @@ export function formatMessageTimestamp(timestamp: number, now: number = Date.now
   return formatCalendarDate(timestamp, now);
 }
 
+/** Formats agent status. */
 export function formatAgentStatus(status: AgentStatus) {
   switch (status) {
     case 'draft':
@@ -89,6 +98,7 @@ export function formatAgentStatus(status: AgentStatus) {
   }
 }
 
+/** Formats message status. */
 export function formatMessageStatus(status: MessageStatus) {
   switch (status) {
     case 'complete':

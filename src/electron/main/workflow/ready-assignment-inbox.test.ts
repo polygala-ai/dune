@@ -1,3 +1,5 @@
+// Ready-assignment inbox tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,10 +15,11 @@ import {
 import {
   resolveAgentDuneDir,
   resolveProjectDuneDir,
-} from '@/electron/main/agent-ipc/ipc-directory';
+} from '@/electron/main/dune-paths';
 
 const tempDirs: string[] = [];
 
+/** Creates agent. */
 function createAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     channel: {
@@ -44,6 +47,7 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
   };
 }
 
+/** Creates snapshot. */
 function createSnapshot(readyItems: Array<{
   id: string;
   primaryAgentId?: string | null;

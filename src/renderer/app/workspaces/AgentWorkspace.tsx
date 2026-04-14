@@ -1,3 +1,5 @@
+// Agent workspace UI.
+
 import type { RefObject } from 'react';
 
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
@@ -9,6 +11,7 @@ import type {
   AgentRuntimeInfo,
 } from '@/renderer/features/agents/types';
 
+/** Agent workspace props. */
 interface AgentWorkspaceProps {
   agent: PresentedAgent | null;
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -27,6 +30,7 @@ interface AgentWorkspaceProps {
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
 
+/** Renders the agent workspace UI. */
 export function AgentWorkspace({
   agent,
   composerRef,

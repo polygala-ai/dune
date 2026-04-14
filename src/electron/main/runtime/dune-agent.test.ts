@@ -1,3 +1,5 @@
+// Dune agent tests.
+
 import type {
   Agent as AgentLiteAgent,
   AgentLite,
@@ -7,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DuneAgent } from './dune-agent';
 
+/** Creates mock agent. */
 function createMockAgent(): AgentLiteAgent {
   return {
     registerGroup: vi.fn(async () => {}),

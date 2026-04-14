@@ -1,3 +1,5 @@
+// Renderer-side agent runtime adapter.
+
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
 import type {
   AgentRuntimeContract,
@@ -18,6 +20,7 @@ import type {
 } from '@/renderer/features/agents/types';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
+/** Creates initial bridge snapshot. */
 function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   return {
     agents: [],
@@ -34,12 +37,14 @@ function createInitialBridgeSnapshot(): AgentServiceSnapshot {
   };
 }
 
+/** Returns whether the snapshot is a placeholder bridge snapshot. */
 function isPlaceholderBridgeSnapshot(snapshot: AgentServiceSnapshot) {
   return snapshot.runtimeInfo.status === 'starting'
     && snapshot.runtimeInfo.mode === 'mock-fallback'
     && snapshot.agents.length === 0;
 }
 
+/** Connected bridge shape. */
 type ConnectedBridge = DesktopBridge & Required<
   Pick<
     DesktopBridge,
@@ -57,6 +62,7 @@ type ConnectedBridge = DesktopBridge & Required<
   >
 >;
 
+/** Returns whether runtime bridge exist. */
 function hasRuntimeBridge(
   bridge: DesktopBridge | undefined,
 ): bridge is ConnectedBridge {
@@ -75,6 +81,7 @@ function hasRuntimeBridge(
   );
 }
 
+/** Implements bridge agent runtime behavior. */
 class BridgeAgentRuntime implements AgentRuntimeContract {
   private listeners = new Set<AgentServiceListener>();
 
@@ -150,6 +157,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     void this.syncSnapshot('bridge-init');
   }
 
+  /** Returns snapshot. */
   getSnapshot() {
     return {
       ...this.snapshot,
@@ -172,6 +180,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     };
   }
 
+  /** Subscribes to bridge agent updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
     return () => {
@@ -179,6 +188,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     };
   }
 
+  /** Resets bridge agent. */
   reset() {
     if (this.bridge.resetRuntime) {
       void this.bridge.resetRuntime();
@@ -189,6 +199,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
+  /** Disposes bridge agent. */
   dispose() {
     this.unsubscribeBridge?.();
 
@@ -201,6 +212,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     }
   }
 
+  /** Synchronizes snapshot. */
   async syncSnapshot(reason = 'manual') {
     const previousSnapshot = this.snapshot;
     const nextSnapshot = await this.bridge.getRuntimeSnapshot();
@@ -230,10 +242,12 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
   }
 }
 
+/** Syncable agent runtime shape. */
 type SyncableAgentRuntime = AgentRuntimeContract & {
   syncSnapshot?: (reason?: string) => Promise<AgentServiceSnapshot>;
 };
 
+/** Creates agent runtime. */
 export function createAgentRuntime(
   desktopBridge: DesktopBridge | undefined = window.duneDesktop,
 ): AgentRuntimeContract {
@@ -244,8 +258,10 @@ export function createAgentRuntime(
   return createMockAgentRuntime();
 }
 
+/** Agent runtime constant. */
 export const agentRuntime: AgentRuntimeContract = createAgentRuntime();
 
+/** Synchronizes agent runtime snapshot. */
 export async function syncAgentRuntimeSnapshot(reason = 'manual') {
   if (typeof (agentRuntime as SyncableAgentRuntime).syncSnapshot === 'function') {
     return (agentRuntime as SyncableAgentRuntime).syncSnapshot!(reason);

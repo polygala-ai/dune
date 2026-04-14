@@ -1,7 +1,11 @@
+// Agent customization helpers.
+
 import { createId } from '@/shared/id';
 
+/** Agent skill origin shape. */
 export type AgentSkillOrigin = 'catalog' | 'global' | 'manual' | 'project';
 
+/** Agent skill draft shape. */
 export interface AgentSkillDraft {
   id: string;
   isDiscovered: boolean;
@@ -10,12 +14,14 @@ export interface AgentSkillDraft {
   path: string;
 }
 
+/** Agent MCP env var draft shape. */
 export interface AgentMcpEnvVarDraft {
   id: string;
   key: string;
   value: string;
 }
 
+/** Agent MCP server draft shape. */
 export interface AgentMcpServerDraft {
   args: string;
   command: string;
@@ -26,12 +32,14 @@ export interface AgentMcpServerDraft {
   source: string;
 }
 
+/** Agent customization draft shape. */
 export interface AgentCustomizationDraft {
   additionalInstructions: string;
   mcpServers: AgentMcpServerDraft[];
   skills: AgentSkillDraft[];
 }
 
+/** Creates agent skill draft. */
 export function createAgentSkillDraft(): AgentSkillDraft {
   return {
     id: createId('agent-skill'),
@@ -42,6 +50,7 @@ export function createAgentSkillDraft(): AgentSkillDraft {
   };
 }
 
+/** Creates agent MCP env var draft. */
 export function createAgentMcpEnvVarDraft(): AgentMcpEnvVarDraft {
   return {
     id: createId('agent-mcp-env'),
@@ -50,6 +59,7 @@ export function createAgentMcpEnvVarDraft(): AgentMcpEnvVarDraft {
   };
 }
 
+/** Creates agent MCP server draft. */
 export function createAgentMcpServerDraft(): AgentMcpServerDraft {
   return {
     args: '',
@@ -62,6 +72,7 @@ export function createAgentMcpServerDraft(): AgentMcpServerDraft {
   };
 }
 
+/** Creates empty agent customization draft. */
 export function createEmptyAgentCustomizationDraft(): AgentCustomizationDraft {
   return {
     additionalInstructions: '',
@@ -70,6 +81,7 @@ export function createEmptyAgentCustomizationDraft(): AgentCustomizationDraft {
   };
 }
 
+/** Clones agent customization draft. */
 export function cloneAgentCustomizationDraft(
   draft: AgentCustomizationDraft | null | undefined,
 ): AgentCustomizationDraft {
@@ -85,14 +97,17 @@ export function cloneAgentCustomizationDraft(
   };
 }
 
+/** Returns whether the skill is a configured skill. */
 function isConfiguredSkill(skill: AgentSkillDraft) {
   return Boolean(skill.name.trim() || skill.path.trim());
 }
 
+/** Returns whether the entry is a configured env var. */
 function isConfiguredEnvVar(entry: AgentMcpEnvVarDraft) {
   return Boolean(entry.key.trim() || entry.value.trim());
 }
 
+/** Returns whether the server is a configured MCP server. */
 export function isConfiguredMcpServer(server: AgentMcpServerDraft) {
   return Boolean(
     server.name.trim()
@@ -103,14 +118,17 @@ export function isConfiguredMcpServer(server: AgentMcpServerDraft) {
   );
 }
 
+/** Counts configured skills. */
 export function countConfiguredSkills(skills: AgentSkillDraft[]) {
   return skills.filter(isConfiguredSkill).length;
 }
 
+/** Counts configured MCP servers. */
 export function countConfiguredMcpServers(servers: AgentMcpServerDraft[]) {
   return servers.filter(isConfiguredMcpServer).length;
 }
 
+/** Returns whether agent customization exist. */
 export function hasAgentCustomization(
   draft: AgentCustomizationDraft | null | undefined,
 ) {
@@ -125,10 +143,12 @@ export function hasAgentCustomization(
   );
 }
 
+/** Pluralizes. */
 function pluralize(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+/** Returns agent customization summary. */
 export function getAgentCustomizationSummary(
   draft: AgentCustomizationDraft | null | undefined,
 ) {
@@ -156,6 +176,7 @@ export function getAgentCustomizationSummary(
   return parts.join(' · ');
 }
 
+/** Returns agent skill draft label. */
 export function getAgentSkillDraftLabel(skill: AgentSkillDraft) {
   const explicitName = skill.name.trim();
 
@@ -171,6 +192,7 @@ export function getAgentSkillDraftLabel(skill: AgentSkillDraft) {
   return segments.at(-1) ?? 'Unnamed skill';
 }
 
+/** Returns duplicate MCP server IDs. */
 export function getDuplicateMcpServerIds(servers: AgentMcpServerDraft[]) {
   const duplicateIds = new Set<string>();
   const names = new Map<string, string>();

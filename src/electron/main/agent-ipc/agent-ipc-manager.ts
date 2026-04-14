@@ -1,3 +1,5 @@
+// Filesystem IPC manager for live agent sessions.
+
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -14,9 +16,12 @@ import {
   type ToolMessageHandler,
 } from './agent-ipc-connection';
 
+/** Agent IPC manager listener shape. */
 export type AgentIpcManagerListener = () => void;
+/** Tool message handler factory shape. */
 export type ToolMessageHandlerFactory = (context: ToolHandlerContext) => ToolMessageHandler;
 
+/** Managed agent shape. */
 interface ManagedAgent {
   agentId: string;
   agentName: string;
@@ -26,6 +31,7 @@ interface ManagedAgent {
   connection: AgentIpcConnection;
 }
 
+/** Manages agent IPC. */
 export class AgentIpcManager {
   private readonly managedAgents = new Map<string, ManagedAgent>();
 
@@ -35,6 +41,7 @@ export class AgentIpcManager {
 
   constructor(private readonly duneHome: string) {}
 
+  /** Sets tool message handler. */
   setToolMessageHandler(handlerFactory: ToolMessageHandlerFactory): void {
     this.toolMessageHandlerFactory = handlerFactory;
     for (const managed of this.managedAgents.values()) {
@@ -52,6 +59,7 @@ export class AgentIpcManager {
    */
   private static readonly SCANNED_IPC_CONTAINER_PATH = '/workspace/extra/dune/ipc/';
 
+  /** Starts agent IPC. */
   start(): void {
     this.scanForAgents();
   }
@@ -102,6 +110,7 @@ export class AgentIpcManager {
     });
   }
 
+  /** Stops agent IPC. */
   stop(): void {
     for (const agent of this.managedAgents.values()) {
       agent.connection.stop();
@@ -109,6 +118,7 @@ export class AgentIpcManager {
     this.managedAgents.clear();
   }
 
+  /** Subscribes to agent IPC updates. */
   subscribe(listener: AgentIpcManagerListener): () => void {
     this.listeners.add(listener);
     return () => {
@@ -116,6 +126,7 @@ export class AgentIpcManager {
     };
   }
 
+  /** Sends message. */
   sendMessage(agentId: string, text: string): void {
     const agent = this.managedAgents.get(agentId);
     if (!agent) {
@@ -124,6 +135,7 @@ export class AgentIpcManager {
     agent.connection.deliverMessage(text);
   }
 
+  /** Returns whether streaming agents exist. */
   hasStreamingAgents(): boolean {
     for (const agent of this.managedAgents.values()) {
       if (agent.connection.getState().isStreaming) return true;
@@ -131,6 +143,7 @@ export class AgentIpcManager {
     return false;
   }
 
+  /** Converts to snapshot agents. */
   toSnapshotAgents(): Agent[] {
     const result: Agent[] = [];
     for (const managed of this.managedAgents.values()) {
@@ -243,6 +256,7 @@ export class AgentIpcManager {
   }
 }
 
+/** Creates tool handler context. */
 function createToolHandlerContext(managed: ManagedAgent): ToolHandlerContext {
   return {
     agentId: managed.agentId,
@@ -253,6 +267,7 @@ function createToolHandlerContext(managed: ManagedAgent): ToolHandlerContext {
   };
 }
 
+/** Converts to agent. */
 function toAgent(
   agentId: string,
   agentName: string,
@@ -296,6 +311,7 @@ function toAgent(
   };
 }
 
+/** Resolves agent identity. */
 function resolveAgentIdentity(
   ipcDir: string,
   fallbackProjectId: string,
@@ -312,7 +328,7 @@ function resolveAgentIdentity(
       };
     }
   } catch {
-    // Fall back to legacy unsanitized folder names.
+    // Missing or unreadable metadata — fall back to the folder names the caller scanned.
   }
 
   return {

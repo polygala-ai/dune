@@ -1,3 +1,5 @@
+// Agent shell controller hook tests.
+
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +9,7 @@ import type {
   PresentedAgent,
 } from '@/renderer/features/agents/types';
 
+/** Creates presented agent. */
 function createPresentedAgent(): PresentedAgent {
   return {
     channel: {
@@ -106,6 +109,7 @@ describe('useAgentShellController', () => {
   });
 
   it('focuses the composer for an active agent and closes the drawer when leaving compact mode', async () => {
+    /** Controller props. */
     interface ControllerProps {
       activeAgent: PresentedAgent | null;
       isCompactShell: boolean;

@@ -1,3 +1,5 @@
+// Main-window option tests.
+
 import { describe, expect, it } from 'vitest';
 
 import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';

@@ -1,3 +1,5 @@
+// Resizable context panel hook.
+
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -7,18 +9,24 @@ import {
   useState,
 } from 'react';
 
+/** Storage key for context panel width storage. */
 export const CONTEXT_PANEL_WIDTH_STORAGE_KEY = 'dune.shell.contextPanelWidth';
+/** Context panel width default constant. */
 export const CONTEXT_PANEL_WIDTH_DEFAULT = 340;
+/** Context panel width min constant. */
 export const CONTEXT_PANEL_WIDTH_MIN = 260;
+/** Context panel width max constant. */
 export const CONTEXT_PANEL_WIDTH_MAX = 420;
 
 const CONTEXT_PANEL_WIDTH_KEYBOARD_STEP = 16;
 
+/** Context panel style shape. */
 type ContextPanelStyle = CSSProperties & {
   '--app-shell-context-width': string;
   '--app-shell-overlay-context-width': string;
 };
 
+/** Clamps context panel width. */
 function clampContextPanelWidth(width: number) {
   return Math.min(
     CONTEXT_PANEL_WIDTH_MAX,
@@ -26,6 +34,7 @@ function clampContextPanelWidth(width: number) {
   );
 }
 
+/** Reads stored context panel width. */
 function readStoredContextPanelWidth() {
   if (typeof window === 'undefined') {
     return CONTEXT_PANEL_WIDTH_DEFAULT;
@@ -50,10 +59,12 @@ function readStoredContextPanelWidth() {
   }
 }
 
+/** Use resizable context panel options. */
 interface UseResizableContextPanelOptions {
   enabled: boolean;
 }
 
+/** Resizable context panel hook. */
 export function useResizableContextPanel({
   enabled,
 }: UseResizableContextPanelOptions) {
@@ -88,10 +99,12 @@ export function useResizableContextPanel({
     }
   }, [enabled]);
 
+  /** Updates context panel width. */
   const updateContextPanelWidth = (nextWidth: number) => {
     setContextPanelWidth(clampContextPanelWidth(nextWidth));
   };
 
+  /** Handles down key. */
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'ArrowLeft':
@@ -115,6 +128,7 @@ export function useResizableContextPanel({
     }
   };
 
+  /** Handles down pointer. */
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!enabled || event.button !== 0) {
       return;
@@ -137,10 +151,12 @@ export function useResizableContextPanel({
     document.documentElement.style.userSelect = 'none';
     setIsResizing(true);
 
+    /** Handles move pointer. */
     const handlePointerMove = (moveEvent: PointerEvent) => {
       updateContextPanelWidth(startWidth - (moveEvent.clientX - startX));
     };
 
+    /** Stops dragging. */
     const stopDragging = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', stopDragging);

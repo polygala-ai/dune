@@ -1,3 +1,5 @@
+// Renderer store types.
+
 import type { StateCreator } from 'zustand';
 
 import type {
@@ -26,8 +28,10 @@ import type {
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
 
+/** App route shape. */
 export type AppRoute = 'agent' | 'plugins' | 'settings' | 'workflow';
 
+/** Navigation snapshot. */
 export interface NavigationSnapshot {
   route: AppRoute;
   selectedAgentId: string | null;
@@ -37,6 +41,7 @@ export interface NavigationSnapshot {
   settingsRoute: SettingsRoute;
 }
 
+/** Agent state. */
 export interface AgentState {
   agents: Agent[];
   agentCustomizations: Record<string, AgentCustomizationDraft>;
@@ -49,6 +54,7 @@ export interface AgentState {
   telegramSetupSessions: TelegramSetupSession[];
 }
 
+/** Agent actions shape. */
 export interface AgentActions {
   resetAgentCustomization: (agentId: string) => void;
   setAgentsSnapshot: (snapshot: AgentServiceSnapshot) => void;
@@ -59,25 +65,31 @@ export interface AgentActions {
   ) => void;
 }
 
+/** Agent slice shape. */
 export type AgentSlice = AgentState & AgentActions;
 
+/** Settings state. */
 export interface SettingsState {
   settingsRoute: SettingsRoute;
   themePreference: ThemePreference;
 }
 
+/** Settings actions shape. */
 export interface SettingsActions {
   setSettingsRoute: (route: SettingsRoute) => void;
   setThemePreference: (preference: ThemePreference) => void;
 }
 
+/** Settings slice shape. */
 export type SettingsSlice = SettingsState & SettingsActions;
 
+/** Workflow state. */
 export interface WorkflowState extends WorkflowSnapshot {
   isWorkflowHydrated: boolean;
   selectedProjectScreen: WorkflowProjectScreen;
 }
 
+/** Workflow actions shape. */
 export interface WorkflowActions {
   addTask: (itemId: string, title: string) => string | null;
   addWorkProduct: (itemId: string, input: { body: string; title: string }) => string | null;
@@ -125,8 +137,10 @@ export interface WorkflowActions {
   ) => void;
 }
 
+/** Workflow slice shape. */
 export type WorkflowSlice = WorkflowState & WorkflowActions;
 
+/** Shell state. */
 export interface ShellState {
   isCommandOpen: boolean;
   isContextPanelOpen: boolean;
@@ -136,6 +150,7 @@ export interface ShellState {
   route: AppRoute;
 }
 
+/** Shell actions shape. */
 export interface ShellActions {
   setCommandOpen: (isOpen: boolean) => void;
   setContextPanelOpen: (isOpen: boolean) => void;
@@ -143,16 +158,21 @@ export interface ShellActions {
   setRoute: (route: AppRoute) => void;
 }
 
+/** Shell slice shape. */
 export type ShellSlice = ShellState & ShellActions;
 
+/** App store state. */
 export type AppStoreState = AgentState & SettingsState & WorkflowState & ShellState;
+/** App store contract. */
 export type AppStore = AppStoreState &
   AgentActions &
   SettingsActions &
   WorkflowActions &
   ShellActions;
+/** App store slice shape. */
 export type AppStoreSlice<T> = StateCreator<AppStore, [], [], T>;
 
+/** Agent session state. */
 export interface AgentSessionState {
   activeAgent: PresentedAgent | null;
   activeAgentCustomization: AgentCustomizationDraft | null;
@@ -166,6 +186,7 @@ export interface AgentSessionState {
   telegramSetupSessions: TelegramSetupSession[];
 }
 
+/** Workflow session state. */
 export interface WorkflowSessionState {
   activityEntries: Array<{
     actor?: string;

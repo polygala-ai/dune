@@ -1,3 +1,5 @@
+// Desktop Dune agent wrapper.
+
 import type {
   Agent as AgentLiteAgent,
   AgentLite,
@@ -8,6 +10,7 @@ import type {
 
 import { DuneChannel } from './dune-channel';
 
+/** Dune agent options. */
 export interface DuneAgentOptions {
   agentLite: AgentLite;
   boundExternalJid?: string | undefined;
@@ -28,6 +31,7 @@ export interface DuneAgentOptions {
   skills?: string[] | undefined;
 }
 
+/** Creates registered main group. */
 function createRegisteredMainGroup(
   name: string,
   mounts: NonNullable<DuneAgentOptions['mounts']> = [],
@@ -53,6 +57,7 @@ function createRegisteredMainGroup(
   return options;
 }
 
+/** Dune agent. */
 export class DuneAgent {
   private agent!: AgentLiteAgent;
 
@@ -67,6 +72,7 @@ export class DuneAgent {
     this.groupFolder = options.groupFolder;
   }
 
+  /** Starts Dune agent. */
   async start() {
     const { options } = this;
 
@@ -115,10 +121,12 @@ export class DuneAgent {
     return this.agent;
   }
 
+  /** Pushes user message. */
   async pushUserMessage(chatJid: string, text: string, senderName: string = 'You') {
     await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
   }
 
+  /** Pushes control message. */
   async pushControlMessage(
     chatJid: string,
     text: string,
@@ -132,6 +140,7 @@ export class DuneAgent {
     await this.duneChannel.attachExternalChannel(factory, boundJid);
   }
 
+  /** Detaches external channel. */
   async detachExternalChannel() {
     await this.duneChannel.detachExternalChannel();
   }

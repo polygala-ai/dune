@@ -1,3 +1,6 @@
+// Workflow project activity UI.
+
+/** Workflow project activity props. */
 interface WorkflowProjectActivityProps {
   entries: Array<{
     actor?: string | undefined;
@@ -10,6 +13,7 @@ interface WorkflowProjectActivityProps {
   onOpenItem: (itemId: string) => void;
 }
 
+/** Renders the workflow project activity UI. */
 export function WorkflowProjectActivity({
   entries,
   onOpenItem,

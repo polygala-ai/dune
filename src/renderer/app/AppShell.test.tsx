@@ -1,3 +1,5 @@
+// App shell UI tests.
+
 import {
   act,
   fireEvent,
@@ -27,6 +29,7 @@ import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import { createSeedWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
+/** Titlebar area rect input shape. */
 interface TitlebarAreaRectInput {
   height: number;
   width: number;
@@ -41,6 +44,7 @@ const DEFAULT_TITLEBAR_AREA_RECT: TitlebarAreaRectInput = {
   y: 0,
 };
 
+/** Window controls overlay mock. */
 class WindowControlsOverlayMock extends EventTarget implements WindowControlsOverlay {
   visible = true;
   private rect: TitlebarAreaRectInput;
@@ -50,16 +54,19 @@ class WindowControlsOverlayMock extends EventTarget implements WindowControlsOve
     this.rect = rect;
   }
 
+  /** Returns titlebar area rect. */
   getTitlebarAreaRect() {
     return new DOMRect(this.rect.x, this.rect.y, this.rect.width, this.rect.height);
   }
 
+  /** Sets rect. */
   setRect(rect: TitlebarAreaRectInput) {
     this.rect = rect;
     this.dispatchEvent(new Event('geometrychange'));
   }
 }
 
+/** Sets window controls overlay mock. */
 function setWindowControlsOverlayMock(overlay?: WindowControlsOverlay) {
   Object.defineProperty(window.navigator, 'windowControlsOverlay', {
     configurable: true,
@@ -67,12 +74,14 @@ function setWindowControlsOverlayMock(overlay?: WindowControlsOverlay) {
   });
 }
 
+/** Installs window controls overlay mock. */
 function installWindowControlsOverlayMock(rect?: TitlebarAreaRectInput) {
   const overlay = new WindowControlsOverlayMock(rect);
   setWindowControlsOverlayMock(overlay);
   return overlay;
 }
 
+/** Sets window width. */
 function setWindowWidth(width: number) {
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
@@ -82,18 +91,22 @@ function setWindowWidth(width: number) {
   fireEvent(window, new Event('resize'));
 }
 
+/** Returns sidebar resize handle. */
 function getSidebarResizeHandle() {
   return screen.getByRole('separator', { name: 'Resize sidebar' });
 }
 
+/** Returns context panel resize handle. */
 function getContextPanelResizeHandle() {
   return screen.getByRole('separator', { name: 'Resize inspector' });
 }
 
+/** Returns context panel dialog. */
 function getContextPanelDialog() {
   return screen.getByRole('dialog', { name: 'Agent inspector' });
 }
 
+/** Returns open agent button. */
 function getOpenAgentButton(agentName: string) {
   const agentLabel = screen.getByText(agentName);
   const agentRow = agentLabel.closest('div[class*="justify-between"]');
@@ -105,12 +118,14 @@ function getOpenAgentButton(agentName: string) {
   return within(agentRow).getByRole('button', { name: /^Open agent$/i });
 }
 
+/** Asserts sidebar width. */
 function expectSidebarWidth(width: number) {
   expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
     `--app-shell-sidebar-width: ${width}px`,
   );
 }
 
+/** Asserts context panel width. */
 function expectContextPanelWidth(width: number) {
   expect(screen.getByTestId('app-shell-layout')).toHaveStyle(
     `--app-shell-context-width: ${width}px`,
@@ -120,6 +135,7 @@ function expectContextPanelWidth(width: number) {
   );
 }
 
+/** Creates agent. */
 async function createAgent(user: ReturnType<typeof userEvent.setup>, name: string) {
   if (screen.queryByRole('dialog')) {
     await user.keyboard('{Escape}');
@@ -1461,50 +1477,4 @@ describe('AppShell', () => {
     });
   });
 
-  it('restores a persisted workflow snapshot from local storage', async () => {
-    const storageGet = vi.fn(() => Promise.resolve({
-      missions: [
-        {
-          brief: 'Reload the saved mission from storage.',
-          createdAt: 1_700_000_000_000,
-          id: 'mission-restored',
-          linkedAgents: [],
-          projectId: 'project-restored',
-          sortOrder: 0,
-          status: 'active',
-          tasks: [],
-          title: 'Restored workflow mission',
-          updatedAt: 1_700_000_000_000,
-          workProducts: [],
-          workflowEvents: [],
-        },
-      ],
-      projects: [
-        {
-          color: '#A86D46',
-          createdAt: 1_700_000_000_000,
-          description: 'Recovered from storage',
-          id: 'project-restored',
-          name: 'Recovered board',
-          updatedAt: 1_700_000_000_000,
-        },
-      ],
-      selectedMissionId: 'mission-restored',
-      selectedProjectId: 'project-restored',
-    }));
-
-    window.duneDesktop = {
-      ...window.duneDesktop,
-      platform: 'darwin',
-      storageGet,
-      storageSet: vi.fn(() => Promise.resolve(undefined)),
-    };
-
-    render(<AppShell />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Recovered board' })).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Restored workflow mission')).toBeInTheDocument();
-    });
-  });
 });

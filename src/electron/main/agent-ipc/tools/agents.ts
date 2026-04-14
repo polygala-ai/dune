@@ -1,3 +1,5 @@
+// Agents IPC tool handlers.
+
 import { optionalString, requireString, resolveProjectId } from './helpers';
 import { sanitizeAgent } from './presenters';
 import { readWorkflowSnapshot, writeWorkflowSnapshot } from './snapshot';
@@ -5,6 +7,7 @@ import { objectSchema, optionalStringSchema, stringSchema } from './schemas';
 import { clearPrimaryAgentAssignments } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Lists agent tools. */
 export const agentTools: RegisteredTool[] = [
   {
     definition: {

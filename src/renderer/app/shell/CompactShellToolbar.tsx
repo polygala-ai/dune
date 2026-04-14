@@ -1,9 +1,12 @@
+// Compact shell toolbar UI.
+
 import { Menu, PanelRight } from 'lucide-react';
 
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Compact shell toolbar props. */
 interface CompactShellToolbarProps {
   inspectorToggle?: {
     isOpen: boolean;
@@ -14,6 +17,7 @@ interface CompactShellToolbarProps {
   showSidebarToggle?: boolean;
 }
 
+/** Renders the compact shell toolbar UI. */
 export function CompactShellToolbar({
   inspectorToggle,
   isSidebarOpen,

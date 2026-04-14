@@ -1,3 +1,5 @@
+// Agent runtime tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,22 +23,27 @@ import {
   type TelegramSecretsStore,
 } from './agent-runtime';
 import {
+  resolveAgentIpcMetadataPath,
+} from '@/electron/main/agent-ipc/ipc-directory';
+import {
   resolveAgentDuneDir,
   resolveAgentIpcDir,
-  resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
-} from '@/electron/main/agent-ipc/ipc-directory';
+} from '@/electron/main/dune-paths';
 import type { DuneChannel } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import { createReadyAssignmentsInboxSignalMessage } from '@/shared/agents/ready-assignments';
 
+/** Agent lite module shape. */
 type AgentLiteModule = typeof import('@boxlite-ai/agentlite');
 
+/** Creates temp home. */
 function createTempHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-agentlite-home-'));
 }
 
+/** Creates memory store. */
 function createMemoryStore(initialData: Record<string, unknown> = {}): AgentStore {
   const data = new Map<string, unknown>(Object.entries(initialData));
   return {
@@ -49,6 +56,7 @@ function createMemoryStore(initialData: Record<string, unknown> = {}): AgentStor
   };
 }
 
+/** Creates memory secrets store. */
 function createMemorySecretsStore(
   initialData: Record<string, unknown> = {},
 ): TelegramSecretsStore & { getData: () => Map<string, unknown> } {
@@ -67,6 +75,7 @@ function createMemorySecretsStore(
   };
 }
 
+/** Creates deferred. */
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -82,12 +91,14 @@ function createDeferred<T>() {
   };
 }
 
+/** Flushes microtasks. */
 async function flushMicrotasks() {
   for (let index = 0; index < 8; index += 1) {
     await Promise.resolve();
   }
 }
 
+/** Mock agent shape. */
 interface MockAgent {
   _emit: <K extends keyof AgentEvents & string>(event: K, ...args: AgentEvents[K]) => void;
   _options: AgentOptions;
@@ -104,6 +115,7 @@ interface MockAgent {
   stop: ReturnType<typeof vi.fn>;
 }
 
+/** Creates agent lite module harness. */
 function createAgentLiteModuleHarness(
   harnessOptions: {
     start?: () => Promise<void> | void;
@@ -119,6 +131,7 @@ function createAgentLiteModuleHarness(
   });
 
   const createAgent = vi.fn((name: string, options?: AgentOptions): MockAgent => {
+    /** Event handler shape. */
     type EventHandler = (...args: unknown[]) => void;
     const eventHandlers = new Map<string, EventHandler[]>();
     const channelDrivers = new Map<string, ChannelDriver>();
@@ -275,6 +288,7 @@ function createAgentLiteModuleHarness(
   };
 }
 
+/** Creates Telegram channel factory harness. */
 function createTelegramChannelFactoryHarness(
   options: {
     connect?: () => Promise<void> | void;
@@ -745,10 +759,10 @@ describe('AgentRuntime', () => {
     const harness = createAgentLiteModuleHarness();
     const projectId = 'YipGrZE0';
     const projectName = 'Polygala, Inc.';
-    const legacyProjectDir = resolveProjectDuneDir(homeDir, projectId, null);
+    const bareProjectDir = resolveProjectDuneDir(homeDir, projectId, null);
 
-    fs.mkdirSync(path.join(legacyProjectDir, 'agents', 'legacy-agent', 'ipc', 'agent'), { recursive: true });
-    fs.writeFileSync(path.join(legacyProjectDir, 'CLAUDE.md'), '# legacy project\n');
+    fs.mkdirSync(path.join(bareProjectDir, 'agents', 'stale-agent', 'ipc', 'agent'), { recursive: true });
+    fs.writeFileSync(path.join(bareProjectDir, 'CLAUDE.md'), '# stale project\n');
 
     tempDirs.push(homeDir);
 
@@ -775,7 +789,7 @@ describe('AgentRuntime', () => {
     expect(
       fs.existsSync(resolveAgentDuneDir(homeDir, projectId, projectName, 'Chani', agentId)),
     ).toBe(true);
-    expect(fs.existsSync(legacyProjectDir)).toBe(false);
+    expect(fs.existsSync(bareProjectDir)).toBe(false);
   });
 
   it('creates one project-main agent per project and keeps a stable Dune character name', async () => {
@@ -955,68 +969,12 @@ describe('AgentRuntime', () => {
     expect(harness.deleteAgent).toHaveBeenCalledTimes(1);
   });
 
-  it('blocks startup when persisted agents have no project ownership', async () => {
-    const homeDir = createTempHome();
-    const harness = createAgentLiteModuleHarness();
-    const store = createMemoryStore({
-      agents: [
-        {
-          agent: {
-            channel: {
-              canCompose: true,
-              id: 'dune-chat',
-              kind: 'built-in',
-              label: 'Dune chat',
-              status: 'ready',
-            },
-            activityEvents: [],
-            codingEngineEvents: [],
-            contextCards: [],
-            id: 'dune:agent:legacy',
-            messages: [],
-            name: 'Legacy agent',
-            note: 'Legacy agent',
-            preview: 'Legacy agent',
-            projectId: null,
-            role: 'custom',
-            status: 'draft',
-            updatedAt: 1,
-            workspace: 'AgentLite agent',
-          },
-          groupFolder: 'legacy-agent',
-        },
-      ],
-    });
-
-    tempDirs.push(homeDir);
-
-    const host = new AgentRuntime({
-      agentStore: store,
-      homeDir,
-      loadAgentLiteModule: harness.loadAgentLiteModule,
-      resolveModelCredentials: async () => ({}),
-    });
-
-    await host.start();
-
-    expect(harness.stop).not.toHaveBeenCalled();
-    expect(host.getSnapshot().runtimeInfo.status).toBe('error');
-    expect(host.getSnapshot().runtimeInfo.message).toContain(
-      'Legacy Dune agent state contains agents without project ownership.',
-    );
-    await expect(host.service.createAgent({
-      channelId: 'dune-chat',
-      name: 'Navigator',
-      projectId: 'project-1',
-    })).rejects.toThrow(/without project ownership/i);
-  });
-
   it('prunes persisted agents whose projects no longer exist and removes their Dune paths on startup', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
     const projectId = 'project-KhA2L6JPWg7yTjX62WmPH';
     const projectDir = resolveProjectDuneDir(homeDir, projectId, null);
-    const legacyAgentDir = path.join(
+    const staleAgentDir = path.join(
       projectDir,
       'agents',
       'duncan-idaho-dune-agent-xwtmkq2tf8uqviiprel4o',
@@ -1053,10 +1011,10 @@ describe('AgentRuntime', () => {
       selectedAgentId: 'dune:agent:xwTmkq2Tf8uQViIpreL4o',
     });
 
-    fs.mkdirSync(path.join(legacyAgentDir, 'ipc'), { recursive: true });
+    fs.mkdirSync(path.join(staleAgentDir, 'ipc'), { recursive: true });
     fs.writeFileSync(path.join(projectDir, 'CLAUDE.md'), '# stale project\n');
-    fs.writeFileSync(path.join(legacyAgentDir, 'CLAUDE.md'), '# stale agent\n');
-    fs.writeFileSync(path.join(legacyAgentDir, 'ipc', 'dune-ipc.json'), '{}\n');
+    fs.writeFileSync(path.join(staleAgentDir, 'CLAUDE.md'), '# stale agent\n');
+    fs.writeFileSync(path.join(staleAgentDir, 'ipc', 'dune-ipc.json'), '{}\n');
 
     tempDirs.push(homeDir);
 

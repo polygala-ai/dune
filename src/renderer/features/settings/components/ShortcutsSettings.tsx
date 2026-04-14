@@ -1,3 +1,5 @@
+// Shortcuts settings UI.
+
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
 import type { SettingsRow } from '@/renderer/features/settings/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
@@ -5,6 +7,7 @@ import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { SettingsRows } from './SettingsRows';
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
+/** Renders the shortcuts settings UI. */
 export function ShortcutsSettings(props: SettingsSectionComponentProps) {
   void props;
   const {

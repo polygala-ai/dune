@@ -1,3 +1,5 @@
+// Desktop runtime controller and backend fallback wiring.
+
 import type {
   AgentRuntimeContract,
   AgentServiceListener,
@@ -18,21 +20,25 @@ import {
 } from './agent-runtime';
 import type { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 
+/** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
 
+/** Real runtime shape. */
 type RealRuntime = ActiveRuntime & {
   start: () => Promise<void>;
 };
 
+/** Desktop runtime controller options. */
 export interface DesktopRuntimeControllerOptions
   extends AgentRuntimeOptions {
   agentIpcManager?: AgentIpcManager;
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
 }
 
+/** Coordinates desktop runtime. */
 export class DesktopRuntimeController {
   private activeRuntime: ActiveRuntime;
 
@@ -66,6 +72,7 @@ export class DesktopRuntimeController {
     this.subscribeToActiveRuntime();
   }
 
+  /** Starts desktop runtime. */
   async start() {
     try {
       const host = this.createRealRuntime(this.runtimeOptions);
@@ -83,10 +90,12 @@ export class DesktopRuntimeController {
     }
   }
 
+  /** Returns snapshot. */
   getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
   }
 
+  /** Pushes coding engine event. */
   pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
     const runtime = this.activeRuntime;
 
@@ -95,6 +104,7 @@ export class DesktopRuntimeController {
     }
   }
 
+  /** Subscribes to desktop runtime updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
     return () => {
@@ -102,18 +112,22 @@ export class DesktopRuntimeController {
     };
   }
 
+  /** Creates agent. */
   async createAgent(input: CreateAgentInput) {
     return this.activeRuntime.service.createAgent(input);
   }
 
+  /** Cancels Telegram setup session. */
   async cancelTelegramSetupSession(sessionId: string) {
     await this.activeRuntime.service.cancelTelegramSetupSession(sessionId);
   }
 
+  /** Deletes agent. */
   async deleteAgent(agentId: string) {
     await this.activeRuntime.service.deleteAgent(agentId);
   }
 
+  /** Ensures project main agent. */
   async ensureProjectMainAgent(
     projectId: string,
     projectName: string,
@@ -126,40 +140,49 @@ export class DesktopRuntimeController {
     );
   }
 
+  /** Returns Telegram setup session. */
   async getTelegramSetupSession(sessionId: string) {
     return this.activeRuntime.service.getTelegramSetupSession(sessionId);
   }
 
+  /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.activeRuntime.reloadExternalChannels?.();
   }
 
+  /** Sends agent message. */
   async sendAgentMessage(agentId: string, text: string) {
     await this.activeRuntime.service.sendMessage(agentId, text);
   }
 
+  /** Signals ready assignment inbox. */
   async signalReadyAssignmentInbox(agentId: string, signal: ReadyAssignmentsInboxSignal) {
     await this.activeRuntime.service.signalReadyAssignmentInbox(agentId, signal);
   }
 
+  /** Starts Telegram setup session. */
   async startTelegramSetupSession(input: StartTelegramSetupSessionInput) {
     return this.activeRuntime.service.startTelegramSetupSession(input);
   }
 
+  /** Updates agent channel. */
   async updateAgentChannel(input: UpdateAgentChannelInput) {
     await this.activeRuntime.service.updateAgentChannel(input);
   }
 
+  /** Selects agent. */
   selectAgent(agentId: string) {
     this.activeRuntime.service.selectAgent(agentId);
   }
 
+  /** Resets desktop runtime. */
   async reset() {
     if (typeof this.activeRuntime.reset === 'function') {
       this.activeRuntime.reset();
     }
   }
 
+  /** Shuts down desktop runtime. */
   shutdown(): Promise<void> {
     if (this.shutdownPromise) {
       return this.shutdownPromise;

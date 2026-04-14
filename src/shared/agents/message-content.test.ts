@@ -1,3 +1,5 @@
+// Agent message content tests.
+
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -1,3 +1,5 @@
+// Shared agent runtime contracts.
+
 import type {
   Agent,
   AgentRuntimeInfo,
@@ -25,6 +27,7 @@ export interface AgentServiceSnapshot {
   telegramSetupSessions: TelegramSetupSession[];
 }
 
+/** Agent service listener shape. */
 export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
 
 /**

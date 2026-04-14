@@ -1,13 +1,21 @@
+// Network settings persistence helpers.
+
+import { isPlainObject } from '@/shared/is-record';
+
+/** Storage key for network settings. */
 export const NETWORK_SETTINGS_KEY = 'network';
 
+/** Network proxy mode shape. */
 export type NetworkProxyMode = 'direct' | 'manual' | 'system';
 
+/** Network settings. */
 export interface NetworkSettings {
   bypassRules: string[];
   manualProxyUrl: string;
   mode: NetworkProxyMode;
 }
 
+/** Network settings store contract. */
 export interface NetworkSettingsStore {
   get: <T>(key: string) => Promise<T | null>;
   set: <T>(key: string, value: T) => Promise<void>;
@@ -21,10 +29,7 @@ const DEFAULT_NETWORK_SETTINGS: NetworkSettings = {
 
 const VALID_MODES = new Set<NetworkProxyMode>(['direct', 'manual', 'system']);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
+/** Normalizes bypass rules. */
 export function normalizeBypassRules(rules: string[]) {
   return [...new Set(
     rules
@@ -33,8 +38,9 @@ export function normalizeBypassRules(rules: string[]) {
   )];
 }
 
+/** Normalizes network settings. */
 export function normalizeNetworkSettings(value: unknown): NetworkSettings {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return { ...DEFAULT_NETWORK_SETTINGS };
   }
 
@@ -57,6 +63,7 @@ export function normalizeNetworkSettings(value: unknown): NetworkSettings {
   };
 }
 
+/** Validates network settings. */
 export function validateNetworkSettings(value: NetworkSettings) {
   const normalized = normalizeNetworkSettings(value);
 
@@ -90,6 +97,7 @@ export function validateNetworkSettings(value: NetworkSettings) {
   };
 }
 
+/** Loads network settings. */
 export async function loadNetworkSettings(
   settingsStore: NetworkSettingsStore,
 ) {
@@ -97,6 +105,7 @@ export async function loadNetworkSettings(
   return normalizeNetworkSettings(value);
 }
 
+/** Saves network settings. */
 export async function saveNetworkSettings(
   settingsStore: NetworkSettingsStore,
   settings: NetworkSettings,

@@ -1,3 +1,5 @@
+// Agent IPC connection tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentIpcConnection } from './agent-ipc-connection';
 
+/** Creates temp IPC dirs. */
 function createTempIpcDirs() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-ipc-test-'));
   const agentDir = path.join(base, 'agent');

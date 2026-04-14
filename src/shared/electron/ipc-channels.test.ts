@@ -1,3 +1,5 @@
+// IPC channel tests.
+
 import { describe, expect, it } from 'vitest';
 
 import { ipcChannels } from './ipc-channels';

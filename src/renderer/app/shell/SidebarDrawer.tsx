@@ -1,3 +1,5 @@
+// Sidebar drawer UI.
+
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
@@ -10,12 +12,14 @@ import {
 } from '@/renderer/shared/ui/dialog';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Sidebar drawer props. */
 interface SidebarDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   sidebar: ReactNode;
 }
 
+/** Renders the sidebar drawer UI. */
 export function SidebarDrawer({
   isOpen,
   onOpenChange,

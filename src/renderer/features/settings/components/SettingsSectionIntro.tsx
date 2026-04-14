@@ -1,9 +1,13 @@
+// Settings section intro UI.
+
+/** Settings section intro props. */
 interface SettingsSectionIntroProps {
   description?: string;
   eyebrow: string;
   title: string;
 }
 
+/** Renders the settings section intro UI. */
 export function SettingsSectionIntro({
   description,
   eyebrow,

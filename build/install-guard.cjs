@@ -1,3 +1,5 @@
+// Install-time runtime guard.
+
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -14,6 +16,7 @@ const STALE_NATIVE_MODULES = [
   },
 ];
 
+/** Returns whether the env is a pnpm execution. */
 function isPnpmExecution(env = process.env) {
   const userAgent = env.npm_config_user_agent ?? '';
   const execPath = env.npm_execpath ?? '';
@@ -21,6 +24,7 @@ function isPnpmExecution(env = process.env) {
   return userAgent.includes('pnpm/') || execPath.includes('pnpm');
 }
 
+/** Formats pnpm only message. */
 function formatPnpmOnlyMessage() {
   return [
     'This repo is pnpm-only.',
@@ -28,6 +32,7 @@ function formatPnpmOnlyMessage() {
   ].join(' ');
 }
 
+/** Finds install hygiene issues. */
 function findInstallHygieneIssues(rootDir = process.cwd()) {
   return STALE_NATIVE_MODULES
     .map((entry) => ({
@@ -37,6 +42,7 @@ function findInstallHygieneIssues(rootDir = process.cwd()) {
     .filter((entry) => fs.existsSync(entry.absolutePath));
 }
 
+/** Formats install hygiene message. */
 function formatInstallHygieneMessage(issues, rootDir = process.cwd()) {
   const relativeIssues = issues.map((issue) => path.relative(rootDir, issue.absolutePath));
 
@@ -47,12 +53,14 @@ function formatInstallHygieneMessage(issues, rootDir = process.cwd()) {
   ].join('\n');
 }
 
+/** Asserts pnpm only. */
 function assertPnpmOnly(env = process.env) {
   if (!isPnpmExecution(env)) {
     throw new Error(formatPnpmOnlyMessage());
   }
 }
 
+/** Asserts install hygiene. */
 function assertInstallHygiene(rootDir = process.cwd()) {
   const issues = findInstallHygieneIssues(rootDir);
 
@@ -61,6 +69,7 @@ function assertInstallHygiene(rootDir = process.cwd()) {
   }
 }
 
+/** Mains. */
 function main(argv = process.argv.slice(2)) {
   const mode = argv[0];
 

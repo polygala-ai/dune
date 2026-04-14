@@ -1,3 +1,5 @@
+// Workflow end-to-end coverage.
+
 import { expect, test } from '@playwright/test';
 
 import {

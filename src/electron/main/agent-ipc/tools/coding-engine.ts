@@ -1,3 +1,5 @@
+// Coding engine IPC tool handlers.
+
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,6 +13,7 @@ import { ToolHandlerError, type RegisteredTool, type ToolServices } from './type
 const CODING_ENGINE_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
 const LOG_TAIL_READ_BYTES = 64 * 1024;
 
+/** Coding engine job shape. */
 interface CodingEngineJob {
   jobId: string;
   engineId: CodingEngineId;
@@ -27,14 +30,17 @@ interface CodingEngineJob {
 /** Global registry of running/completed coding engine jobs. */
 const engineJobs = new Map<string, CodingEngineJob>();
 
+/** Creates engine event ID. */
 function createEngineEventId(): string {
   return `ce-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Creates job ID. */
 function createJobId(): string {
   return `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Emits engine event. */
 function emitEngineEvent(
   services: ToolServices,
   event: CodingEngineEvent,
@@ -42,6 +48,7 @@ function emitEngineEvent(
   services.onCodingEngineEvent?.(services.agentContext.agentId, event);
 }
 
+/** Builds engine command. */
 function buildEngineCommand(
   engineId: CodingEngineId,
   prompt: string,
@@ -76,6 +83,7 @@ function buildEngineCommand(
   };
 }
 
+/** Parses streamed steps. */
 function parseStreamedSteps(
   engineId: CodingEngineId,
   line: string,
@@ -116,6 +124,7 @@ function parseStreamedSteps(
   return null;
 }
 
+/** Reads log tail. */
 function readLogTail(logPathHost: string, maxBytes: number): string {
   try {
     const stat = fs.statSync(logPathHost);
@@ -135,6 +144,7 @@ function readLogTail(logPathHost: string, maxBytes: number): string {
   }
 }
 
+/** Extracts final result. */
 function extractFinalResult(
   engineId: CodingEngineId,
   logPathHost: string,
@@ -165,6 +175,7 @@ function extractFinalResult(
   return lines.filter(Boolean).pop() ?? 'Completed';
 }
 
+/** Starts coding engine. */
 function startCodingEngine(
   services: ToolServices,
   engineId: CodingEngineId,
@@ -214,6 +225,7 @@ function startCodingEngine(
 
   const outStream = fs.createWriteStream(logPathHost);
   const errStream = fs.createWriteStream(errPathHost);
+  /** Marks job error. */
   const markJobError = (message: string) => {
     if (job.status !== 'running') return;
     job.status = 'error';
@@ -292,6 +304,7 @@ function startCodingEngine(
   return { jobId, status: 'running', logPath: logPathContainer, errPath: errPathContainer };
 }
 
+/** Polls coding engine job. */
 function pollCodingEngineJob(jobId: string): {
   status: 'running' | 'completed' | 'error';
   engineId: CodingEngineId;
@@ -328,6 +341,7 @@ function pollCodingEngineJob(jobId: string): {
   return poll;
 }
 
+/** Lists coding engine tools. */
 export const codingEngineTools: RegisteredTool[] = [
   {
     definition: {

@@ -1,3 +1,5 @@
+// Primary-agent assignment message formatting.
+
 const workflowItemStatusLabels: Record<string, string> = {
   active: 'Active',
   done: 'Done',
@@ -14,11 +16,13 @@ const workflowTaskStatusLabels: Record<string, string> = {
   todo: 'To do',
 };
 
+/** Assignment task summary shape. */
 interface AssignmentTaskSummary {
   status: string;
   title: string;
 }
 
+/** Agent assignment message input shape. */
 export interface AgentAssignmentMessageInput {
   agentName?: string | null;
   artifactPath?: string | null;
@@ -29,14 +33,17 @@ export interface AgentAssignmentMessageInput {
   tasks: AssignmentTaskSummary[];
 }
 
+/** Formats workflow item status. */
 function formatWorkflowItemStatus(status: string) {
   return workflowItemStatusLabels[status] ?? status;
 }
 
+/** Formats workflow task status. */
 function formatWorkflowTaskStatus(status: string) {
   return workflowTaskStatusLabels[status] ?? status;
 }
 
+/** Creates agent assignment message. */
 export function createAgentAssignmentMessage(
   input: AgentAssignmentMessageInput,
 ) {

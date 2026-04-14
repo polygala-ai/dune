@@ -1,3 +1,5 @@
+// Dune channel tests.
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { DuneChannel } from './dune-channel';

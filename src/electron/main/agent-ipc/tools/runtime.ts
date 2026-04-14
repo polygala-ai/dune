@@ -1,7 +1,10 @@
+// Runtime IPC tool handlers.
+
 import { sanitizeRuntimeSnapshot } from './presenters';
 import { emptyObjectSchema } from './schemas';
 import type { RegisteredTool } from './types';
 
+/** Lists runtime tools. */
 export const runtimeTools: RegisteredTool[] = [
   {
     definition: {

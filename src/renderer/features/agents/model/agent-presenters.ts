@@ -1,3 +1,5 @@
+// Agent presenter helpers.
+
 import {
   formatAgentStatus,
   formatAgentTimestamp,
@@ -10,6 +12,7 @@ import type {
   PresentedAgent,
 } from '@/renderer/features/agents/types';
 
+/** Presents agent summary. */
 export function presentAgentSummary(
   agent: Agent,
   now: number = Date.now(),
@@ -23,6 +26,7 @@ export function presentAgentSummary(
   };
 }
 
+/** Presents agent. */
 export function presentAgent(
   agent: Agent,
   now: number = Date.now(),
@@ -37,6 +41,7 @@ export function presentAgent(
   };
 }
 
+/** Selects agent by ID. */
 export function selectAgentById(
   agents: Agent[],
   selectedAgentId: string | null,

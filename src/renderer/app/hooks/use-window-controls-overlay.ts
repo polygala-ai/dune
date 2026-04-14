@@ -1,5 +1,8 @@
+// Window controls overlay hook.
+
 import { useEffect, useState } from 'react';
 
+/** Titlebar area rect shape. */
 export interface TitlebarAreaRect {
   height: number;
   width: number;
@@ -7,6 +10,7 @@ export interface TitlebarAreaRect {
   y: number;
 }
 
+/** Reads titlebar area rect. */
 function readTitlebarAreaRect(): TitlebarAreaRect | null {
   const overlay = navigator.windowControlsOverlay;
 
@@ -24,6 +28,7 @@ function readTitlebarAreaRect(): TitlebarAreaRect | null {
   };
 }
 
+/** Window controls overlay hook. */
 export function useWindowControlsOverlay(enabled: boolean) {
   const [rect, setRect] = useState<TitlebarAreaRect | null>(() =>
     enabled ? readTitlebarAreaRect() : null,
@@ -42,6 +47,7 @@ export function useWindowControlsOverlay(enabled: boolean) {
       return;
     }
 
+    /** Synchronizes rect. */
     const syncRect = () => {
       setRect(readTitlebarAreaRect());
     };

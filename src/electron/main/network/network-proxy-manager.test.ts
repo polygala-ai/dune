@@ -1,3 +1,5 @@
+// Network proxy manager tests.
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -5,11 +7,13 @@ import {
   parsePacProxyResult,
 } from '@/electron/main/network/network-proxy-manager';
 
+/** Create harness options. */
 interface CreateHarnessOptions {
   env?: NodeJS.ProcessEnv;
   resolveProxy?: (url: string) => Promise<string>;
 }
 
+/** Creates harness. */
 function createHarness(options: CreateHarnessOptions = {}) {
   const proxyController = {
     HTTP_PROXY: null as string | null,

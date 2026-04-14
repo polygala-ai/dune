@@ -1,9 +1,13 @@
+// IPC directory discovery helpers.
+
 import path from 'node:path';
 
-import { toAgentPathId } from '@/shared/agents/agent-id';
+import { isPlainObject } from '@/shared/is-record';
 
+/** Agent IPC metadata filename constant. */
 export const AGENT_IPC_METADATA_FILENAME = 'dune-ipc.json';
 
+/** Agent IPC directory metadata shape. */
 export interface AgentIpcDirectoryMetadata {
   version: 2;
   agentId: string;
@@ -12,34 +16,7 @@ export interface AgentIpcDirectoryMetadata {
   projectName: string | null;
 }
 
-interface LegacyAgentIpcDirectoryMetadata {
-  version: 1;
-  projectId: string;
-  agentName: string;
-}
-
-function sanitizePathSegment(value: string, fallback: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || fallback;
-}
-
-function resolveProjectPathSegment(
-  projectId: string,
-  projectName: string | null | undefined,
-): string {
-  const projectIdSegment = sanitizePathSegment(projectId, 'project');
-  const trimmedProjectName = projectName?.trim() ?? '';
-
-  if (!trimmedProjectName) {
-    return projectIdSegment;
-  }
-
-  return `${sanitizePathSegment(trimmedProjectName, 'project')}-${projectIdSegment}`;
-}
-
+/** Creates agent IPC directory metadata. */
 export function createAgentIpcDirectoryMetadata(
   projectId: string,
   agentId: string,
@@ -55,6 +32,7 @@ export function createAgentIpcDirectoryMetadata(
   };
 }
 
+/** Parses agent IPC directory metadata. */
 export function parseAgentIpcDirectoryMetadata(rawValue: string): AgentIpcDirectoryMetadata | null {
   let parsed: unknown;
 
@@ -64,28 +42,11 @@ export function parseAgentIpcDirectoryMetadata(rawValue: string): AgentIpcDirect
     return null;
   }
 
-  if (!parsed || typeof parsed !== 'object') {
+  if (!isPlainObject(parsed)) {
     return null;
   }
 
-  const candidate = parsed as Partial<AgentIpcDirectoryMetadata>
-    & Partial<LegacyAgentIpcDirectoryMetadata>;
-
-  if (
-    candidate.version === 1
-    && typeof candidate.projectId === 'string'
-    && candidate.projectId.trim()
-    && typeof candidate.agentName === 'string'
-    && candidate.agentName.trim()
-  ) {
-    return {
-      version: 2,
-      agentId: '',
-      projectId: candidate.projectId,
-      agentName: candidate.agentName,
-      projectName: null,
-    };
-  }
+  const candidate = parsed as Partial<AgentIpcDirectoryMetadata>;
 
   if (
     candidate.version !== 2
@@ -112,43 +73,7 @@ export function parseAgentIpcDirectoryMetadata(rawValue: string): AgentIpcDirect
   };
 }
 
-export function resolveProjectDuneDir(
-  homeDir: string,
-  projectId: string,
-  projectName?: string | null,
-): string {
-  return path.join(
-    homeDir,
-    '.dune',
-    'projs',
-    resolveProjectPathSegment(projectId, projectName),
-  );
-}
-
-export function resolveAgentDuneDir(
-  homeDir: string,
-  projectId: string,
-  projectName: string | null | undefined,
-  agentName: string,
-  agentId: string,
-): string {
-  return path.join(
-    resolveProjectDuneDir(homeDir, projectId, projectName),
-    'agents',
-    `${sanitizePathSegment(agentName, 'agent')}-${sanitizePathSegment(toAgentPathId(agentId), 'agent')}`,
-  );
-}
-
-export function resolveAgentIpcDir(
-  homeDir: string,
-  projectId: string,
-  projectName: string | null | undefined,
-  agentName: string,
-  agentId: string,
-): string {
-  return path.join(resolveAgentDuneDir(homeDir, projectId, projectName, agentName, agentId), 'ipc');
-}
-
+/** Resolves agent IPC metadata path. */
 export function resolveAgentIpcMetadataPath(ipcDir: string): string {
   return path.join(ipcDir, AGENT_IPC_METADATA_FILENAME);
 }

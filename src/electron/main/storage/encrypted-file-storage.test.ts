@@ -1,3 +1,5 @@
+// Encrypted file storage tests.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +20,7 @@ import { EncryptedFileStorage } from './encrypted-file-storage';
 
 const mockSafeStorage = vi.mocked(safeStorage);
 
+/** Creates temp dir. */
 function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'dune-encrypted-'));
 }

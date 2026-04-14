@@ -1,8 +1,11 @@
+// Workflow project-agent roster UI.
+
 import { ArrowUpRight, Bot } from 'lucide-react';
 
 import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 import { Button } from '@/renderer/shared/ui/button';
 
+/** Workflow project agents props. */
 interface WorkflowProjectAgentsProps {
   agents: Array<{
     currentItemId: string | null;
@@ -18,6 +21,7 @@ interface WorkflowProjectAgentsProps {
   runtimeInfo: AgentRuntimeInfo;
 }
 
+/** Renders the workflow project agents UI. */
 export function WorkflowProjectAgents({
   agents,
   onOpenAgent,

@@ -1,3 +1,5 @@
+// Work products IPC tool handlers.
+
 import { createId } from '@/shared/id';
 
 import { requireString } from './helpers';
@@ -12,6 +14,7 @@ import { objectSchema, stringSchema } from './schemas';
 import { assertAgentCanAddWorkProduct } from './validators';
 import type { RegisteredTool } from './types';
 
+/** Lists work product tools. */
 export const workProductTools: RegisteredTool[] = [
   {
     definition: {

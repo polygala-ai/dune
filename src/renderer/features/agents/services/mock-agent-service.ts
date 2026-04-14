@@ -1,3 +1,5 @@
+// Mock agent service implementation.
+
 import type {
   AgentRuntimeContract,
   AgentService,
@@ -26,25 +28,26 @@ import {
 import { summarizeMessagePreview } from '@/shared/agents/message-content';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
+import { sanitizeSlug } from '@/shared/sanitize';
 
+/** Creates agent ID. */
 function createAgentId(name: string, now: number) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'agent';
+  const slug = sanitizeSlug(name, 'agent');
 
   return `agent-${slug}-${now}`;
 }
 
+/** Creates message ID. */
 function createMessageId(role: AgentMessage['role'], now: number) {
   return `message-${role}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Summarizes preview. */
 function summarizePreview(content: string) {
   return summarizeMessagePreview(content);
 }
 
+/** Creates external agent copy. */
 function createExternalAgentCopy(attachedLabel: string) {
   return {
     note: `This prototype agent mirrors ${attachedLabel} through Telegram. Real channel wiring lands in the AgentLite phase.`,
@@ -52,6 +55,7 @@ function createExternalAgentCopy(attachedLabel: string) {
   };
 }
 
+/** Creates draft agent. */
 function createDraftAgent(
   name: string,
   now: number,
@@ -101,6 +105,7 @@ function createDraftAgent(
   };
 }
 
+/** Creates user message. */
 function createUserMessage(content: string, now: number): AgentMessage {
   return {
     attachments: [],
@@ -113,6 +118,7 @@ function createUserMessage(content: string, now: number): AgentMessage {
   };
 }
 
+/** Creates assistant message. */
 function createAssistantMessage(now: number): AgentMessage {
   return {
     attachments: [],
@@ -125,6 +131,7 @@ function createAssistantMessage(now: number): AgentMessage {
   };
 }
 
+/** Picks response. */
 function pickResponse(agent: Agent, input: string) {
   const normalized = input.toLowerCase();
 
@@ -153,6 +160,7 @@ function pickResponse(agent: Agent, input: string) {
   ].join('\n');
 }
 
+/** Splits into chunks. */
 function splitIntoChunks(content: string) {
   const chunks: string[] = [];
 
@@ -163,6 +171,7 @@ function splitIntoChunks(content: string) {
   return chunks;
 }
 
+/** Clones snapshot. */
 function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
     agents: snapshot.agents.map((agent) => ({
@@ -189,6 +198,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   };
 }
 
+/** Creates default runtime info. */
 function createDefaultRuntimeInfo(): AgentRuntimeInfo {
   return {
     message: 'AgentLite is unavailable, so Dune is using the mock runtime.',
@@ -197,11 +207,13 @@ function createDefaultRuntimeInfo(): AgentRuntimeInfo {
   };
 }
 
+/** Pending timer record shape. */
 interface PendingTimerRecord {
   resolve: (completed: boolean) => void;
   timer: ReturnType<typeof globalThis.setTimeout>;
 }
 
+/** Implements mock agent service behavior. */
 class MockAgentService implements AgentService {
   private listeners = new Set<AgentServiceListener>();
 
@@ -225,10 +237,12 @@ class MockAgentService implements AgentService {
     };
   }
 
+  /** Returns snapshot. */
   getSnapshot() {
     return cloneSnapshot(this.snapshot);
   }
 
+  /** Cancels Telegram setup session. */
   cancelTelegramSetupSession(sessionId: string) {
     this.telegramSetupSessions.delete(sessionId);
     this.syncTelegramSetupSessionsSnapshot();
@@ -237,15 +251,18 @@ class MockAgentService implements AgentService {
     return Promise.resolve();
   }
 
+  /** Returns Telegram setup session. */
   getTelegramSetupSession(sessionId: string) {
     const session = this.telegramSetupSessions.get(sessionId) ?? null;
     return Promise.resolve(session ? cloneTelegramSetupSession(session) : null);
   }
 
+  /** Lists agents. */
   listAgents() {
     return this.getSnapshot().agents;
   }
 
+  /** Subscribes to mock agent updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
     return () => {
@@ -253,6 +270,7 @@ class MockAgentService implements AgentService {
     };
   }
 
+  /** Selects agent. */
   selectAgent(agentId: string) {
     const agentExists = this.snapshot.agents.some((agent) => agent.id === agentId);
 
@@ -267,6 +285,7 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
+  /** Creates agent. */
   createAgent(input: CreateAgentInput) {
     const trimmedName = input.name.trim();
 
@@ -319,6 +338,7 @@ class MockAgentService implements AgentService {
     return Promise.resolve(nextAgent.id);
   }
 
+  /** Ensures project main agent. */
   ensureProjectMainAgent(
     projectId: string,
     projectName: string,
@@ -383,6 +403,7 @@ class MockAgentService implements AgentService {
     return Promise.resolve(nextAgent.id);
   }
 
+  /** Starts Telegram setup session. */
   startTelegramSetupSession(input: StartTelegramSetupSessionInput) {
     const token = input.token?.trim() ?? '';
 
@@ -419,6 +440,7 @@ class MockAgentService implements AgentService {
     return Promise.resolve(sessionId);
   }
 
+  /** Updates agent channel. */
   updateAgentChannel(input: UpdateAgentChannelInput) {
     const agentId = input.agentId.trim();
     const channelId = input.channelId;
@@ -500,6 +522,7 @@ class MockAgentService implements AgentService {
     return Promise.resolve();
   }
 
+  /** Deletes agent. */
   deleteAgent(agentId: string) {
     const agentExists = this.snapshot.agents.some((agent) => agent.id === agentId);
 
@@ -531,6 +554,7 @@ class MockAgentService implements AgentService {
     return Promise.resolve();
   }
 
+  /** Sends message. */
   async sendMessage(agentId: string, text: string) {
     const trimmedText = text.trim();
 
@@ -636,10 +660,12 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
+  /** Signals ready assignment inbox. */
   signalReadyAssignmentInbox(_agentId: string, _signal: ReadyAssignmentsInboxSignal) {
     return Promise.resolve();
   }
 
+  /** Resets mock agent. */
   reset() {
     this.clearAllPendingTimers();
     this.streamingAgentIds.clear();
@@ -714,6 +740,7 @@ class MockAgentService implements AgentService {
   }
 }
 
+/** Creates mock agent runtime. */
 export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntimeContract {
   const service = new MockAgentService(runtimeInfo);
 

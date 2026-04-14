@@ -1,3 +1,5 @@
+// Nuclear settings UI.
+
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 
@@ -13,16 +15,19 @@ import {
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
+/** Feedback state. */
 type FeedbackState =
   | { kind: 'error'; message: string }
   | null;
 
+/** Renders the nuclear settings UI. */
 export function NuclearSettings(props: SettingsSectionComponentProps) {
   void props;
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
 
+  /** Handles delete. */
   const handleDelete = async () => {
     setDeleting(true);
     setFeedback(null);

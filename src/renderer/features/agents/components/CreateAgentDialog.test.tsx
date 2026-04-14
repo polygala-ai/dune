@@ -1,3 +1,5 @@
+// Create agent dialog tests.
+
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +13,7 @@ import type {
 } from '@/renderer/features/agents/types';
 import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
 
+/** Creates snapshot. */
 function createSnapshot(
   overrides: Partial<AgentServiceSnapshot> = {},
 ): AgentServiceSnapshot {

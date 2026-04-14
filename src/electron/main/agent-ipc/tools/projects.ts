@@ -1,3 +1,5 @@
+// Projects IPC tool handlers.
+
 import { createProjectId } from '@/shared/id';
 import { prepareProjectRootPath } from '@/electron/main/workflow/project-artifacts';
 
@@ -13,6 +15,7 @@ import { ToolHandlerError, type RegisteredTool } from './types';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
+/** Lists project tools. */
 export const projectTools: RegisteredTool[] = [
   {
     definition: {

@@ -1,3 +1,5 @@
+// App sidebar UI.
+
 import {
   Blocks,
   Command,
@@ -19,6 +21,7 @@ import {
   TooltipTrigger,
 } from '@/renderer/shared/ui/tooltip';
 
+/** Workflow sidebar state. */
 interface WorkflowSidebarState {
   onCreateProject: () => void;
   onOpenPlugins: () => void;
@@ -28,6 +31,7 @@ interface WorkflowSidebarState {
   selectedProjectId: string | null;
 }
 
+/** App sidebar props. */
 interface AppSidebarProps {
   className?: string;
   isCommandOpen: boolean;
@@ -37,6 +41,7 @@ interface AppSidebarProps {
   workflow: WorkflowSidebarState;
 }
 
+/** Renders the app sidebar UI. */
 export function AppSidebar({
   className,
   isCommandOpen,

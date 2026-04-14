@@ -1,3 +1,5 @@
+// Agent runtime lifecycle tracking.
+
 import type { AgentLite } from '@boxlite-ai/agentlite';
 
 import type { DuneAgent } from '../dune-agent';
@@ -63,18 +65,22 @@ export class Lifecycle {
 
   // ---------- Per-agent runtimes ----------
 
+  /** Returns runtime. */
   getRuntime(agentId: string): DuneAgent | undefined {
     return this.runtimes.get(agentId);
   }
 
+  /** Returns whether runtime exist. */
   hasRuntime(agentId: string): boolean {
     return this.runtimes.has(agentId);
   }
 
+  /** Sets runtime. */
   setRuntime(agentId: string, runtime: DuneAgent): void {
     this.runtimes.set(agentId, runtime);
   }
 
+  /** Deletes runtime. */
   deleteRuntime(agentId: string): void {
     this.runtimes.delete(agentId);
   }
@@ -84,10 +90,12 @@ export class Lifecycle {
     return this.runtimeStarts.get(agentId);
   }
 
+  /** Begins runtime start. */
   beginRuntimeStart(agentId: string, promise: Promise<DuneAgent>): void {
     this.runtimeStarts.set(agentId, promise);
   }
 
+  /** Ends runtime start. */
   endRuntimeStart(agentId: string, promise: Promise<DuneAgent>): void {
     if (this.runtimeStarts.get(agentId) === promise) {
       this.runtimeStarts.delete(agentId);

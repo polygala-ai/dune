@@ -29,10 +29,12 @@ const HOST_DIR = path.join(IPC_PATH, 'host');
 const POLL_INTERVAL_MS = 100;
 const POLL_TIMEOUT_MS = 30_000;
 
+/** Creates file ID. */
 function createFileId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Writes request. */
 function writeRequest(fileId: string, type: string, payload: unknown): void {
   fs.mkdirSync(AGENT_DIR, { recursive: true });
   const data = JSON.stringify({ type, payload });
@@ -42,6 +44,7 @@ function writeRequest(fileId: string, type: string, payload: unknown): void {
   fs.renameSync(tmpPath, finalPath);
 }
 
+/** Polls response. */
 function pollResponse(fileId: string): Promise<unknown> {
   const responsePath = path.join(HOST_DIR, `${fileId}-reply.json`);
 
@@ -92,18 +95,21 @@ function pollResponse(fileId: string): Promise<unknown> {
   });
 }
 
+/** Calls tool. */
 async function callTool(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
   const fileId = createFileId();
   writeRequest(fileId, 'tools/call', { name, arguments: args });
   return pollResponse(fileId);
 }
 
+/** Mcps result. */
 function mcpResult(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
   };
 }
 
+/** Mcps error. */
 function mcpError(message: string): { content: Array<{ type: 'text'; text: string }>; isError: true } {
   return {
     content: [{ type: 'text' as const, text: message }],

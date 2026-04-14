@@ -1,14 +1,28 @@
+// Agent feature types.
+
+/** Message role shape. */
 export type MessageRole = 'assistant' | 'system' | 'user';
+/** Message status. */
 export type MessageStatus = 'complete' | 'streaming';
+/** Message format shape. */
 export type MessageFormat = 'markdown' | 'plain';
+/** Identifier for coding engine. */
 export type CodingEngineId = 'claude-code' | 'codex';
+/** Coding engine event kind shape. */
 export type CodingEngineEventKind = 'completed' | 'error' | 'started' | 'step';
+/** Agent activity kind shape. */
 export type AgentActivityKind = 'subagent' | 'status' | 'tool';
+/** Agent status. */
 export type AgentStatus = 'draft' | 'live' | 'ready';
+/** Agent role shape. */
 export type AgentRole = 'custom' | 'project-main';
+/** Identifier for agent channel. */
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
+/** Identifier for external channel. */
 export type ExternalChannelId = Exclude<AgentChannelId, 'dune-chat'>;
+/** Agent channel kind shape. */
 export type AgentChannelKind = 'built-in' | 'external';
+/** Agent channel status. */
 export type AgentChannelStatus =
   | 'coming-soon'
   | 'connected'
@@ -16,21 +30,27 @@ export type AgentChannelStatus =
   | 'disconnected'
   | 'error'
   | 'ready';
+/** Agent runtime mode shape. */
 export type AgentRuntimeMode = 'mock-fallback' | 'real';
+/** Agent runtime status. */
 export type AgentRuntimeStatus = 'error' | 'ready' | 'starting';
+/** External chat kind shape. */
 export type ExternalChatKind = 'dm' | 'group';
+/** Telegram connection status. */
 export type TelegramConnectionStatus =
   | 'connected'
   | 'connecting'
   | 'disconnected'
   | 'error'
   | 'not-configured';
+/** Telegram pairing status. */
 export type TelegramPairingStatus =
   | 'expired'
   | 'idle'
   | 'listening'
   | 'matched';
 
+/** Agent external target shape. */
 export interface AgentExternalTarget {
   channelId: ExternalChannelId;
   jid: string;
@@ -38,10 +58,12 @@ export interface AgentExternalTarget {
   name: string;
 }
 
+/** Discovered external chat shape. */
 export interface DiscoveredExternalChat extends AgentExternalTarget {
   lastSeenAt: number;
 }
 
+/** Telegram agent runtime state. */
 export interface TelegramAgentRuntimeState {
   botUsername: string | null;
   boundChat: AgentExternalTarget | null;
@@ -52,6 +74,7 @@ export interface TelegramAgentRuntimeState {
   status: TelegramConnectionStatus;
 }
 
+/** Telegram setup session. */
 export interface TelegramSetupSession {
   agentId: string | null;
   botUsername: string | null;
@@ -64,8 +87,10 @@ export interface TelegramSetupSession {
   status: TelegramConnectionStatus;
 }
 
+/** External channels state. */
 export type ExternalChannelsState = Record<string, never>;
 
+/** Agent runtime info shape. */
 export interface AgentRuntimeInfo {
   artifactsPath?: string;
   mode: AgentRuntimeMode;
@@ -74,6 +99,7 @@ export interface AgentRuntimeInfo {
   rootPath?: string;
 }
 
+/** Agent channel binding. */
 export interface AgentChannelBinding {
   id: AgentChannelId;
   kind: AgentChannelKind;
@@ -83,6 +109,7 @@ export interface AgentChannelBinding {
   target?: AgentExternalTarget | null;
 }
 
+/** Create agent input shape. */
 export interface CreateAgentInput {
   channelId: AgentChannelId;
   externalTarget?: AgentExternalTarget | null;
@@ -94,17 +121,20 @@ export interface CreateAgentInput {
   telegramSetupSessionId?: string | null;
 }
 
+/** Update agent channel input shape. */
 export interface UpdateAgentChannelInput {
   agentId: string;
   channelId: AgentChannelId;
   telegramSetupSessionId?: string | null;
 }
 
+/** Start Telegram setup session input shape. */
 export interface StartTelegramSetupSessionInput {
   agentId?: string | null;
   token?: string | null;
 }
 
+/** Agent attachment shape. */
 export interface AgentAttachment {
   caption?: string;
   kind: 'audio' | 'file' | 'image' | 'video';
@@ -114,6 +144,7 @@ export interface AgentAttachment {
   url: string;
 }
 
+/** Agent message shape. */
 export interface AgentMessage {
   attachments: AgentAttachment[];
   id: string;
@@ -124,6 +155,7 @@ export interface AgentMessage {
   status: MessageStatus;
 }
 
+/** Agent activity event shape. */
 export interface AgentActivityEvent {
   id: string;
   kind: AgentActivityKind;
@@ -132,6 +164,7 @@ export interface AgentActivityEvent {
   timestamp: number;
 }
 
+/** Agent context card shape. */
 export interface AgentContextCard {
   id: string;
   title: string;
@@ -139,10 +172,12 @@ export interface AgentContextCard {
   body: string;
 }
 
+/** Presented agent message shape. */
 export interface PresentedAgentMessage extends AgentMessage {
   createdAtLabel: string;
 }
 
+/** Agent summary shape. */
 export interface AgentSummary {
   id: string;
   name: string;
@@ -151,6 +186,7 @@ export interface AgentSummary {
   statusLabel: string;
 }
 
+/** Agent shape. */
 export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
@@ -166,6 +202,7 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   messages: AgentMessage[];
 }
 
+/** Presented agent shape. */
 export interface PresentedAgent extends AgentSummary {
   activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
@@ -182,6 +219,7 @@ export interface PresentedAgent extends AgentSummary {
   messages: PresentedAgentMessage[];
 }
 
+/** Coding engine status. */
 export interface CodingEngineStatus {
   id: CodingEngineId;
   label: string;
@@ -189,6 +227,7 @@ export interface CodingEngineStatus {
   version: string | null;
 }
 
+/** Coding engine event shape. */
 export interface CodingEngineEvent {
   id: string;
   engineId: CodingEngineId;

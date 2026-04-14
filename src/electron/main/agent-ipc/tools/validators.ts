@@ -1,3 +1,5 @@
+//  validation helpers IPC tool handlers.
+
 import { ToolHandlerError } from './types';
 import {
   createWorkflowEvent,
@@ -7,6 +9,7 @@ import {
   type WorkflowSnapshot,
 } from './snapshot';
 
+/** Asserts agent can create item. */
 export function assertAgentCanCreateItem(status: string) {
   if (status !== 'inbox' && status !== 'ready') {
     throw new ToolHandlerError(
@@ -16,6 +19,7 @@ export function assertAgentCanCreateItem(status: string) {
   }
 }
 
+/** Asserts agent can edit item. */
 export function assertAgentCanEditItem(item: WorkflowItem) {
   if (item.status !== 'inbox') {
     throw new ToolHandlerError(
@@ -25,6 +29,7 @@ export function assertAgentCanEditItem(item: WorkflowItem) {
   }
 }
 
+/** Asserts agent can move item. */
 export function assertAgentCanMoveItem(
   agentId: string,
   item: WorkflowItem,
@@ -85,6 +90,7 @@ export function assertAgentCanMoveItem(
   }
 }
 
+/** Asserts agent can mutate tasks. */
 export function assertAgentCanMutateTasks(agentId: string, item: WorkflowItem) {
   if (item.status === 'inbox') {
     return;
@@ -101,6 +107,7 @@ export function assertAgentCanMutateTasks(agentId: string, item: WorkflowItem) {
   );
 }
 
+/** Asserts agent can add work product. */
 export function assertAgentCanAddWorkProduct(agentId: string, item: WorkflowItem) {
   if (item.status !== 'active') {
     throw new ToolHandlerError(
@@ -112,6 +119,7 @@ export function assertAgentCanAddWorkProduct(agentId: string, item: WorkflowItem
   assertAssignedWorker(agentId, item, 'add work products to active work items');
 }
 
+/** Asserts agent can set primary agent. */
 export function assertAgentCanSetPrimaryAgent(item: WorkflowItem) {
   if (item.status !== 'ready') {
     throw new ToolHandlerError(
@@ -121,6 +129,7 @@ export function assertAgentCanSetPrimaryAgent(item: WorkflowItem) {
   }
 }
 
+/** Asserts assigned worker. */
 export function assertAssignedWorker(agentId: string, item: WorkflowItem, action: string) {
   if (item.primaryAgentId !== agentId) {
     throw new ToolHandlerError(
@@ -130,6 +139,7 @@ export function assertAssignedWorker(agentId: string, item: WorkflowItem, action
   }
 }
 
+/** Clears primary agent assignments. */
 export function clearPrimaryAgentAssignments(
   snapshot: WorkflowSnapshot,
   agentId: string,

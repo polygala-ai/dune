@@ -1,3 +1,5 @@
+// macOS Forge packaging tests.
+
 import { describe, expect, it } from 'vitest';
 
 import {

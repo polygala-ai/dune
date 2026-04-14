@@ -1,3 +1,5 @@
+// Agent IPC tool registry.
+
 import type { IpcMessage } from '../types';
 
 import type { ToolHandlerContext, ToolMessageHandler } from '../agent-ipc-connection';
@@ -32,6 +34,7 @@ const toolsByName = new Map(
   registeredTools.map((tool) => [tool.definition.name, tool] as const),
 );
 
+/** Creates tool handler. */
 export function createToolHandler(
   options: ToolHandlerOptions,
 ): (agentContext: ToolHandlerContext) => ToolMessageHandler {
@@ -44,6 +47,7 @@ export function createToolHandler(
   };
 }
 
+/** Handles message tool. */
 async function handleToolMessage(
   options: ToolHandlerOptions,
   agentContext: ToolHandlerContext,
@@ -94,6 +98,7 @@ async function handleToolMessage(
   }
 }
 
+/** Converts to error message. */
 function toErrorMessage(error: unknown): IpcMessage<'error'> {
   if (error instanceof ToolHandlerError) {
     return {

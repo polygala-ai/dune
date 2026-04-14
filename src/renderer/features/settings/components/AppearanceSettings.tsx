@@ -1,3 +1,5 @@
+// Appearance settings UI.
+
 import type { LucideIcon } from 'lucide-react';
 import { Laptop, MoonStar, SunMedium } from 'lucide-react';
 
@@ -8,6 +10,7 @@ import type { SettingsSectionComponentProps } from '@/renderer/features/settings
 import { SettingsRows } from './SettingsRows';
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
+/** Theme option shape. */
 interface ThemeOption {
   icon: LucideIcon;
   id: SettingsSectionComponentProps['themePreference'];
@@ -32,6 +35,7 @@ const themeOptions: ThemeOption[] = [
   },
 ];
 
+/** Renders the appearance settings UI. */
 export function AppearanceSettings({
   onThemeChange,
   themePreference,

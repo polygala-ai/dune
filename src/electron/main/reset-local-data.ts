@@ -1,3 +1,5 @@
+// Local data reset helpers.
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -8,11 +10,13 @@ const removePathOptions = {
   retryDelay: 100,
 } as const;
 
+/** Reset local data options. */
 export interface ResetLocalDataOptions {
   agentLiteRuntimeRoot: string;
   userDataDir: string;
 }
 
+/** Clears directory contents. */
 async function clearDirectoryContents(dir: string) {
   try {
     const entries = await fs.readdir(dir);
@@ -31,6 +35,7 @@ async function clearDirectoryContents(dir: string) {
   }
 }
 
+/** Resets local data. */
 export async function resetLocalData({
   agentLiteRuntimeRoot,
   userDataDir,

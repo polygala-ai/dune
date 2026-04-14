@@ -1,3 +1,5 @@
+// Electron Forge packaging configuration.
+
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +19,7 @@ import { createMacDmgMakerConfig, createMacPackagerConfig } from './build/macos-
 import { externalModules } from './build/external-modules';
 
 // Collect a module and all its production dependencies recursively.
+/** Collects production deps. */
 function collectProductionDeps(
   roots: string[],
   nodeModulesDir: string,

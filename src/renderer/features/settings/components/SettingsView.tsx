@@ -1,3 +1,5 @@
+// Settings view UI.
+
 import { settingsSectionRegistry } from '@/renderer/features/settings/config/settings-sections';
 import { cn } from '@/renderer/shared/lib/utils';
 import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
@@ -13,6 +15,7 @@ import type {
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
 
+/** Settings view props. */
 interface SettingsViewProps {
   agents: Agent[];
   externalChannels: ExternalChannelsState;
@@ -24,6 +27,7 @@ interface SettingsViewProps {
   themePreference: ThemePreference;
 }
 
+/** Renders the settings view UI. */
 export function SettingsView({
   agents,
   externalChannels,

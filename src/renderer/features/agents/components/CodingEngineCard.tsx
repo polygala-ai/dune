@@ -1,12 +1,16 @@
+// Coding engine card UI.
+
 import { CheckCircle2, CircleDot, AlertCircle, Cpu } from 'lucide-react';
 
 import type { CodingEngineEvent, CodingEngineId } from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 
+/** Engines label. */
 function engineLabel(id: CodingEngineId): string {
   return id === 'claude-code' ? 'Claude Code' : 'Codex';
 }
 
+/** Renders the engine status badge UI. */
 function EngineStatusBadge({ isRunning, hasError }: { isRunning: boolean; hasError: boolean }) {
   if (hasError) {
     return (
@@ -31,6 +35,7 @@ function EngineStatusBadge({ isRunning, hasError }: { isRunning: boolean; hasErr
   );
 }
 
+/** Renders the step row UI. */
 function StepRow({ label, isDone }: { label: string; isDone: boolean }) {
   return (
     <div className="flex items-center gap-2 py-0.5 text-[11px]">
@@ -44,11 +49,13 @@ function StepRow({ label, isDone }: { label: string; isDone: boolean }) {
   );
 }
 
+/** Coding engine run shape. */
 export interface CodingEngineRun {
   engineId: CodingEngineId;
   events: CodingEngineEvent[];
 }
 
+/** Groups engine runs. */
 export function groupEngineRuns(events: CodingEngineEvent[]): CodingEngineRun[] {
   const runs: CodingEngineRun[] = [];
   let current: CodingEngineRun | null = null;
@@ -65,6 +72,7 @@ export function groupEngineRuns(events: CodingEngineEvent[]): CodingEngineRun[] 
   return runs;
 }
 
+/** Renders the coding engine card UI. */
 export function CodingEngineCard({ run }: { run: CodingEngineRun }) {
   const started = run.events.find((e) => e.kind === 'started');
   const steps = run.events.filter((e) => e.kind === 'step');

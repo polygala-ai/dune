@@ -1,3 +1,5 @@
+// Create project dialog UI.
+
 import { useEffect, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 
@@ -10,6 +12,7 @@ import {
 } from '@/renderer/shared/ui/dialog';
 import { Input } from '@/renderer/shared/ui/input';
 
+/** Create project dialog props. */
 interface CreateProjectDialogProps {
   onCreateProject: (input: {
     description: string;
@@ -21,6 +24,7 @@ interface CreateProjectDialogProps {
   open: boolean;
 }
 
+/** Renders the create project dialog UI. */
 export function CreateProjectDialog({
   onCreateProject,
   onOpenChange,
@@ -45,6 +49,7 @@ export function CreateProjectDialog({
     }
   }, [open]);
 
+  /** Handles project directory selection. */
   const handleSelectProjectDirectory = async () => {
     setErrorMessage(null);
     setIsPickingDirectory(true);
@@ -62,6 +67,7 @@ export function CreateProjectDialog({
     }
   };
 
+  /** Handles project creation. */
   const handleCreateProject = async () => {
     if (!name.trim() || !rootPath.trim()) {
       return;

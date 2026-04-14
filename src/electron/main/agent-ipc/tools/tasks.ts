@@ -1,3 +1,5 @@
+// Tasks IPC tool handlers.
+
 import { createId } from '@/shared/id';
 
 import { optionalString, requireString } from './helpers';
@@ -12,6 +14,7 @@ import { objectSchema, optionalStringSchema, stringSchema } from './schemas';
 import { assertAgentCanMutateTasks } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Lists task tools. */
 export const taskTools: RegisteredTool[] = [
   {
     definition: {

@@ -1,3 +1,5 @@
+//  presenter helpers IPC tool handlers.
+
 import {
   normalizeProjectRootPath,
   resolveMountedItemArtifactPath,
@@ -6,6 +8,7 @@ import {
 import type { RuntimeAgent, RuntimeSnapshot } from './types';
 import type { WorkflowItem, WorkflowProject, WorkflowSnapshot } from './snapshot';
 
+/** Presents project. */
 export function presentProject(project: WorkflowProject) {
   return {
     ...project,
@@ -13,6 +16,7 @@ export function presentProject(project: WorkflowProject) {
   };
 }
 
+/** Presents item. */
 export function presentItem(snapshot: WorkflowSnapshot, item: WorkflowItem) {
   const project = snapshot.projects.find((candidate) => candidate.id === item.projectId) ?? null;
 
@@ -22,6 +26,7 @@ export function presentItem(snapshot: WorkflowSnapshot, item: WorkflowItem) {
   };
 }
 
+/** Sanitizes agent. */
 export function sanitizeAgent(agent: RuntimeAgent) {
   return {
     id: agent.id,
@@ -33,6 +38,7 @@ export function sanitizeAgent(agent: RuntimeAgent) {
   };
 }
 
+/** Sanitizes runtime snapshot. */
 export function sanitizeRuntimeSnapshot(snapshot: RuntimeSnapshot, projectId: string) {
   return {
     agents: snapshot.agents

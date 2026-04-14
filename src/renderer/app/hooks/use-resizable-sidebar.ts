@@ -1,3 +1,5 @@
+// Resizable sidebar hook.
+
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -7,17 +9,23 @@ import {
   useState,
 } from 'react';
 
+/** Storage key for sidebar width storage. */
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'dune.shell.sidebarWidth';
+/** Sidebar width default constant. */
 export const SIDEBAR_WIDTH_DEFAULT = 216;
+/** Sidebar width min constant. */
 export const SIDEBAR_WIDTH_MIN = 208;
+/** Sidebar width max constant. */
 export const SIDEBAR_WIDTH_MAX = 360;
 
 const SIDEBAR_WIDTH_KEYBOARD_STEP = 16;
 
+/** Sidebar style shape. */
 type SidebarStyle = CSSProperties & {
   '--app-shell-sidebar-width': string;
 };
 
+/** Clamps sidebar width. */
 function clampSidebarWidth(width: number) {
   return Math.min(
     SIDEBAR_WIDTH_MAX,
@@ -25,6 +33,7 @@ function clampSidebarWidth(width: number) {
   );
 }
 
+/** Reads stored sidebar width. */
 function readStoredSidebarWidth() {
   if (typeof window === 'undefined') {
     return SIDEBAR_WIDTH_DEFAULT;
@@ -49,10 +58,12 @@ function readStoredSidebarWidth() {
   }
 }
 
+/** Use resizable sidebar options. */
 interface UseResizableSidebarOptions {
   enabled: boolean;
 }
 
+/** Resizable sidebar hook. */
 export function useResizableSidebar({
   enabled,
 }: UseResizableSidebarOptions) {
@@ -85,10 +96,12 @@ export function useResizableSidebar({
     }
   }, [enabled]);
 
+  /** Updates sidebar width. */
   const updateSidebarWidth = (nextWidth: number) => {
     setSidebarWidth(clampSidebarWidth(nextWidth));
   };
 
+  /** Handles down key. */
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'ArrowLeft':
@@ -112,6 +125,7 @@ export function useResizableSidebar({
     }
   };
 
+  /** Handles down pointer. */
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!enabled || event.button !== 0) {
       return;
@@ -134,10 +148,12 @@ export function useResizableSidebar({
     document.documentElement.style.userSelect = 'none';
     setIsResizing(true);
 
+    /** Handles move pointer. */
     const handlePointerMove = (moveEvent: PointerEvent) => {
       updateSidebarWidth(startWidth + moveEvent.clientX - startX);
     };
 
+    /** Stops dragging. */
     const stopDragging = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', stopDragging);

@@ -1,3 +1,5 @@
+// Agent context panel UI.
+
 import {
   type ReactNode,
   useEffect,
@@ -40,6 +42,7 @@ import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 import { Separator } from '@/renderer/shared/ui/separator';
 import type { AgentContextCard } from '@/renderer/features/agents/types';
 
+/** Agent context panel props. */
 interface AgentContextPanelProps {
   agent: PresentedAgent;
   className?: string;
@@ -56,6 +59,7 @@ interface AgentContextPanelProps {
   ) => Promise<void> | void;
 }
 
+/** Returns whether the card is a suppressed context card. */
 function isSuppressedContextCard(card: AgentContextCard) {
   if (card.eyebrow === 'Bridge' && card.title === 'Desktop-managed runtime') {
     return true;
@@ -71,6 +75,7 @@ function isSuppressedContextCard(card: AgentContextCard) {
   );
 }
 
+/** Returns whether the card is a suppressed mock context card. */
 function isSuppressedMockContextCard(card: AgentContextCard) {
   if (card.eyebrow === 'Connection') {
     return (
@@ -82,15 +87,18 @@ function isSuppressedMockContextCard(card: AgentContextCard) {
   return card.eyebrow === 'Phase one' && card.title === 'UI first, runtime next';
 }
 
+/** Returns agent role label. */
 function getAgentRoleLabel(role: PresentedAgent['role']) {
   return role === 'project-main' ? 'Project main' : 'Custom agent';
 }
 
+/** Inspector section props. */
 interface InspectorSectionProps {
   eyebrow: string;
   children: ReactNode;
 }
 
+/** Renders the inspector section UI. */
 function InspectorSection({ eyebrow, children }: InspectorSectionProps) {
   return (
     <section className="space-y-3">
@@ -102,10 +110,12 @@ function InspectorSection({ eyebrow, children }: InspectorSectionProps) {
   );
 }
 
+/** Inspector card props. */
 interface InspectorCardProps {
   children: ReactNode;
 }
 
+/** Renders the inspector card UI. */
 function InspectorCard({ children }: InspectorCardProps) {
   return (
     <div className="rounded-[22px] border border-app-border bg-app-card/60 p-4">
@@ -114,11 +124,13 @@ function InspectorCard({ children }: InspectorCardProps) {
   );
 }
 
+/** Inspector inset props. */
 interface InspectorInsetProps {
   children: ReactNode;
   className?: string;
 }
 
+/** Renders the inspector inset UI. */
 function InspectorInset({ children, className }: InspectorInsetProps) {
   return (
     <div className={cn('mt-3 rounded-[16px] border border-app-border bg-app-panel/60 px-3 py-2', className)}>
@@ -127,12 +139,14 @@ function InspectorInset({ children, className }: InspectorInsetProps) {
   );
 }
 
+/** Inspector row props. */
 interface InspectorRowProps {
   label: string;
   value: ReactNode;
   valueClassName?: string;
 }
 
+/** Renders the inspector row UI. */
 function InspectorRow({
   label,
   value,
@@ -150,6 +164,7 @@ function InspectorRow({
   );
 }
 
+/** Renders the customization metric row UI. */
 function CustomizationMetricRow({
   label,
   value,
@@ -169,6 +184,7 @@ function CustomizationMetricRow({
   );
 }
 
+/** Renders the agent context panel UI. */
 export function AgentContextPanel({
   agent,
   className,
@@ -217,6 +233,7 @@ export function AgentContextPanel({
     setUpdatingChannel(false);
   }, [agent.channel.id, agent.id]);
 
+  /** Handles agent deletion. */
   const handleDeleteAgent = async () => {
     if (!onDeleteAgent || isDeletingAgent) {
       return;
@@ -232,6 +249,7 @@ export function AgentContextPanel({
     }
   };
 
+  /** Handles channel save. */
   const handleSaveChannel = async () => {
     if (!onUpdateChannel || !hasPendingChannelChange || isUpdatingChannel) {
       return;

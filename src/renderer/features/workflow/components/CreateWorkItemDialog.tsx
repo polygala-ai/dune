@@ -1,3 +1,5 @@
+// Create work item dialog UI.
+
 import { useEffect, useState } from 'react';
 
 import type {
@@ -14,6 +16,7 @@ import {
 
 const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'done'];
 
+/** Create work item dialog props. */
 interface CreateWorkItemDialogProps {
   initialProjectId: string | null;
   onCreateItem: (input: {
@@ -27,6 +30,7 @@ interface CreateWorkItemDialogProps {
   projects: WorkflowProject[];
 }
 
+/** Renders the create work item dialog UI. */
 export function CreateWorkItemDialog({
   initialProjectId,
   onCreateItem,

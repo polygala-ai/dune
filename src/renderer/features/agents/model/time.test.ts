@@ -1,3 +1,5 @@
+// Agent time helper tests.
+
 import { describe, expect, it } from 'vitest';
 
 import {

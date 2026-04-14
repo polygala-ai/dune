@@ -1,3 +1,5 @@
+// Assignments IPC tool handlers.
+
 import { requireString } from './helpers';
 import {
   createWorkflowEvent,
@@ -10,6 +12,7 @@ import { objectSchema, stringSchema } from './schemas';
 import { assertAgentCanSetPrimaryAgent } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Lists assignment tools. */
 export const assignmentTools: RegisteredTool[] = [
   {
     definition: {

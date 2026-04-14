@@ -1,3 +1,5 @@
+// Shared agent message content helpers.
+
 const IMAGE_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -30,6 +32,7 @@ const AUDIO_EXTENSIONS = new Set([
 
 const WORKSPACE_ATTACHMENT_PATTERN = /\((\/workspace\/group\/attachments\/[^)\s]+)\)/g;
 
+/** Extensions from value. */
 function extensionFromValue(value: string) {
   const normalized = value.trim().toLowerCase();
   const cleanValue = normalized.startsWith('file://')
@@ -45,6 +48,7 @@ function extensionFromValue(value: string) {
   return cleanValue.slice(lastDot);
 }
 
+/** Strips markdown syntax. */
 export function stripMarkdownSyntax(content: string) {
   return content
     .replace(/```[\s\S]*?```/g, (block) =>
@@ -64,6 +68,7 @@ export function stripMarkdownSyntax(content: string) {
     .replace(/<[^>]+>/g, ' ');
 }
 
+/** Summarizes message preview. */
 export function summarizeMessagePreview(content: string, maxLength = 92) {
   return stripMarkdownSyntax(content)
     .replace(/\s+/g, ' ')
@@ -71,6 +76,7 @@ export function summarizeMessagePreview(content: string, maxLength = 92) {
     .slice(0, maxLength);
 }
 
+/** Infers attachment kind. */
 export function inferAttachmentKind(input: {
   mimeType?: string | null;
   name?: string | null;
@@ -107,6 +113,7 @@ export function inferAttachmentKind(input: {
   return 'file' as const;
 }
 
+/** Extracts workspace attachment paths. */
 export function extractWorkspaceAttachmentPaths(content: string) {
   const paths: string[] = [];
   const nextContent = content.replace(WORKSPACE_ATTACHMENT_PATTERN, (_match, attachmentPath) => {

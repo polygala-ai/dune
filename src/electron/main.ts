@@ -1,3 +1,5 @@
+// Electron main-process bootstrap and runtime wiring.
+
 import {
   app,
   BrowserWindow,
@@ -29,7 +31,7 @@ import {
   pushCurrentRuntimeSnapshot,
 } from '@/electron/main/runtime/runtime-snapshot';
 import { resetLocalData } from '@/electron/main/reset-local-data';
-import { resolveAgentLiteRuntimeRoot } from '@/electron/main/runtime/agent-runtime';
+import { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
 import type {
   CreateAgentInput,
@@ -63,6 +65,7 @@ let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 
+/** Nudges idle main agents. */
 async function nudgeIdleMainAgents(
   _getController: () => DesktopRuntimeController,
   store: AppStorage,
@@ -185,6 +188,7 @@ const quitCoordinator = createQuitCoordinator({
   },
 });
 
+/** Returns runtime controller or throws. */
 function requireRuntimeController() {
   if (!runtimeController) {
     throw new Error('Runtime controller is unavailable.');
@@ -193,6 +197,7 @@ function requireRuntimeController() {
   return runtimeController;
 }
 
+/** Returns network proxy manager or throws. */
 function requireNetworkProxyManager() {
   if (!networkProxyManager) {
     throw new Error('Network proxy manager is unavailable.');
@@ -201,6 +206,7 @@ function requireNetworkProxyManager() {
   return networkProxyManager;
 }
 
+/** Creates window. */
 const createWindow = () => {
   mainWindow = new BrowserWindow(
     createMainWindowOptions(process.platform, path.join(__dirname, 'preload.js')),
@@ -249,6 +255,7 @@ const createWindow = () => {
   });
 };
 
+/** Creates initial runtime snapshot. */
 function createInitialRuntimeSnapshot() {
   return {
     agents: [],
@@ -278,6 +285,7 @@ void app.whenReady().then(async () => {
   };
   let readyAssignmentInboxStates = new Map<string, ReadyAssignmentInboxState>();
 
+  /** Synchronizes ready assignment inboxes. */
   async function syncReadyAssignmentInboxes(snapshotValue: unknown) {
     const snapshot = normalizeReadyAssignmentsWorkflowSnapshot(snapshotValue)
       ?? { items: [], projects: [] };
@@ -322,6 +330,7 @@ void app.whenReady().then(async () => {
     },
   } satisfies AppStorage;
 
+  /** Resolves store. */
   function resolveStore(name: string): AppStorage {
     if (name === 'workflow') {
       return workflowStore;
@@ -338,11 +347,13 @@ void app.whenReady().then(async () => {
     session: session.defaultSession,
   });
 
+  /** Applies persisted network settings. */
   const applyPersistedNetworkSettings = async () => {
     const settings = await loadNetworkSettings(stores.settings);
     await requireNetworkProxyManager().apply(settings);
   };
 
+  /** Ensures runtime. */
   const ensureRuntime = () => {
     if (runtimeBootstrapPromise) {
       return runtimeBootstrapPromise;
@@ -360,7 +371,7 @@ void app.whenReady().then(async () => {
       void _telegramChannelModule;
       const { DesktopRuntimeController } = runtimeControllerModule;
       const {
-        migrateModelProviders,
+        loadModelProviders,
         resolveDefaultModelCredentials,
       } = modelProvidersModule;
 
@@ -427,7 +438,7 @@ void app.whenReady().then(async () => {
         }
       });
 
-      await migrateModelProviders({
+      await loadModelProviders({
         secretsStore: stores.secrets,
         settingsStore: stores.settings,
       });

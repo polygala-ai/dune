@@ -1,8 +1,11 @@
+// JSON file storage implementation.
+
 import fs from 'node:fs';
 import path from 'node:path';
 
 import type { AppStorage } from './app-storage';
 
+/** Persists JSON file. */
 export class JsonFileStorage implements AppStorage {
   private data: Record<string, unknown>;
 
@@ -13,20 +16,24 @@ export class JsonFileStorage implements AppStorage {
     this.data = this.readFile();
   }
 
+  /** Returns JSON file. */
   async get<T>(key: string): Promise<T | null> {
     return (this.data[key] as T) ?? null;
   }
 
+  /** Sets JSON file. */
   async set<T>(key: string, value: T): Promise<void> {
     this.data[key] = value;
     this.writeFile();
   }
 
+  /** Deletes JSON file. */
   async delete(key: string): Promise<void> {
     delete this.data[key];
     this.writeFile();
   }
 
+  /** Keyses JSON file. */
   async keys(): Promise<string[]> {
     return Object.keys(this.data);
   }

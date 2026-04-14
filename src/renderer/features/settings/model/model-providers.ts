@@ -1,5 +1,11 @@
+// Model provider validation, storage, and credential resolution.
+
+import { isPlainObject } from '@/shared/is-record';
+
+/** Supported model auth values. */
 export type ModelAuthType = 'api-key' | 'oauth-token';
 
+/** Model provider shape. */
 export interface ModelProvider {
   authType: ModelAuthType;
   baseUrl: string;
@@ -8,14 +14,7 @@ export interface ModelProvider {
   name: string;
 }
 
-interface LegacyModelProvider {
-  apiKey: string;
-  baseUrl: string;
-  enabled: boolean;
-  id: string;
-  name: string;
-}
-
+/** Model provider store dependencies. */
 export interface ModelProviderStores {
   secretsStore: {
     delete: (key: string) => Promise<void>;
@@ -28,6 +27,7 @@ export interface ModelProviderStores {
   };
 }
 
+/** Storage key for model providers. */
 export const MODEL_PROVIDERS_KEY = 'modelProviders';
 
 const CLAUDE_CODE_OAUTH_TOKEN_ENV = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -35,16 +35,14 @@ const ANTHROPIC_API_KEY_ENV = 'ANTHROPIC_API_KEY';
 const ANTHROPIC_BASE_URL_ENV = 'ANTHROPIC_BASE_URL';
 const MODEL_PROVIDER_SECRET_PREFIX = 'model-provider:';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
+/** Returns whether the value is a model auth type. */
 function isModelAuthType(value: unknown): value is ModelAuthType {
   return value === 'api-key' || value === 'oauth-token';
 }
 
+/** Returns whether the value is a model provider. */
 export function isModelProvider(value: unknown): value is ModelProvider {
-  return isRecord(value) &&
+  return isPlainObject(value) &&
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
     typeof value.baseUrl === 'string' &&
@@ -52,15 +50,7 @@ export function isModelProvider(value: unknown): value is ModelProvider {
     isModelAuthType(value.authType);
 }
 
-function isLegacyModelProvider(value: unknown): value is LegacyModelProvider {
-  return isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.name === 'string' &&
-    typeof value.baseUrl === 'string' &&
-    typeof value.apiKey === 'string' &&
-    typeof value.enabled === 'boolean';
-}
-
+/** Normalizes provider. */
 function normalizeProvider(provider: ModelProvider): ModelProvider {
   return {
     authType: provider.authType,
@@ -71,6 +61,7 @@ function normalizeProvider(provider: ModelProvider): ModelProvider {
   };
 }
 
+/** Normalizes providers. */
 function normalizeProviders(providers: ModelProvider[]): ModelProvider[] {
   let defaultAssigned = false;
 
@@ -89,27 +80,17 @@ function normalizeProviders(providers: ModelProvider[]): ModelProvider[] {
   }).filter((provider) => provider.id && provider.name);
 }
 
-function legacyProvidersDefaultId(
-  currentProviders: ModelProvider[],
-  legacyProviders: LegacyModelProvider[],
-): string | null {
-  if (currentProviders.some((provider) => provider.isDefault)) {
-    return null;
-  }
-
-  const enabledProviders = legacyProviders.filter((provider) => provider.enabled);
-
-  return enabledProviders.length === 1 ? enabledProviders[0]?.id ?? null : null;
-}
-
+/** Returns model provider secret key. */
 export function getModelProviderSecretKey(providerId: string) {
   return `${MODEL_PROVIDER_SECRET_PREFIX}${providerId}`;
 }
 
+/** Returns whether the key is a model provider secret key. */
 export function isModelProviderSecretKey(key: string) {
   return key.startsWith(MODEL_PROVIDER_SECRET_PREFIX);
 }
 
+/** Reads model provider secret. */
 export async function readModelProviderSecret(
   secretsStore: ModelProviderStores['secretsStore'],
   providerId: string,
@@ -118,6 +99,7 @@ export async function readModelProviderSecret(
   return typeof value === 'string' ? value : '';
 }
 
+/** Writes model provider secret. */
 export async function writeModelProviderSecret(
   secretsStore: ModelProviderStores['secretsStore'],
   providerId: string,
@@ -133,6 +115,7 @@ export async function writeModelProviderSecret(
   await secretsStore.set(getModelProviderSecretKey(providerId), trimmedValue);
 }
 
+/** Deletes model provider secret. */
 export async function deleteModelProviderSecret(
   secretsStore: ModelProviderStores['secretsStore'],
   providerId: string,
@@ -140,8 +123,8 @@ export async function deleteModelProviderSecret(
   await secretsStore.delete(getModelProviderSecretKey(providerId));
 }
 
-export async function migrateModelProviders({
-  secretsStore,
+/** Loads model providers. */
+export async function loadModelProviders({
   settingsStore,
 }: ModelProviderStores): Promise<ModelProvider[]> {
   const rawProviders = await settingsStore.get<unknown>(MODEL_PROVIDERS_KEY);
@@ -150,49 +133,10 @@ export async function migrateModelProviders({
     return [];
   }
 
-  const currentProviders: ModelProvider[] = [];
-  const legacyProviders: LegacyModelProvider[] = [];
-
-  for (const item of rawProviders) {
-    if (isModelProvider(item)) {
-      currentProviders.push(item);
-      continue;
-    }
-
-    if (isLegacyModelProvider(item)) {
-      legacyProviders.push(item);
-    }
-  }
-
-  const migratedLegacyDefaultId = legacyProvidersDefaultId(currentProviders, legacyProviders);
-  const migratedLegacyProviders = legacyProviders.map((provider) => ({
-    authType: 'api-key' as const,
-    baseUrl: provider.baseUrl,
-    id: provider.id,
-    isDefault: provider.id === migratedLegacyDefaultId,
-    name: provider.name,
-  }));
-
-  for (const provider of legacyProviders) {
-    await writeModelProviderSecret(secretsStore, provider.id, provider.apiKey);
-  }
-
-  const nextProviders = normalizeProviders([
-    ...currentProviders,
-    ...migratedLegacyProviders,
-  ]);
-
-  if (JSON.stringify(rawProviders) !== JSON.stringify(nextProviders)) {
-    await settingsStore.set(MODEL_PROVIDERS_KEY, nextProviders);
-  }
-
-  return nextProviders;
+  return normalizeProviders(rawProviders.filter(isModelProvider));
 }
 
-export async function loadModelProviders(stores: ModelProviderStores) {
-  return migrateModelProviders(stores);
-}
-
+/** Saves model providers. */
 export async function saveModelProviders(
   settingsStore: ModelProviderStores['settingsStore'],
   providers: ModelProvider[],
@@ -202,6 +146,7 @@ export async function saveModelProviders(
   return normalizedProviders;
 }
 
+/** Resolves default model credentials. */
 export async function resolveDefaultModelCredentials({
   secretsStore,
   settingsStore,

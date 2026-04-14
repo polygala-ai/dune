@@ -1,3 +1,5 @@
+// Models settings tests.
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -5,8 +7,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 import { ModelsSettings } from './ModelsSettings';
 
+/** Store name shape. */
 type StoreName = 'secrets' | 'settings';
 
+/** Creates desktop bridge. */
 function createDesktopBridge(stores: Record<StoreName, Record<string, unknown>>) {
   return {
     platform: 'darwin' as const,
@@ -21,6 +25,7 @@ function createDesktopBridge(stores: Record<StoreName, Record<string, unknown>>)
   };
 }
 
+/** Renders models settings. */
 function renderModelsSettings() {
   render(
     <ModelsSettings

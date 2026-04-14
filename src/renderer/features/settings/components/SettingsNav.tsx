@@ -1,3 +1,5 @@
+// Settings nav UI.
+
 import { Wrench } from 'lucide-react';
 
 import { settingsSections } from '@/renderer/features/settings/config/settings-sections';
@@ -5,11 +7,13 @@ import type { SettingsRoute } from '@/renderer/features/settings/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 
+/** Settings nav props. */
 interface SettingsNavProps {
   onSelectRoute: (route: SettingsRoute) => void;
   settingsRoute: SettingsRoute;
 }
 
+/** Renders the settings nav UI. */
 export function SettingsNav({
   onSelectRoute,
   settingsRoute,

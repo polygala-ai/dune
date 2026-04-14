@@ -1,16 +1,21 @@
+// Runtime snapshot persistence and renderer fan-out.
+
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 
+/** Runtime snapshot controller shape. */
 export interface RuntimeSnapshotController {
   getSnapshot: () => AgentServiceSnapshot;
 }
 
+/** Runtime snapshot window shape. */
 export interface RuntimeSnapshotWindow {
   webContents: {
     send: (channel: string, snapshot: AgentServiceSnapshot) => void;
   };
 }
 
+/** Returns bootstrapped runtime snapshot. */
 export async function getBootstrappedRuntimeSnapshot(options: {
   createInitialRuntimeSnapshot: () => AgentServiceSnapshot;
   ensureRuntime: () => Promise<void>;
@@ -22,6 +27,7 @@ export async function getBootstrappedRuntimeSnapshot(options: {
     ?? options.createInitialRuntimeSnapshot();
 }
 
+/** Pushes current runtime snapshot. */
 export function pushCurrentRuntimeSnapshot(
   window: RuntimeSnapshotWindow,
   runtimeController: RuntimeSnapshotController | null,

@@ -1,8 +1,12 @@
+// macOS Forge packaging helpers.
+
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import type { MakerDMGConfig } from '@electron-forge/maker-dmg';
 
+/** Packager configuration. */
 type PackagerConfig = NonNullable<ForgeConfig['packagerConfig']>;
 
+/** Mac release configuration. */
 export interface MacReleaseConfig {
   appBundleId: string;
   appCategoryType: string;
@@ -20,10 +24,12 @@ const macDmgAdditionalOptions = {
   filesystem: 'APFS',
 } as unknown as NonNullable<MakerDMGConfig['additionalDMGOptions']>;
 
+/** Returns whether any env exist. */
 function hasAnyEnv(env: NodeJS.ProcessEnv, keys: readonly string[]) {
   return keys.some((key) => Boolean(env[key]));
 }
 
+/** Returns required env value. */
 function getRequiredEnvValue(values: Record<string, string>, key: string) {
   const value = values[key];
 
@@ -34,6 +40,7 @@ function getRequiredEnvValue(values: Record<string, string>, key: string) {
   return value;
 }
 
+/** Reads required env group. */
 function readRequiredEnvGroup(
   env: NodeJS.ProcessEnv,
   providerName: string,
@@ -54,6 +61,7 @@ function readRequiredEnvGroup(
   return Object.fromEntries(keys.map((key) => [key, env[key] ?? '']));
 }
 
+/** Resolves Mac notarize config. */
 export function resolveMacNotarizeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): PackagerConfig['osxNotarize'] {
@@ -91,6 +99,7 @@ export function resolveMacNotarizeConfig(
   return undefined;
 }
 
+/** Creates Mac packager config. */
 export function createMacPackagerConfig(
   config: MacReleaseConfig,
   env: NodeJS.ProcessEnv = process.env,
@@ -111,6 +120,7 @@ export function createMacPackagerConfig(
   };
 }
 
+/** Creates Mac DMG maker config. */
 export function createMacDmgMakerConfig(
   config: Pick<MacReleaseConfig, 'iconBasePath'>,
 ): MakerDMGConfig {

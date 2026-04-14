@@ -1,3 +1,5 @@
+// Agent message content UI.
+
 import type { ComponentPropsWithoutRef, MouseEvent } from 'react';
 
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -10,6 +12,7 @@ import type {
 } from '@/renderer/features/agents/types';
 import { cn } from '@/renderer/shared/lib/utils';
 
+/** Returns whether the URL is a safe URL. */
 function isSafeUrl(url: string, allowedProtocols: ReadonlySet<string>) {
   try {
     const parsed = new URL(url);
@@ -19,14 +22,17 @@ function isSafeUrl(url: string, allowedProtocols: ReadonlySet<string>) {
   }
 }
 
+/** Returns whether the URL is a safe link URL. */
 function isSafeLinkUrl(url: string) {
   return isSafeUrl(url, new Set(['https:']));
 }
 
+/** Returns whether the URL is a safe media URL. */
 function isSafeMediaUrl(url: string) {
   return isSafeUrl(url, new Set(['file:', 'https:']));
 }
 
+/** Opens external URL. */
 async function openExternalUrl(event: MouseEvent<HTMLAnchorElement>, url: string) {
   event.preventDefault();
 
@@ -38,6 +44,7 @@ async function openExternalUrl(event: MouseEvent<HTMLAnchorElement>, url: string
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+/** Renders the file attachment chip UI. */
 function FileAttachmentChip({ attachment }: { attachment: AgentAttachment }) {
   const href = isSafeMediaUrl(attachment.url) ? attachment.url : null;
 
@@ -60,6 +67,7 @@ function FileAttachmentChip({ attachment }: { attachment: AgentAttachment }) {
   );
 }
 
+/** Renders the attachment card UI. */
 function AttachmentCard({ attachment }: { attachment: AgentAttachment }) {
   const isSafeSource = isSafeMediaUrl(attachment.url);
 
@@ -109,6 +117,7 @@ function AttachmentCard({ attachment }: { attachment: AgentAttachment }) {
   return <FileAttachmentChip attachment={attachment} />;
 }
 
+/** Renders the attachment rail UI. */
 function AttachmentRail({ attachments }: { attachments: AgentAttachment[] }) {
   if (attachments.length === 0) {
     return null;
@@ -123,6 +132,7 @@ function AttachmentRail({ attachments }: { attachments: AgentAttachment[] }) {
   );
 }
 
+/** Renders the markdown link UI. */
 function MarkdownLink({
   children,
   href,
@@ -150,6 +160,7 @@ function MarkdownLink({
   );
 }
 
+/** Renders the markdown image UI. */
 function MarkdownImage({
   alt,
   src,
@@ -205,10 +216,12 @@ const markdownComponents: Components = {
   ul: ({ children }) => <ul className="prose-message-list prose-message-list-unordered">{children}</ul>,
 };
 
+/** Transforms markdown URL. */
 function transformMarkdownUrl(url: string) {
   return isSafeLinkUrl(url) || isSafeMediaUrl(url) ? url : '';
 }
 
+/** Renders the agent message content UI. */
 export function AgentMessageContent({
   message,
 }: {

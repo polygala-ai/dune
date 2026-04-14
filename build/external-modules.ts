@@ -1,6 +1,7 @@
 // Modules that contain or depend on native binaries (.node files) and cannot
 // be bundled by Vite. These are marked as external in vite.main.config.ts and
 // must be shipped in node_modules by forge.config.ts during packaging.
+/** Lists external modules. */
 export const externalModules = [
   '@boxlite-ai/agentlite',
   '@boxlite-ai/boxlite',
@@ -8,12 +9,14 @@ export const externalModules = [
   'better-sqlite3',
 ];
 
+/** Normalizes import ID. */
 function normalizeImportId(importId: string) {
   return importId
     .replace(/\\/g, '/')
     .replace(/[?#].*$/, '');
 }
 
+/** Returns whether the import ID is an external module ID. */
 export function isExternalModuleId(
   importId: string,
   rootModuleIds: readonly string[] = externalModules,

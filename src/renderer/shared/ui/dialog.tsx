@@ -1,3 +1,5 @@
+// Dialog UI primitive.
+
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 
@@ -21,6 +23,7 @@ const DialogOverlay = React.forwardRef<
 
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/** Dialog content props. */
 interface DialogContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   overlayClassName?: string;
