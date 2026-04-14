@@ -100,14 +100,19 @@ const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 
 import type {
-  AgentRuntime,
+  AgentRuntimeContract,
   AgentService,
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
 
 export { resolveAgentLiteRuntimeRoot } from './paths';
-export type { AgentRuntime, AgentService, AgentServiceListener, AgentServiceSnapshot };
+export type {
+  AgentRuntimeContract,
+  AgentService,
+  AgentServiceListener,
+  AgentServiceSnapshot,
+};
 
 export interface AgentStore {
   get<T>(key: string): Promise<T | null>;
@@ -124,7 +129,7 @@ const importTelegramModule = globalThis.Function(
 
 export type { TelegramSecretsStore };
 
-export interface AgentLiteHostOptions {
+export interface AgentRuntimeOptions {
   agentStore: AgentStore;
   bundledAgentDir?: string;
   createTelegramChannelFactory?: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
@@ -152,7 +157,7 @@ import {
   seedArtifacts,
 } from '../artifacts';
 
-export class AgentLiteHost implements AgentRuntime {
+export class AgentRuntime implements AgentRuntimeContract {
   private readonly listeners = new Set<AgentServiceListener>();
 
   private readonly now: () => number;
@@ -169,9 +174,9 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly homeDir: string;
 
-  private readonly onAgentIdle: AgentLiteHostOptions['onAgentIdle'];
+  private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
-  private readonly onIpcDirCreated: AgentLiteHostOptions['onIpcDirCreated'];
+  private readonly onIpcDirCreated: AgentRuntimeOptions['onIpcDirCreated'];
 
   private readonly runtimeRoot: string;
 
@@ -205,7 +210,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   readonly service: AgentService;
 
-  constructor(options: AgentLiteHostOptions) {
+  constructor(options: AgentRuntimeOptions) {
     this.agentStore = options.agentStore;
     this.homeDir = options.homeDir ?? os.homedir();
     this.onAgentIdle = options.onAgentIdle;

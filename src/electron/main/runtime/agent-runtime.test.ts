@@ -15,11 +15,11 @@ import type {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  AgentLiteHost,
+  AgentRuntime,
   resolveAgentLiteRuntimeRoot,
   type AgentStore,
   type TelegramSecretsStore,
-} from './agentlite-host';
+} from './agent-runtime';
 import {
   resolveAgentDuneDir,
   resolveAgentIpcDir,
@@ -437,7 +437,7 @@ function createTelegramChannelFactoryHarness(
   };
 }
 
-describe('AgentLiteHost', () => {
+describe('AgentRuntime', () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -458,7 +458,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -490,7 +490,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -526,7 +526,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -549,7 +549,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: async () => ({
@@ -584,7 +584,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: async () => ({
@@ -621,7 +621,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
     tempDirs.push(projectRootPath);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -715,7 +715,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -752,7 +752,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -789,7 +789,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
     tempDirs.push(projectRootPath);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -867,7 +867,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -937,7 +937,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: store,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -990,7 +990,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: store,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1060,7 +1060,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: store,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1170,7 +1170,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: store,
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1214,7 +1214,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1264,7 +1264,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1311,7 +1311,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1353,7 +1353,7 @@ describe('AgentLiteHost', () => {
 
       tempDirs.push(homeDir);
 
-      const host = new AgentLiteHost({
+      const host = new AgentRuntime({
         agentStore: createMemoryStore(),
         homeDir,
         loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1418,7 +1418,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1457,7 +1457,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1496,7 +1496,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     try {
-      const host = new AgentLiteHost({
+      const host = new AgentRuntime({
         agentStore: createMemoryStore(),
         homeDir,
         loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1544,7 +1544,7 @@ describe('AgentLiteHost', () => {
     tempDirs.push(homeDir);
 
     try {
-      const host = new AgentLiteHost({
+      const host = new AgentRuntime({
         agentStore: createMemoryStore(),
         homeDir,
         loadAgentLiteModule: harness.loadAgentLiteModule,
@@ -1587,7 +1587,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -1645,7 +1645,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -1714,7 +1714,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -1806,7 +1806,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -1876,7 +1876,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -1976,7 +1976,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2071,7 +2071,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2159,7 +2159,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2253,7 +2253,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2313,7 +2313,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const firstHost = new AgentLiteHost({
+    const firstHost = new AgentRuntime({
       agentStore,
       createTelegramChannelFactory: firstTelegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2363,7 +2363,7 @@ describe('AgentLiteHost', () => {
     });
     await firstHost.shutdown();
 
-    const restartedHost = new AgentLiteHost({
+    const restartedHost = new AgentRuntime({
       agentStore,
       createTelegramChannelFactory: secondTelegramHarness.createTelegramChannelFactory,
       homeDir,
@@ -2423,7 +2423,7 @@ describe('AgentLiteHost', () => {
 
     tempDirs.push(homeDir);
 
-    const host = new AgentLiteHost({
+    const host = new AgentRuntime({
       agentStore: createMemoryStore(),
       homeDir,
       loadAgentLiteModule: harness.loadAgentLiteModule,

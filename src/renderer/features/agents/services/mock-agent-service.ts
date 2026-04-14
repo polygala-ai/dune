@@ -1,5 +1,5 @@
 import type {
-  AgentRuntime,
+  AgentRuntimeContract,
   AgentService,
   AgentServiceListener,
   AgentServiceSnapshot,
@@ -714,7 +714,7 @@ class MockAgentService implements AgentService {
   }
 }
 
-export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntime {
+export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRuntimeContract {
   const service = new MockAgentService(runtimeInfo);
 
   return {

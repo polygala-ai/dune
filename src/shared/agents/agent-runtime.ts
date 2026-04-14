@@ -56,16 +56,16 @@ export interface AgentService {
 }
 
 /**
- * Top-level container that wraps an AgentService with snapshot access
- * and reset semantics. Multiple implementations exist:
- *   - The real main-process runtime (AgentLiteHost)
+ * Top-level contract that wraps an AgentService with snapshot access
+ * and reset semantics. Multiple implementations satisfy this contract:
+ *   - The real main-process AgentRuntime class
  *   - The mock used by tests and during boot fallback
  *   - The renderer-side bridge that proxies to the real runtime via IPC
  *
- * They all conform to this single shape so the desktop runtime
- * controller can swap between them transparently.
+ * The contract is named "Contract" rather than just "AgentRuntime" so
+ * the canonical real-world implementation can use the unsuffixed name.
  */
-export interface AgentRuntime {
+export interface AgentRuntimeContract {
   getSnapshot: () => AgentServiceSnapshot;
   reset: () => void;
   service: AgentService;
