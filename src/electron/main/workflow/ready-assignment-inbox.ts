@@ -7,7 +7,7 @@ import { resolveMountedItemArtifactPath } from '@/shared/workflow/project-artifa
 import {
   resolveAgentDuneDir,
   resolveProjectDuneDir,
-} from '@/electron/shared/agent-ipc/ipc-directory';
+} from '@/electron/main/agent-ipc/ipc-directory';
 
 interface WorkflowProjectSnapshot {
   id: string;

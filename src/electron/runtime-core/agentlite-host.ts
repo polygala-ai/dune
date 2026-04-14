@@ -57,7 +57,7 @@ import {
   resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
-} from '../shared/agent-ipc/ipc-directory';
+} from '@/electron/main/agent-ipc/ipc-directory';
 import { DuneAgent } from './dune-agent';
 import { TelegramBridge } from './telegram-bridge';
 import type { TelegramSecretsStore } from './telegram-bridge';

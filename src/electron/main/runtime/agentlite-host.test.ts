@@ -25,7 +25,7 @@ import {
   resolveAgentIpcDir,
   resolveAgentIpcMetadataPath,
   resolveProjectDuneDir,
-} from '@/electron/shared/agent-ipc/ipc-directory';
+} from '@/electron/main/agent-ipc/ipc-directory';
 import type { DuneChannel } from '@/electron/runtime-core/dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
