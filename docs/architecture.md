@@ -51,7 +51,87 @@ The main product surfaces are:
   - Telegram is implemented.
   - Slack and Discord are placeholders.
 
+### Call Graph (Big Picture)
+
+A visual view of how a single user action crosses the three process boundaries
+and comes back.
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  RENDERER (React, sandboxed — no Node access)                       │
+│                                                                     │
+│   UI Component (e.g. AgentView.tsx)                                 │
+│        │                                                            │
+│        │ user clicks "Send"                                         │
+│        ▼                                                            │
+│   useAppStore (Zustand)  ──►  app-commands.ts                       │
+│        │                           │                                │
+│        │                           │ cross-slice workflow           │
+│        │                           ▼                                │
+│        │                    agentRuntime.sendMessage(id, text)      │
+│        │                           │                                │
+│        │                           ▼                                │
+│        │                    window.duneDesktop.sendAgentMessage(…)  │
+└────────┼───────────────────────────┼────────────────────────────────┘
+         │                           │
+         │                           ▼
+┌────────┼────────────────────────────────────────────────────────────┐
+│  PRELOAD (contextBridge — the only renderer→main door)              │
+│                                                                     │
+│   bridge.sendAgentMessage = (id, text) =>                           │
+│       ipcRenderer.invoke('dune:runtime:sendAgentMessage', id, text) │
+│                              │                                      │
+└──────────────────────────────┼──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  MAIN (Node.js — owns OS, files, processes)                         │
+│                                                                     │
+│   ipcMain.handle('dune:runtime:sendAgentMessage', handler)          │
+│        │                                                            │
+│        ▼                                                            │
+│   DesktopRuntimeController      ◄── AppStorage (JsonFile/Encrypted) │
+│        │                                                            │
+│        │ delegates to activeRuntime                                 │
+│        ▼                                                            │
+│   AgentLiteHost (real)  ──or──  createMockAgentRuntime() (boot)     │
+│        │                                                            │
+│        │ spawns + talks to                                          │
+│        ▼                                                            │
+│   AgentIpcManager ──► AgentIpcConnection ──► project agent          │
+│                                                (claude / codex)     │
+│                                                                     │
+│   Events flow back:                                                 │
+│        DesktopRuntimeController.listeners                           │
+│            │                                                        │
+│            ▼                                                        │
+│        webContents.send('dune:runtime:<event>', payload)            │
+└──────────┼──────────────────────────────────────────────────────────┘
+           │
+           ▼  (reverse trip)
+┌─────────────────────────────────────────────────────────────────────┐
+│   ipcRenderer.on(…) → bridge.subscribe callback                     │
+│           │                                                         │
+│           ▼                                                         │
+│   runtime-sync → useAppStore.setState(…) → React re-renders         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Process Boundary Reference
+
+| Layer       | Lives in                      | Can touch                        | Talks to next layer via           |
+|-------------|-------------------------------|----------------------------------|-----------------------------------|
+| Renderer    | `src/renderer/`               | DOM, React, Zustand              | `window.duneDesktop.*`            |
+| Preload     | `src/electron/preload/index.ts` | `contextBridge`, `ipcRenderer` | `ipcRenderer.invoke` / `.on`      |
+| Main        | `src/electron/main/`          | Node, fs, child_process, network | `ipcMain.handle` / `webContents.send` |
+
+The preload is intentionally a dumb pass-through — one method per IPC channel,
+no logic. All real work happens on the ends: React state in the renderer,
+`DesktopRuntimeController` + `AgentLiteHost` + `AppStorage` in main.
+
 ### Component Graph
+
+This is the finer-grained ownership tree behind the big-picture diagram above.
 
 ```text
 Legend:
