@@ -40,12 +40,13 @@ export function copyDirRecursive(src: string, dst: string): void {
 }
 
 /**
- * Source .md files live in /agent/ at the project root.
+ * Source .md files live in /agent/prompts/ at the project root.
  * At build time they are bundled alongside the app.
  * At runtime, seedArtifacts() copies them to ~/.dune/artifacts/ if missing,
  * and readAgentInstructions() / readIpcGuide() read from there.
  */
 const SOURCE_DIR = resolveBundledAgentDir();
+const PROMPTS_SUBDIR = 'prompts';
 
 export const ARTIFACT_FILES = {
   agentInstructions: 'dune-agent-instructions.md',
@@ -57,8 +58,12 @@ export function resolveArtifactsDir(homeDir: string = os.homedir()): string {
   return path.join(homeDir, '.dune', ARTIFACTS_DIR_NAME);
 }
 
+function resolvePromptSource(sourceDir: string, filename: string): string {
+  return path.join(sourceDir, PROMPTS_SUBDIR, filename);
+}
+
 function readSourceFile(filename: string, sourceDir: string = SOURCE_DIR): string {
-  return fs.readFileSync(path.join(sourceDir, filename), 'utf-8');
+  return fs.readFileSync(resolvePromptSource(sourceDir, filename), 'utf-8');
 }
 
 /** Seed artifact files, always overwriting with the latest bundled version. */
@@ -71,7 +76,7 @@ export function seedArtifacts(
 
   for (const filename of Object.values(ARTIFACT_FILES)) {
     const targetPath = path.join(dir, filename);
-    const sourcePath = path.join(sourceDir, filename);
+    const sourcePath = resolvePromptSource(sourceDir, filename);
 
     try {
       // Use readFile/writeFile (not copyFileSync) so this works when the

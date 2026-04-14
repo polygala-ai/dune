@@ -218,9 +218,9 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
     const stagingDir = seedAgentIpcSources(this.bundledAgentDir, this.homeDir);
-    this.duneSkillDir = path.join(stagingDir, 'dune');
-    this.projectKickoffSkillDir = path.join(stagingDir, 'dune-project-kickoff');
-    this.duneMcpServerDir = path.join(stagingDir, 'dune-mcp-server');
+    this.duneSkillDir = path.join(stagingDir, 'skills', 'dune');
+    this.projectKickoffSkillDir = path.join(stagingDir, 'skills', 'dune-project-kickoff');
+    this.duneMcpServerDir = path.join(stagingDir, 'mcp');
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??

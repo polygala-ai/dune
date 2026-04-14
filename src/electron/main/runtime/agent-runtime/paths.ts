@@ -15,9 +15,9 @@ import { toAgentPathId } from '@/shared/agents/agent-id';
 import { copyDirRecursive, readIpcGuide } from '../artifacts';
 
 const AGENT_IPC_SOURCE_NAMES = [
-  'dune',
-  'dune-project-kickoff',
-  'dune-mcp-server',
+  'skills/dune',
+  'skills/dune-project-kickoff',
+  'mcp',
 ] as const;
 
 export function resolveAgentLiteRuntimeRoot(homeDir: string = os.homedir()): string {
@@ -41,6 +41,7 @@ export function seedAgentIpcSources(bundledDir: string, homeDir: string): string
     if (fs.existsSync(dst)) {
       fs.rmSync(dst, { recursive: true, force: true });
     }
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
     copyDirRecursive(src, dst);
   }
   return stagingDir;
