@@ -1,7 +1,7 @@
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { CodingEngineEvent } from '@/renderer/features/agents/types';
-import type { ToolDefinition } from '@/shared/agent-ipc/types';
+import type { ToolDefinition } from '../types';
 
 import type { ToolHandlerContext } from '../agent-ipc-connection';
 

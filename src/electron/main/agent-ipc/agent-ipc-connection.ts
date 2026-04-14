@@ -5,7 +5,7 @@ import {
   createIpcFileId,
   parseIpcMessage,
   type IpcMessage,
-} from '@/shared/agent-ipc/types';
+} from './types';
 
 const STREAMING_IDLE_WINDOW_MS = 320;
 const STREAMING_SAFETY_TIMEOUT_MS = 30_000;

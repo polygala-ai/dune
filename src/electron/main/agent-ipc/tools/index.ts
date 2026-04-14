@@ -1,4 +1,4 @@
-import type { IpcMessage } from '@/shared/agent-ipc/types';
+import type { IpcMessage } from '../types';
 
 import type { ToolHandlerContext, ToolMessageHandler } from '../agent-ipc-connection';
 
