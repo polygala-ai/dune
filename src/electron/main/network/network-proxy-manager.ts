@@ -1,5 +1,6 @@
 import type { ProxyConfig } from 'electron';
 import { createGlobalProxyAgent } from 'global-agent';
+import { Agent, ProxyAgent, setGlobalDispatcher, type Dispatcher } from 'undici';
 
 import type { NetworkSettings } from '@/renderer/features/settings/model/network-settings';
 
@@ -11,6 +12,7 @@ export interface ProxyController {
 
 interface ProxySession {
   forceReloadProxyConfig?: () => Promise<void>;
+  resolveProxy: (url: string) => Promise<string>;
   setProxy: (config: ProxyConfig) => Promise<void>;
 }
 
@@ -23,10 +25,15 @@ export interface NetworkProxyManagerOptions {
   env?: NodeJS.ProcessEnv;
   logger?: LoggerLike;
   session: ProxySession;
+  setDispatcher?: (dispatcher: Dispatcher) => void;
 }
 
 export const LOOPBACK_BYPASS_RULES = ['localhost', '127.0.0.1', '::1'] as const;
 export const DUNE_PROXY_ENV_NAMESPACE = 'DUNE_PROXY_';
+
+// Representative URL used to ask Electron's session for the PAC-resolved proxy
+// when the app runs without HTTP_PROXY in its env (e.g. launched from Finder).
+const SYSTEM_PROXY_PROBE_URL = 'https://api.telegram.org';
 
 function splitBypassRules(value: string | null | undefined) {
   if (!value) {
@@ -81,6 +88,27 @@ function buildProxyRules(proxyUrl: string) {
   return `http=${proxyUrl};https=${proxyUrl}`;
 }
 
+// PAC results look like "PROXY host:port; DIRECT" or "DIRECT". Pick the first
+// HTTP PROXY entry if there is one, otherwise null. SOCKS is not supported by
+// global-agent or undici ProxyAgent, so SOCKS entries are treated as direct.
+export function parsePacProxyResult(pac: string | null | undefined): string | null {
+  if (!pac) {
+    return null;
+  }
+
+  const entries = pac.split(';').map((entry) => entry.trim()).filter(Boolean);
+
+  for (const entry of entries) {
+    const match = entry.match(/^PROXY\s+(\S+:\d+)$/i);
+
+    if (match) {
+      return `http://${match[1]}`;
+    }
+  }
+
+  return null;
+}
+
 export class NetworkProxyManager {
   private readonly env: NodeJS.ProcessEnv;
 
@@ -89,6 +117,8 @@ export class NetworkProxyManager {
   private readonly proxyController: ProxyController;
 
   private readonly session: ProxySession;
+
+  private readonly setDispatcher: (dispatcher: Dispatcher) => void;
 
   constructor(options: NetworkProxyManagerOptions) {
     this.env = options.env ?? process.env;
@@ -100,18 +130,26 @@ export class NetworkProxyManager {
         socketConnectionTimeout: 15_000,
       });
     this.session = options.session;
+    this.setDispatcher = options.setDispatcher ?? setGlobalDispatcher;
   }
 
   async apply(settings: NetworkSettings) {
-    const nodeProxyState = this.buildNodeProxyState(settings);
     const electronProxyConfig = this.buildElectronProxyConfig(settings);
+
+    // Apply the Chromium session proxy FIRST so that a subsequent
+    // session.resolveProxy() call in system mode runs against the correct
+    // PAC/system config.
+    await this.session.setProxy(electronProxyConfig);
+    await this.session.forceReloadProxyConfig?.();
+
+    const nodeProxyState = await this.buildNodeProxyState(settings);
 
     this.proxyController.HTTP_PROXY = nodeProxyState.HTTP_PROXY;
     this.proxyController.HTTPS_PROXY = nodeProxyState.HTTPS_PROXY;
     this.proxyController.NO_PROXY = nodeProxyState.NO_PROXY;
 
-    await this.session.setProxy(electronProxyConfig);
-    await this.session.forceReloadProxyConfig?.();
+    const dispatcherTarget = nodeProxyState.HTTPS_PROXY ?? nodeProxyState.HTTP_PROXY;
+    this.setDispatcher(dispatcherTarget ? new ProxyAgent(dispatcherTarget) : new Agent());
 
     this.logger.info?.('Applied Dune network settings.', {
       mode: settings.mode,
@@ -119,6 +157,7 @@ export class NetworkProxyManager {
         bypassRules: nodeProxyState.NO_PROXY,
         httpProxy: redactProxyUrl(nodeProxyState.HTTP_PROXY),
         httpsProxy: redactProxyUrl(nodeProxyState.HTTPS_PROXY),
+        resolvedVia: nodeProxyState.resolvedVia,
       },
       sessionProxy: {
         ...electronProxyConfig,
@@ -156,13 +195,14 @@ export class NetworkProxyManager {
     }
   }
 
-  private buildNodeProxyState(settings: NetworkSettings) {
+  private async buildNodeProxyState(settings: NetworkSettings) {
     switch (settings.mode) {
       case 'direct':
         return {
           HTTP_PROXY: null,
           HTTPS_PROXY: null,
           NO_PROXY: null,
+          resolvedVia: 'direct' as const,
         };
       case 'manual': {
         const mergedBypassRules = mergeBypassRules(
@@ -174,6 +214,7 @@ export class NetworkProxyManager {
           HTTP_PROXY: settings.manualProxyUrl,
           HTTPS_PROXY: settings.manualProxyUrl,
           NO_PROXY: mergedBypassRules.join(','),
+          resolvedVia: 'manual' as const,
         };
       }
       case 'system':
@@ -182,11 +223,34 @@ export class NetworkProxyManager {
           splitBypassRules(pickEnvValue(this.env, 'NO_PROXY', 'no_proxy')),
           LOOPBACK_BYPASS_RULES,
         );
+        const envHttpProxy = pickEnvValue(this.env, 'HTTP_PROXY', 'http_proxy');
+        const envHttpsProxy = pickEnvValue(this.env, 'HTTPS_PROXY', 'https_proxy');
+
+        if (envHttpProxy || envHttpsProxy) {
+          return {
+            HTTP_PROXY: envHttpProxy,
+            HTTPS_PROXY: envHttpsProxy,
+            NO_PROXY: mergedBypassRules.length > 0 ? mergedBypassRules.join(',') : null,
+            resolvedVia: 'env' as const,
+          };
+        }
+
+        // Packaged macOS apps launched from Finder don't inherit shell env, so
+        // fall back to asking Chromium to resolve the PAC/system proxy for us.
+        let pacProxy: string | null = null;
+
+        try {
+          const pac = await this.session.resolveProxy(SYSTEM_PROXY_PROBE_URL);
+          pacProxy = parsePacProxyResult(pac);
+        } catch (error) {
+          this.logger.info?.('Failed to resolve system proxy via Electron session.', { error });
+        }
 
         return {
-          HTTP_PROXY: pickEnvValue(this.env, 'HTTP_PROXY', 'http_proxy'),
-          HTTPS_PROXY: pickEnvValue(this.env, 'HTTPS_PROXY', 'https_proxy'),
+          HTTP_PROXY: pacProxy,
+          HTTPS_PROXY: pacProxy,
           NO_PROXY: mergedBypassRules.length > 0 ? mergedBypassRules.join(',') : null,
+          resolvedVia: pacProxy ? ('electron-resolve' as const) : ('direct' as const),
         };
       }
     }
