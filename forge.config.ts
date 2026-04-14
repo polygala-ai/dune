@@ -131,7 +131,7 @@ const config: ForgeConfig = {
     new VitePlugin({
       build: [
         {
-          entry: 'src/electron/main/index.ts',
+          entry: 'src/electron/main.ts',
           config: 'vite.main.config.ts',
           target: 'main',
         },

@@ -50,7 +50,7 @@ import {
   listProjectArtifactEntries,
   prepareProjectRootPath,
 } from '@/electron/main/workflow/project-artifacts';
-import { createMainWindowOptions } from './window/create-main-window-options';
+import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';
 
 if (started) {
   app.quit();

@@ -21,7 +21,7 @@ export default defineConfig({
       reporter: ['text', 'html'],
       exclude: [
         'build/**/*.test.ts',
-        'src/electron/main/index.ts',
+        'src/electron/main.ts',
         'src/electron/preload.ts',
         'tests/**',
       ],
