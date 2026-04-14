@@ -7,14 +7,14 @@ import { READY_ASSIGNMENTS_INBOX_MOUNT_PATH } from '@/shared/agents/ready-assign
 const ARTIFACTS_DIR_NAME = 'artifacts';
 
 /**
- * Resolve where the bundled agent-ipc source tree lives. In dev (pnpm dev),
+ * Resolve where the bundled agent/ tree lives. In dev (pnpm dev),
  * process.cwd() is the repo root and the files live on the real filesystem.
  * In a packaged Electron build the main process should pass the explicit
  * bundled dir via options (computed from app.getAppPath()) — this fallback
  * is only for tests and dev.
  */
-export function resolveBundledAgentIpcDir(): string {
-  return path.resolve(process.cwd(), 'src', 'shared', 'agent-ipc');
+export function resolveBundledAgentDir(): string {
+  return path.resolve(process.cwd(), 'agent');
 }
 
 /**
@@ -40,12 +40,12 @@ export function copyDirRecursive(src: string, dst: string): void {
 }
 
 /**
- * Source .md files live in src/shared/agent-ipc/.
+ * Source .md files live in /agent/ at the project root.
  * At build time they are bundled alongside the app.
  * At runtime, seedArtifacts() copies them to ~/.dune/artifacts/ if missing,
  * and readAgentInstructions() / readIpcGuide() read from there.
  */
-const SOURCE_DIR = resolveBundledAgentIpcDir();
+const SOURCE_DIR = resolveBundledAgentDir();
 
 export const ARTIFACT_FILES = {
   agentInstructions: 'dune-agent-instructions.md',

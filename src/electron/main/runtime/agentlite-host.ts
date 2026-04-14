@@ -163,7 +163,7 @@ export type { TelegramSecretsStore };
 
 export interface AgentLiteHostOptions {
   agentStore: AgentStore;
-  bundledAgentIpcDir?: string;
+  bundledAgentDir?: string;
   createTelegramChannelFactory?: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
@@ -441,7 +441,7 @@ import {
   readAgentInstructions,
   readIpcGuide,
   resolveArtifactsDir,
-  resolveBundledAgentIpcDir,
+  resolveBundledAgentDir,
   seedArtifacts,
 } from './artifacts';
 
@@ -630,7 +630,7 @@ export class AgentLiteHost implements AgentRuntime {
 
   private readonly duneMcpServerDir: string;
 
-  private readonly bundledAgentIpcDir: string;
+  private readonly bundledAgentDir: string;
 
   private agentLite: AgentLite | null = null;
 
@@ -664,8 +664,8 @@ export class AgentLiteHost implements AgentRuntime {
     this.onAgentIdle = options.onAgentIdle;
     this.onIpcDirCreated = options.onIpcDirCreated;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
-    this.bundledAgentIpcDir = options.bundledAgentIpcDir ?? resolveBundledAgentIpcDir();
-    const stagingDir = seedAgentIpcSources(this.bundledAgentIpcDir, this.homeDir);
+    this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
+    const stagingDir = seedAgentIpcSources(this.bundledAgentDir, this.homeDir);
     this.duneSkillDir = path.join(stagingDir, 'dune');
     this.projectKickoffSkillDir = path.join(stagingDir, 'dune-project-kickoff');
     this.duneMcpServerDir = path.join(stagingDir, 'dune-mcp-server');
@@ -767,7 +767,7 @@ export class AgentLiteHost implements AgentRuntime {
   }
 
   async start() {
-    seedArtifacts(this.homeDir, this.bundledAgentIpcDir);
+    seedArtifacts(this.homeDir, this.bundledAgentDir);
     await this.loadPersistedState();
 
     const persistedAgentValidationError = this.validatePersistedAgents();

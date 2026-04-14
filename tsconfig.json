@@ -42,6 +42,6 @@
     "tests"
   ],
   "exclude": [
-    "src/shared/agent-ipc/dune-mcp-server"
+    "agent/dune-mcp-server"
   ]
 }
