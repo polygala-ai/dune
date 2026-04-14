@@ -1,8 +1,9 @@
 import type {
+  AgentRuntime,
   AgentServiceListener,
   AgentServiceSnapshot,
-} from '@/renderer/features/agents/model/agent-service';
-import { createMockAgentRuntime, type AgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
+} from '@/shared/agents/agent-runtime';
+import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   CodingEngineEvent,
   CreateAgentInput,

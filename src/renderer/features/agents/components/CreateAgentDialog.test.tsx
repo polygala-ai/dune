@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
-import type { AgentServiceSnapshot } from '@/renderer/features/agents/model/agent-service';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
   CreateAgentInput,
   TelegramSetupSession,

@@ -1,18 +1,16 @@
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
 import type {
+  AgentRuntime,
   AgentServiceListener,
   AgentServiceSnapshot,
-} from '@/renderer/features/agents/model/agent-service';
+} from '@/shared/agents/agent-runtime';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
   createDefaultExternalChannelsState,
 } from '@/renderer/features/agents/model/channels';
-import {
-  createMockAgentRuntime,
-  type AgentRuntime,
-} from '@/renderer/features/agents/services/mock-agent-service';
+import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,

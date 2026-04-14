@@ -88,7 +88,6 @@ import {
   cloneSnapshot,
   createRuntimeInfo,
   createRuntimeReadyMessage,
-  type AgentServiceSnapshot,
 } from './snapshot';
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
 import { ReadyInbox } from './ready-inbox';
@@ -100,40 +99,15 @@ const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 
-export type { AgentServiceSnapshot } from './snapshot';
+import type {
+  AgentRuntime,
+  AgentService,
+  AgentServiceListener,
+  AgentServiceSnapshot,
+} from '@/shared/agents/agent-runtime';
+
 export { resolveAgentLiteRuntimeRoot } from './paths';
-
-export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
-
-export interface AgentService {
-  cancelTelegramSetupSession: (sessionId: string) => Promise<void>;
-  createAgent: (input: CreateAgentInput) => Promise<string>;
-  deleteAgent: (agentId: string) => Promise<void>;
-  ensureProjectMainAgent: (
-    projectId: string,
-    projectName: string,
-    projectRootPath?: string | null,
-  ) => Promise<string>;
-  getTelegramSetupSession: (sessionId: string) => Promise<TelegramSetupSession | null>;
-  getSnapshot: () => AgentServiceSnapshot;
-  listAgents: () => Agent[];
-  selectAgent: (agentId: string) => void;
-  sendMessage: (agentId: string, text: string) => Promise<void>;
-  signalReadyAssignmentInbox: (
-    agentId: string,
-    signal: ReadyAssignmentsInboxSignal,
-  ) => Promise<void>;
-  startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
-  subscribe: (listener: AgentServiceListener) => () => void;
-  updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
-}
-
-export interface AgentRuntime {
-  getSnapshot: () => AgentServiceSnapshot;
-  reset: () => void;
-  service: AgentService;
-  subscribe: (listener: AgentServiceListener) => () => void;
-}
+export type { AgentRuntime, AgentService, AgentServiceListener, AgentServiceSnapshot };
 
 export interface AgentStore {
   get<T>(key: string): Promise<T | null>;

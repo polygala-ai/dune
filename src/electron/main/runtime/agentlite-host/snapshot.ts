@@ -1,27 +1,12 @@
-import type {
-  Agent,
-  AgentRuntimeInfo,
-  CodingEngineStatus,
-  ExternalChannelsState,
-  TelegramSetupSession,
-} from '@/renderer/features/agents/types';
+import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
   cloneTelegramSetupSession,
 } from '@/renderer/features/agents/model/channels';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 
 import { resolveArtifactsDir } from '../artifacts';
-
-export interface AgentServiceSnapshot {
-  agents: Agent[];
-  codingEngines: CodingEngineStatus[];
-  externalChannels: ExternalChannelsState;
-  isStreaming: boolean;
-  runtimeInfo: AgentRuntimeInfo;
-  selectedAgentId: string | null;
-  telegramSetupSessions: TelegramSetupSession[];
-}
 
 export function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
   return {
