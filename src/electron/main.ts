@@ -21,7 +21,7 @@ if (app.isPackaged) {
 }
 
 import { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
-import { createToolHandler } from '@/electron/main/agent-ipc/tools-handler';
+import { createToolHandler } from '@/electron/main/agent-ipc/tools';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import {
