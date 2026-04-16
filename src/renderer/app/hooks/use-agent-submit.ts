@@ -22,12 +22,7 @@ export function useAgentSubmit({ focusComposer }: UseAgentSubmitOptions) {
     } = useAppStore.getState();
     const selectedAgent = selectAgentById(agents, selectedAgentId);
 
-    if (
-      !value
-      || !selectedAgentId
-      || !selectedAgent?.channel.canCompose
-      || selectedAgent.status === 'live'
-    ) {
+    if (!value || !selectedAgentId) {
       return;
     }
 

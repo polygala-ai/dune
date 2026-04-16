@@ -22,12 +22,9 @@ import {
   type AgentStore,
   type TelegramSecretsStore,
 } from './agent-runtime';
-import {
-  resolveAgentIpcMetadataPath,
-} from '@/electron/main/agent-ipc/ipc-directory';
+import type { DuneAcpOptions } from './dune-agent';
 import {
   resolveAgentDuneDir,
-  resolveAgentIpcDir,
   resolveProjectDuneDir,
 } from '@/electron/main/dune-paths';
 import type { DuneChannel } from './dune-channel';
@@ -534,6 +531,47 @@ describe('AgentRuntime', () => {
     );
   });
 
+  it('configures ACP peers via auto-discovery with credentials merged', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({
+        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
+      }),
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'ACP Agent',
+      projectId: 'project-1',
+    });
+
+    const acpConfig = (harness.mockAgent()._options as AgentOptions & { acp?: DuneAcpOptions }).acp;
+
+    // auto() discovers whatever agents are on $PATH. Verify that
+    // credential env is merged into each peer and that the peers
+    // use the factory defaults (sandbox disabled, approvals bypassed).
+    expect(acpConfig).toBeDefined();
+    expect(acpConfig!.peers).toBeDefined();
+    expect(acpConfig!.peers!.length).toBeGreaterThan(0);
+
+    for (const peer of acpConfig!.peers!) {
+      expect(peer.env).toMatchObject({
+        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
+      });
+      expect(peer.command).toBe('npx');
+      expect(peer.name).toBeTruthy();
+      expect(peer.args.length).toBeGreaterThan(0);
+    }
+  });
+
   it('starts without saved credentials and reports that replies will fail', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -661,20 +699,12 @@ describe('AgentRuntime', () => {
     };
     const projectDir = resolveProjectDuneDir(homeDir, projectId, projectName);
     const agentDir = resolveAgentDuneDir(homeDir, projectId, projectName, 'Test / Agent', agentId);
-    const ipcDir = resolveAgentIpcDir(homeDir, projectId, projectName, 'Test / Agent', agentId);
     const projectClaudeMdPath = path.join(projectDir, 'CLAUDE.md');
     const agentClaudeMdPath = path.join(agentDir, 'CLAUDE.md');
     const projectClaudeMd = fs.readFileSync(projectClaudeMdPath, 'utf-8');
     const agentClaudeMd = fs.readFileSync(agentClaudeMdPath, 'utf-8');
-    const metadata = JSON.parse(fs.readFileSync(resolveAgentIpcMetadataPath(ipcDir), 'utf-8')) as {
-      agentId: string;
-      projectId: string;
-      agentName: string;
-      projectName: string | null;
-    };
     const relativeProjectGuidePath = path.relative(path.join(homeDir, '.dune', 'projs'), projectClaudeMdPath);
     const relativeAgentGuidePath = path.relative(path.join(homeDir, '.dune', 'projs'), agentClaudeMdPath);
-    const relativeIpcPath = path.relative(path.join(homeDir, '.dune', 'projs'), ipcDir);
 
     expect(
       registeredGroup.containerConfig?.additionalMounts?.[0]?.containerPath,
@@ -700,25 +730,17 @@ describe('AgentRuntime', () => {
     ]);
     expect(relativeProjectGuidePath.split(path.sep)).toHaveLength(2);
     expect(relativeAgentGuidePath.split(path.sep)).toHaveLength(4);
-    expect(relativeIpcPath.split(path.sep)).toHaveLength(4);
-    expect(projectClaudeMd).toContain('/workspace/extra/dune/agents/');
     expect(projectClaudeMd).toContain('/workspace/extra/dune/');
     expect(projectClaudeMd).toContain('/workspace/extra/project/');
-    expect(agentClaudeMd).toContain('/workspace/extra/dune/ipc/');
+    expect(projectClaudeMd).toContain(projectRootPath);
     expect(agentClaudeMd).toContain('/workspace/extra/project/');
-    expect(agentClaudeMd).toContain('Call `tools/list` first to discover available tools.');
-    expect(agentClaudeMd).toContain('Coordinate through work items, tasks, assignments, and work products.');
-    expect(agentClaudeMd).not.toContain('/workspace/extra/ipc/');
+    expect(agentClaudeMd).toContain(projectRootPath);
+    expect(agentClaudeMd).toContain('Dune exposes its host-side functions as **actions**');
+    expect(agentClaudeMd).toContain('`search_actions');
+    expect(agentClaudeMd).toContain('`call_action');
+    expect(agentClaudeMd).toContain('Coordinate through work items');
+    expect(agentClaudeMd).not.toContain('tools/list');
     expect(agentClaudeMd).not.toContain('get-board');
-    expect(agentClaudeMd).not.toContain('agents.send_message');
-    expect(agentClaudeMd).not.toContain('lookup, and messaging');
-    expect(metadata).toEqual({
-      version: 2,
-      agentId,
-      projectId,
-      agentName: 'Test / Agent',
-      projectName,
-    });
   });
 
   it('uses the provided project name for custom agent paths even when project lookup is not yet available', async () => {

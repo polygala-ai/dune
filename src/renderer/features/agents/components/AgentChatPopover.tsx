@@ -31,7 +31,7 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
 
   const handleSubmit = useCallback(async (rawValue: string) => {
     const value = rawValue.trim();
-    if (!value || !agent.channel.canCompose || agent.status === 'live') return;
+    if (!value) return;
 
     try {
       await agentRuntime.service.sendMessage(agent.id, value);
@@ -47,7 +47,7 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
-  }, [agent.messages.length]);
+  }, [agent.activityEvents.length, agent.codingEngineEvents.length, agent.messages.length]);
 
   const handleDragStart = useCallback((e: ReactMouseEvent) => {
     e.preventDefault();

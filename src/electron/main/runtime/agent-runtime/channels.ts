@@ -35,7 +35,7 @@ export function createChannelBinding(
   switch (channelId) {
     case 'discord':
       return {
-        canCompose: false,
+        canCompose: true,
         id: 'discord',
         kind: 'external',
         label: 'Discord',
@@ -43,7 +43,7 @@ export function createChannelBinding(
       };
     case 'slack':
       return {
-        canCompose: false,
+        canCompose: true,
         id: 'slack',
         kind: 'external',
         label: 'Slack',
@@ -51,7 +51,7 @@ export function createChannelBinding(
       };
     case 'telegram':
       return {
-        canCompose: false,
+        canCompose: true,
         id: 'telegram',
         kind: 'external',
         label: 'Telegram',
