@@ -187,7 +187,7 @@ export function createChannelBinding(
   const target = options.target ?? null;
 
   return {
-    canCompose: channel.kind === 'built-in',
+    canCompose: true,
     id: channel.id,
     kind: channel.kind,
     label: channel.label,

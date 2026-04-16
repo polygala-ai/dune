@@ -28,78 +28,103 @@ type TimelineItem =
   | { type: 'activity'; events: AgentActivityEvent[]; timestamp: number }
   | { type: 'engine'; run: ReturnType<typeof groupEngineRuns>[number]; timestamp: number };
 
+interface IndexedMessage {
+  index: number;
+  message: PresentedAgent['messages'][number];
+}
+
+interface IndexedActivityEvent {
+  event: AgentActivityEvent;
+  index: number;
+}
+
+interface SortableTimelineItem {
+  item: TimelineItem;
+  index: number;
+  priority: number;
+}
+
+function getMessagePriority(role: PresentedAgent['messages'][number]['role']) {
+  switch (role) {
+    case 'user':
+      return 0;
+    case 'system':
+      return 1;
+    case 'assistant':
+    default:
+      return 4;
+  }
+}
+
+function compareMessages(left: IndexedMessage, right: IndexedMessage) {
+  if (left.message.createdAt !== right.message.createdAt) {
+    return left.message.createdAt - right.message.createdAt;
+  }
+
+  const priorityDifference = getMessagePriority(left.message.role) - getMessagePriority(right.message.role);
+
+  if (priorityDifference !== 0) {
+    return priorityDifference;
+  }
+
+  return left.index - right.index;
+}
+
+function compareActivityEvents(left: IndexedActivityEvent, right: IndexedActivityEvent) {
+  if (left.event.timestamp !== right.event.timestamp) {
+    return left.event.timestamp - right.event.timestamp;
+  }
+
+  return left.index - right.index;
+}
+
+function compareTimelineItems(left: SortableTimelineItem, right: SortableTimelineItem) {
+  if (left.item.timestamp !== right.item.timestamp) {
+    return left.item.timestamp - right.item.timestamp;
+  }
+
+  if (left.priority !== right.priority) {
+    return left.priority - right.priority;
+  }
+
+  return left.index - right.index;
+}
+
 /** Builds timeline. */
 function buildTimeline(agent: PresentedAgent): TimelineItem[] {
-  const items: TimelineItem[] = [];
+  const messages = [...agent.messages]
+    .map((message, index) => ({ index, message }))
+    .sort(compareMessages)
+    .map<SortableTimelineItem>(({ message }, index) => ({
+      item: { type: 'message', message, timestamp: message.createdAt },
+      index,
+      priority: getMessagePriority(message.role),
+    }));
 
-  // Pre-build engine runs keyed by start timestamp so we can attach them
-  // right after the assistant message whose turn spawned them.
-  const engineRuns = groupEngineRuns(agent.codingEngineEvents);
+  const activities = [...agent.activityEvents]
+    .map((event, index) => ({ event, index }))
+    .sort(compareActivityEvents)
+    .map<SortableTimelineItem>(({ event }, index) => ({
+      item: { type: 'activity', events: [event], timestamp: event.timestamp },
+      index,
+      priority: 2,
+    }));
 
-  // Build message pairs: find each assistant message and the activity events
-  // that happened during its turn (between the preceding user message and the
-  // next user message). Render: user → activity pills → assistant → engine cards.
-  const messages = agent.messages;
-  const activities = agent.activityEvents;
-  let activityIdx = 0;
-  let engineIdx = 0;
+  const engineRuns = groupEngineRuns(
+    [...agent.codingEngineEvents].sort((left, right) => left.timestamp - right.timestamp),
+  ).map<SortableTimelineItem>((run, index) => ({
+    item: {
+      type: 'engine',
+      run,
+      timestamp: run.events[0]?.timestamp ?? Number.MAX_SAFE_INTEGER,
+    },
+    index,
+    priority: 3,
+  }));
 
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i]!;
-
-    // Add user message
-    if (message.role === 'user') {
-      items.push({ type: 'message', message, timestamp: message.createdAt });
-      continue;
-    }
-
-    // For assistant messages: insert activity events that happened before this
-    // assistant's content was finalized. Use the next message's timestamp as
-    // the upper bound, or Infinity if this is the last message.
-    const nextMessageTs = messages[i + 1]?.createdAt ?? Infinity;
-
-    while (activityIdx < activities.length) {
-      const event = activities[activityIdx]!;
-      if (event.timestamp < nextMessageTs) {
-        items.push({ type: 'activity', events: [event], timestamp: event.timestamp });
-        activityIdx++;
-      } else {
-        break;
-      }
-    }
-
-    // Add assistant message after its activity events
-    items.push({ type: 'message', message, timestamp: message.createdAt });
-
-    // Attach any engine runs that started during this assistant's turn
-    while (engineIdx < engineRuns.length) {
-      const run = engineRuns[engineIdx]!;
-      const startTs = run.events[0]?.timestamp ?? 0;
-      if (startTs < nextMessageTs) {
-        items.push({ type: 'engine', run, timestamp: startTs });
-        engineIdx++;
-      } else {
-        break;
-      }
-    }
-  }
-
-  // Any remaining activity events (current turn, not yet finalized)
-  while (activityIdx < activities.length) {
-    const event = activities[activityIdx]!;
-    items.push({ type: 'activity', events: [event], timestamp: event.timestamp });
-    activityIdx++;
-  }
-
-  // Any remaining engine runs (started during the current unfinalized turn)
-  while (engineIdx < engineRuns.length) {
-    const run = engineRuns[engineIdx]!;
-    const startTs = run.events[0]?.timestamp ?? 0;
-    items.push({ type: 'engine', run, timestamp: startTs });
-    engineIdx++;
-  }
-
-  return items;
+  return [...messages, ...activities, ...engineRuns]
+    .sort(compareTimelineItems)
+    .map(({ item }) => item);
 }
 
 /** Renders the activity pill UI. */
@@ -163,15 +188,7 @@ export function AgentPanel({
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
-  const attachedLabel = agent.channel.target?.name ?? agent.channel.label;
-  const isAgentStreaming = agent.status === 'live';
-  const isComposerDisabled = isAgentStreaming || !agent.channel.canCompose;
-  const composerHint = agent.channel.canCompose
-    ? `${modifierLabel} Enter to send · Shift Enter for a new line`
-    : `This agent is attached to ${attachedLabel}. Reply in the source channel.`;
-  const composerPlaceholder = agent.channel.canCompose
-    ? 'Message agent...'
-    : `Attached to ${attachedLabel}`;
+  const composerHint = `${modifierLabel} Enter to send · Shift Enter for a new line`;
 
   /** Handles key down composer. */
   const handleComposerKeyDown = async (
@@ -270,12 +287,11 @@ export function AgentPanel({
           <textarea
             aria-label="Agent composer"
             className="min-h-[84px] w-full bg-transparent px-1 text-[14px] leading-7 text-app-text outline-none placeholder:text-app-muted"
-            disabled={isComposerDisabled}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               void handleComposerKeyDown(event);
             }}
-            placeholder={composerPlaceholder}
+            placeholder="Message agent..."
             ref={composerRef}
             rows={4}
             value={draft}
@@ -284,8 +300,8 @@ export function AgentPanel({
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-[12px] leading-5 text-app-muted">{composerHint}</p>
 
-            <Button disabled={!draft.trim() || isComposerDisabled} size="sm" type="submit">
-              {isAgentStreaming ? 'Streaming…' : 'Send'}
+            <Button disabled={!draft.trim()} size="sm" type="submit">
+              Send
               <ArrowUpRight className="h-4 w-4" />
             </Button>
           </div>

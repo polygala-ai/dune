@@ -19,7 +19,6 @@ import type {
   AgentMessage,
   AgentRole,
   AgentRuntimeInfo,
-  CodingEngineEvent,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
@@ -58,7 +57,12 @@ import {
   findProjectDuneDirs,
   resolveAgentLiteRuntimeRoot,
 } from '@/electron/main/dune-paths';
-import { DuneAgent } from '../dune-agent';
+import { auto as autoAcpPeers } from '@boxlite-ai/agentlite/acp/peers';
+import { DuneAgent, type DuneAcpOptions } from '../dune-agent';
+import {
+  registerDuneActions,
+  type ActionHostServices,
+} from '@/electron/main/agent-actions/register-actions';
 import { TelegramBridge } from '../telegram-bridge';
 import type { TelegramSecretsStore } from '../telegram-bridge';
 import { detectCodingEngines } from '../coding-engine-detect';
@@ -77,8 +81,8 @@ import {
   type PersistedAgentRecord,
 } from './records';
 import {
-  createIpcLayout,
-  seedAgentIpcSources,
+  createDuneMountLayout,
+  seedAgentSupportSources,
 } from './paths';
 import {
   cloneSnapshot,
@@ -129,20 +133,15 @@ export type { TelegramSecretsStore };
 
 /** Agent runtime options. */
 export interface AgentRuntimeOptions {
+  actionServices?: ActionHostServices;
   agentStore: AgentStore;
   bundledAgentDir?: string;
   createTelegramChannelFactory?: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
+  detectCodingEngines?: () => Promise<CodingEngineStatus[]>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
-  onIpcDirCreated?: (
-    agentId: string,
-    agentName: string,
-    projectId: string,
-    ipcHostPath: string,
-    ipcContainerPath: string,
-  ) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
@@ -155,6 +154,28 @@ import {
   resolveBundledAgentDir,
   seedArtifacts,
 } from '../artifacts';
+
+/**
+ * Builds ACP peer config using AgentLite's built-in auto-discovery.
+ * `auto()` scans $PATH for known agents (claude, codex) and returns
+ * configs with full permissions (sandbox disabled, approvals bypassed).
+ * Credential env vars are merged into each peer's env.
+ */
+function createCodingEngineAcpConfig(
+  env: Record<string, string>,
+): DuneAcpOptions | undefined {
+  const peers = autoAcpPeers();
+  if (peers.length === 0) return undefined;
+
+  // Merge credential env into each discovered peer.
+  if (Object.keys(env).length > 0) {
+    for (const peer of peers) {
+      peer.env = { ...env, ...peer.env };
+    }
+  }
+
+  return { peers };
+}
 
 /** Implements agent runtime behavior. */
 export class AgentRuntime implements AgentRuntimeContract {
@@ -176,15 +197,11 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
-  private readonly onIpcDirCreated: AgentRuntimeOptions['onIpcDirCreated'];
-
   private readonly runtimeRoot: string;
 
   private readonly duneSkillDir: string;
 
   private readonly projectKickoffSkillDir: string;
-
-  private readonly duneMcpServerDir: string;
 
   private readonly bundledAgentDir: string;
 
@@ -196,7 +213,11 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly resolveModelCredentials: () => Promise<Record<string, string>>;
 
+  private readonly detectCodingEngines: () => Promise<CodingEngineStatus[]>;
+
   private readonly telegram: TelegramBridge;
+
+  private readonly actionServices: ActionHostServices | undefined;
 
   private readonly createTelegramChannelFactory: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
 
@@ -210,15 +231,14 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   constructor(options: AgentRuntimeOptions) {
     this.agentStore = options.agentStore;
+    this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
     this.onAgentIdle = options.onAgentIdle;
-    this.onIpcDirCreated = options.onIpcDirCreated;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
-    const stagingDir = seedAgentIpcSources(this.bundledAgentDir, this.homeDir);
+    const stagingDir = seedAgentSupportSources(this.bundledAgentDir, this.homeDir);
     this.duneSkillDir = path.join(stagingDir, 'skills', 'dune');
     this.projectKickoffSkillDir = path.join(stagingDir, 'skills', 'dune-project-kickoff');
-    this.duneMcpServerDir = path.join(stagingDir, 'mcp');
     this.now = options.now ?? Date.now;
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
@@ -228,6 +248,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.resolveModelCredentials =
       options.resolveModelCredentials ??
       (() => Promise.resolve({} satisfies Record<string, string>));
+    this.detectCodingEngines = options.detectCodingEngines ?? detectCodingEngines;
     this.createTelegramChannelFactory =
       options.createTelegramChannelFactory ??
       (async (token: string) => {
@@ -323,11 +344,9 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.startupModelCredentials = { ...credentials };
     await this.ensureAgentLiteReady();
 
-    // Detect coding engines before starting agent runtimes so the env vars
-    // passed to each agent's dune-mcp-server reflect real availability.
-    // Otherwise the MCP server starts with DUNE_*_AVAILABLE='false' and never
-    // registers the coding_engine_* tools.
-    const codingEngines = await detectCodingEngines();
+    // Detect coding engines before starting agent runtimes so each agent gets
+    // the right ACP peer list for Claude Code / Codex delegation.
+    const codingEngines = await this.detectCodingEngines();
     this.snapshot = { ...this.snapshot, codingEngines };
 
     for (const record of this.records.values()) {
@@ -1067,25 +1086,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
-  /** Pushes coding engine event. */
-  pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
-    this.snapshot = {
-      ...this.snapshot,
-      agents: this.snapshot.agents.map((agent) => {
-        if (agent.id !== agentId) {
-          return agent;
-        }
-
-        return {
-          ...agent,
-          codingEngineEvents: [...agent.codingEngineEvents, event],
-          updatedAt: this.now(),
-        };
-      }),
-    };
-    this.emit();
-  }
-
   private scheduleFinalizeAssistantMessage(agentId: string) {
     const pending = this.messageStream.get(agentId);
 
@@ -1322,8 +1322,6 @@ export class AgentRuntime implements AgentRuntimeContract {
 
     const startPromise = (async () => {
       const agentLite = this.lifecycle.getEngine() ?? await this.ensureAgentLiteReady();
-      let ipcHostPath: string | undefined;
-      let ipcContainerPath: string | undefined;
       const mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }> = [];
       let didUpdateRecord = false;
       if (record.agent.projectId) {
@@ -1346,19 +1344,18 @@ export class AgentRuntime implements AgentRuntimeContract {
             record.projectRootPath = projectRootPath;
             didUpdateRecord = true;
           }
-          const ipcLayout = createIpcLayout(
+          const duneMountLayout = createDuneMountLayout(
             this.homeDir,
             record.agent.projectId,
             projectName,
+            projectRootPath,
             record.agent.id,
             record.agent.name,
             record.agent.role,
           );
-          ipcHostPath = ipcLayout.ipcDir;
-          ipcContainerPath = `/workspace/extra/dune/${path.relative(ipcLayout.duneMountRoot, ipcLayout.ipcDir)}`;
           mounts.push({
             containerPath: 'dune',
-            hostPath: ipcLayout.duneMountRoot,
+            hostPath: duneMountLayout.duneMountRoot,
             readonly: false,
           });
 
@@ -1370,7 +1367,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             });
           }
         } catch (error) {
-          console.error(`Failed to create IPC directory for "${record.agent.name}".`, error);
+          console.error(`Failed to create dune mount layout for "${record.agent.name}".`, error);
         }
       }
 
@@ -1389,25 +1386,22 @@ export class AgentRuntime implements AgentRuntimeContract {
         }
       }
 
+      const actionServicesForAgent = this.actionServices;
+      const ownerProjectId = record.agent.projectId;
+      const duneMountHostDir = mounts.find((m) => m.containerPath === 'dune')?.hostPath ?? '';
+      const duneMountContainerDir = '/workspace/extra/dune/';
+      const acp = createCodingEngineAcpConfig(
+        this.startupModelCredentials,
+      );
+
       const duneAgent = new DuneAgent({
+        ...(acp ? { acp } : {}),
         agentLite,
         boundExternalJid,
         credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
         externalChannelFactory,
         groupFolder: record.groupFolder,
         instructions: readAgentInstructions(record.agent.role, this.homeDir),
-        mcpServers: ipcHostPath ? {
-          dune: {
-            source: this.duneMcpServerDir,
-            command: 'node',
-            args: ['server.ts'],
-            env: {
-              DUNE_IPC_PATH: ipcContainerPath!,
-              DUNE_CLAUDE_CODE_AVAILABLE: String(this.snapshot.codingEngines.some((e) => e.id === 'claude-code' && e.available)),
-              DUNE_CODEX_AVAILABLE: String(this.snapshot.codingEngines.some((e) => e.id === 'codex' && e.available)),
-            },
-          },
-        } : undefined,
         ...(mounts.length > 0 ? { mounts } : {}),
         name: record.agent.name,
         onExternalInbound: (text, senderName) => {
@@ -1417,6 +1411,15 @@ export class AgentRuntime implements AgentRuntimeContract {
           this.handleOutboundMessage(chatJid, text);
         },
         primaryChatJid: toAgentChatJid(agentId),
+        ...(actionServicesForAgent && ownerProjectId ? {
+          registerActions: (alAgent) => registerDuneActions(alAgent, actionServicesForAgent, {
+            agentId,
+            agentName: record.agent.name,
+            projectId: ownerProjectId,
+            duneMountHostDir,
+            duneMountContainerDir,
+          }),
+        } : {}),
         skills: record.agent.role === 'project-main'
           ? [this.duneSkillDir, this.projectKickoffSkillDir]
           : [this.duneSkillDir],
@@ -1516,16 +1519,6 @@ export class AgentRuntime implements AgentRuntimeContract {
           });
         }
       });
-
-      if (ipcHostPath && ipcContainerPath && record.agent.projectId) {
-        this.onIpcDirCreated?.(
-          agentId,
-          record.agent.name,
-          record.agent.projectId,
-          ipcHostPath,
-          ipcContainerPath,
-        );
-      }
 
       if (didUpdateRecord) {
         this.persistState();
