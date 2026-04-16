@@ -1737,12 +1737,39 @@ describe('AgentRuntime', () => {
 
     let agent = host.getSnapshot().agents.find((item) => item.id === agentId);
 
-    expect(agent?.channel.target).toEqual({
-      channelId: 'telegram',
-      jid: 'tg:123',
-      kind: 'group',
-      name: 'Product QA',
+    expect(agent?.channel).toMatchObject({
+      canCompose: true,
+      id: 'telegram',
+      kind: 'external',
+      label: 'Telegram',
+      target: {
+        channelId: 'telegram',
+        jid: 'tg:123',
+        kind: 'group',
+        name: 'Product QA',
+      },
     });
+
+    await host.service.sendMessage(agentId, 'Investigate from Dune UI.');
+
+    agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+
+    expect(agent?.messages.map((message) => ({
+      content: message.content,
+      role: message.role,
+      status: message.status,
+    }))).toEqual([
+      {
+        content: 'Investigate from Dune UI.',
+        role: 'user',
+        status: 'complete',
+      },
+      {
+        content: '',
+        role: 'assistant',
+        status: 'streaming',
+      },
+    ]);
 
     await harness.duneChannel('release-triage').sendMessage(
       toAgentChatJid(agentId),

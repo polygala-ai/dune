@@ -26,6 +26,7 @@ import {
   createDefaultTelegramAgentRuntimeState,
 } from '@/renderer/features/agents/model/channels';
 import { extractWorkspaceAttachmentPaths } from '@/shared/agents/message-content';
+import { createChannelBinding as createAgentRuntimeChannelBinding } from './agent-runtime/channels';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,38 +118,12 @@ function createExternalAgentCopy(attachedLabel: string) {
   };
 }
 
-/** Maps Telegram channel status. */
-function mapTelegramChannelStatus(
-  status: TelegramConnectionStatus,
-): import('@/renderer/features/agents/types').AgentChannelStatus {
-  switch (status) {
-    case 'connected':
-      return 'connected';
-    case 'connecting':
-      return 'connecting';
-    case 'error':
-      return 'error';
-    case 'disconnected':
-    case 'not-configured':
-      return 'disconnected';
-    default:
-      return 'disconnected';
-  }
-}
-
 /** Creates channel binding. */
 function createChannelBinding(
   telegramState: TelegramAgentRuntimeState | null,
   target: AgentExternalTarget | null = null,
 ): AgentChannelBinding {
-  return {
-    canCompose: false,
-    id: 'telegram',
-    kind: 'external',
-    label: 'Telegram',
-    status: mapTelegramChannelStatus(telegramState?.status ?? 'disconnected'),
-    ...(target ? { target } : {}),
-  };
+  return createAgentRuntimeChannelBinding('telegram', telegramState, target);
 }
 
 // ---------------------------------------------------------------------------
