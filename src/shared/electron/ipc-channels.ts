@@ -23,8 +23,6 @@ export const ipcChannels = {
   selectAgent: 'dune:runtime:select-agent',
   sendAgentMessage: 'dune:runtime:send-agent-message',
   startTelegramSetupSession: 'dune:runtime:start-telegram-setup-session',
-  startAgentIpc: 'dune:runtime:start-agent-ipc',
-  stopAgentIpc: 'dune:runtime:stop-agent-ipc',
   selectProjectDirectory: 'dune:runtime:select-project-directory',
   updateAgentChannel: 'dune:runtime:update-agent-channel',
   workflowChanged: 'dune:runtime:workflow-changed',

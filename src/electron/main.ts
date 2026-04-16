@@ -22,8 +22,6 @@ if (app.isPackaged) {
   fixPath();
 }
 
-import { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
-import { createToolHandler } from '@/electron/main/agent-ipc/tools';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import {
@@ -375,41 +373,28 @@ void app.whenReady().then(async () => {
         resolveDefaultModelCredentials,
       } = modelProvidersModule;
 
-      const agentIpcManager = new AgentIpcManager(duneHomeDir);
-      agentIpcManager.setToolMessageHandler(createToolHandler({
-        getRuntimeController: requireRuntimeController,
-        onWorkflowChanged: () => {
-          for (const window of BrowserWindow.getAllWindows()) {
-            window.webContents.send(ipcChannels.workflowChanged);
-          }
-
-          // Nudge idle project-main agents when their project inbox is empty.
-          // Debounced to avoid infinite loops (agent creates item → change → nudge → ...).
-          if (!nudgeScheduled) {
-            nudgeScheduled = true;
-            setTimeout(() => {
-              nudgeScheduled = false;
-              void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
-            }, 10_000);
-          }
-        },
-        onCodingEngineEvent: (agentId, event) => {
-          const ctrl = requireRuntimeController();
-          ctrl.pushCodingEngineEvent(agentId, event);
-        },
-        workflowStore,
-      }));
-
       runtimeController = new DesktopRuntimeController({
-        agentIpcManager,
+        actionServices: {
+          getRuntimeController: requireRuntimeController,
+          onWorkflowChanged: () => {
+            for (const window of BrowserWindow.getAllWindows()) {
+              window.webContents.send(ipcChannels.workflowChanged);
+            }
+            if (!nudgeScheduled) {
+              nudgeScheduled = true;
+              setTimeout(() => {
+                nudgeScheduled = false;
+                void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
+              }, 10_000);
+            }
+          },
+          workflowStore,
+        },
         agentStore: stores.agents,
         bundledAgentDir: path.join(app.getAppPath(), 'agent'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
-        },
-        onIpcDirCreated: (agentId, agentName, projectId, ipcHostPath, ipcContainerPath) => {
-          agentIpcManager.addConnection(agentId, agentName, projectId, ipcHostPath, ipcContainerPath);
         },
         resolveProjectName: async (projectId) => {
           const snapshot = await stores.workflow.get<{
@@ -444,7 +429,6 @@ void app.whenReady().then(async () => {
       });
       await runtimeController.start();
       await syncReadyAssignmentInboxes(await workflowStore.get('snapshot'));
-      agentIpcManager.start();
 
       // Periodic check: nudge idle project-main agents when inbox is empty
       nudgeIntervalHandle = setInterval(() => {
@@ -600,12 +584,6 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.resetRuntime, async () => {
     await ensureRuntime();
     return requireRuntimeController().reset();
-  });
-  ipcMain.handle(ipcChannels.startAgentIpc, async () => {
-    await ensureRuntime();
-  });
-  ipcMain.handle(ipcChannels.stopAgentIpc, async () => {
-    await ensureRuntime();
   });
   ipcMain.handle(ipcChannels.restartApp, () => {
     quitCoordinator.restart();

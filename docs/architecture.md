@@ -224,7 +224,7 @@ User
 ### Workflow Hydration And Persistence
 
 1. `useWorkflowPersistence` loads `workflow/snapshot` through `storageGet(...)`.
-2. It normalizes legacy or current snapshot shapes and hydrates the workflow slice.
+2. It normalizes persisted snapshot shapes and hydrates the workflow slice.
 3. Renderer-side workflow edits write the new snapshot through `storageSet(...)`.
 4. Agent tool calls can also update the same snapshot in the main process.
 5. After a main-process workflow update, `tools-handler` emits `workflowChanged`.
@@ -257,76 +257,51 @@ Runtime-managed state lives under the configured home directory.
 - AgentLite runtime root
   - `~/.dune/agentlite`
   - Stores AgentLite groups, agent runtime data, and attachment files.
-- Project agent IPC tree
-  - `~/.dune/projs/<projectId>/agents/<agentName>/ipc/`
-  - Contains `agent/`, `host/`, and a generated `CLAUDE.md`.
+- Project agent support tree
+  - `~/.dune/projs/...`
+  - Contains generated `CLAUDE.md` guides plus per-project and per-agent support files that are mounted into AgentLite containers.
 
 In short:
 
 - Electron `userData` stores app state.
-- `.dune` stores runtime state and project agent IPC state.
+- `.dune` stores runtime state and generated agent support files.
 
-## Agent IPC And Workflow Tools
+## Agent Actions And Workflow Tools
 
-Project agents talk to Dune through a filesystem IPC protocol.
+Project agents talk to Dune through AgentLite's built-in HTTP `actions` transport.
 
-### Directory Layout
+### Action Surface
 
-Each project agent gets:
+Each Dune agent registers a project-scoped action surface in the host process via `registerDuneActions(...)`:
 
-- `agent/` for agent-to-host JSON files
-- `host/` for host-to-agent JSON files
-- `CLAUDE.md` for the generated usage guide
+- Workflow actions
+  - `workflow.projects.*`
+  - `workflow.items.*`
+  - `workflow.tasks.*`
+  - `workflow.work_products.*`
+  - `workflow.assignments.*`
+- Agent/runtime actions
+  - `agents.*`
+  - `runtime.get_snapshot`
+- ACP delegation actions from AgentLite itself
+  - `acp_list_remote_agents`
+  - `acp_new_session`
+  - `acp_prompt`
+  - `acp_cancel`
+  - `acp_close_session`
 
-`AgentIpcManager` tracks these directories and creates one `AgentIpcConnection` per agent.
+Inside the container, the model does not see host functions as bespoke tools. Instead it uses the built-in MCP helpers:
 
-### Message Types
+- `search_actions({ query?, limit? })`
+  - discovers registered host actions plus their JSON schemas
+- `call_action({ name, payload })`
+  - invokes one action synchronously and returns JSON
 
-`src/shared/agent-ipc/types.ts` defines the protocol.
-
-- Host to agent
-  - `user-message`
-  - `tools/list-result`
-  - `tools/call-result`
-  - `error`
-- Agent to host
-  - `reply`
-  - `reply-done`
-  - `message`
-  - `error`
-  - `tools/list`
-  - `tools/call`
-
-### Streaming Replies
-
-- Agents can stream text by writing repeated `reply` chunks for the same file ID.
-- `AgentIpcConnection` merges those chunks into one assistant message.
-- Idle and safety timers finalize the stream.
-- `-reply.done` ends the stream immediately and cleans up the temporary files.
-
-### Tool Discovery And Invocation
-
-Structured tool calls go through `tools-handler`.
-
-- Agents write `tools/list` to discover tools.
-- The host replies with tool definitions and JSON schemas.
-- Agents write `tools/call` with a tool name and arguments.
-- `AgentIpcConnection` parses the message and delegates it to `tools-handler`.
-- `tools-handler` validates input and writes either `tools/call-result` or `error` back to `host/`.
-
-The current tool families are:
-
-- `workflow.projects.*`
-- `workflow.items.*`
-- `workflow.tasks.*`
-- `workflow.work_products.*`
-- `workflow.assignments.*`
-- `agents.*`
-- `runtime.get_snapshot`
+ACP peers are separate from Dune-owned actions. They run on the host and are used for background coding delegation to Claude Code / Codex when available.
 
 ### Workflow Mutation Path
 
-Workflow tool calls follow one pattern:
+Workflow action handlers follow one pattern:
 
 1. Read the stored workflow snapshot.
 2. Clone and validate it.
@@ -348,15 +323,13 @@ Legend:
   => emitted update or persisted side effect
 
 Project agent
-  -> agent/ tools/call JSON
-    -> AgentIpcConnection
-      -> tools-handler
+  -> search_actions / call_action
+    -> AgentLite actions HTTP transport
+      -> registerDuneActions
         -> workflow store
           => read snapshot
           => write normalized snapshot
         -> DesktopRuntimeController
-        => AgentIpcConnection
-          => host/<fileId>-reply.json
         => workflowChanged
           => renderer reloads workflow snapshot
 ```
@@ -379,10 +352,10 @@ Project agent
   - The typed bridge surface.
 - `ipcChannels`
   - The canonical IPC channel list.
-- Agent IPC protocol in `src/shared/agent-ipc/types.ts`
-  - The contract between project agents and the Dune host.
-- `createIpcClaudeMd(...)`
-  - The generated guide for project agent IPC usage.
+- `registerDuneActions(...)`
+  - The host action surface registered on each agent.
+- `readIpcGuide(...)`
+  - The generated guide that teaches agents how to use `search_actions`, `call_action`, and ACP peers.
 - `settings-sections.ts`
   - The settings route registry.
 - Workflow store and presenters

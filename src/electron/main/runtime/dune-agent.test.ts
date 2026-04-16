@@ -7,7 +7,7 @@ import type {
 } from '@boxlite-ai/agentlite';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DuneAgent } from './dune-agent';
+import { DuneAgent, type DuneAcpOptions } from './dune-agent';
 
 /** Creates mock agent. */
 function createMockAgent(): AgentLiteAgent {
@@ -59,5 +59,43 @@ describe('DuneAgent', () => {
         trigger: '@Stilgar',
       }),
     );
+  });
+
+  it('passes ACP peer configuration through to AgentLite', async () => {
+    const agent = createMockAgent();
+    const getOrCreateAgent = vi.fn((_name: string, _options?: AgentOptions) => agent);
+    const acp = {
+      peers: [
+        {
+          name: 'codex',
+          command: 'npx',
+          args: ['-y', '@zed-industries/codex-acp'],
+          description: 'Codex via ACP',
+        },
+      ],
+    } satisfies DuneAcpOptions;
+
+    const duneAgent = new DuneAgent({
+      acp,
+      agentLite: {
+        agents: new Map(),
+        createAgent: vi.fn(),
+        deleteAgent: vi.fn(async () => {}),
+        getOrCreateAgent,
+        stop: vi.fn(async () => {}),
+      } as unknown as AgentLite,
+      credentials: async () => ({}),
+      groupFolder: 'stilgar-PNDOmbNq',
+      name: 'Stilgar',
+      onOutboundMessage: vi.fn(),
+      primaryChatJid: 'dune:agent:PNDOmbNq',
+    });
+
+    await duneAgent.start();
+
+    const [, runtimeOptions] = getOrCreateAgent.mock.calls[0] as [string, AgentOptions & {
+      acp?: DuneAcpOptions;
+    }];
+    expect(runtimeOptions.acp).toEqual(acp);
   });
 });

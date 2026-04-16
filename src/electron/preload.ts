@@ -42,10 +42,8 @@ const bridge: DesktopBridge = {
   updateAgentChannel: (input) => ipcRenderer.invoke(ipcChannels.updateAgentChannel, input),
   sendAgentMessage: (agentId, text) =>
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
-  startAgentIpc: () => ipcRenderer.invoke(ipcChannels.startAgentIpc),
   startTelegramSetupSession: (input) =>
     ipcRenderer.invoke(ipcChannels.startTelegramSetupSession, input),
-  stopAgentIpc: () => ipcRenderer.invoke(ipcChannels.stopAgentIpc),
   storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
   storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),

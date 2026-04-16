@@ -6,14 +6,15 @@ settings:
 
 overrides:
   better-sqlite3: ^12.8.0
+  '@boxlite-ai/agentlite': file:../agentlite
 
 importers:
 
   .:
     dependencies:
       '@boxlite-ai/agentlite':
-        specifier: github:boxlite-ai/agentlite
-        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b3d514663099b415dca06c5af15a258075072819(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
+        specifier: file:../agentlite
+        version: file:../agentlite(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -207,6 +208,11 @@ packages:
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
 
+  '@agentclientprotocol/sdk@0.19.0':
+    resolution: {integrity: sha512-U9I8ws9WTOk6jCBAWpXefGSDgVXn14/kV6HFzwWGcstQ02mOQgClMAROHmoIn9GqZbDBDEOkdIbP4P4TEMQdug==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
@@ -313,9 +319,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b3d514663099b415dca06c5af15a258075072819':
-    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b3d514663099b415dca06c5af15a258075072819}
-    version: 1.2.25
+  '@boxlite-ai/agentlite@file:../agentlite':
+    resolution: {directory: ../agentlite, type: directory}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -4977,6 +4982,10 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
+  '@agentclientprotocol/sdk@0.19.0(zod@4.3.6)':
+    dependencies:
+      zod: 4.3.6
+
   '@alloc/quick-lru@5.2.0': {}
 
   '@asamuzakjp/css-color@5.0.1':
@@ -5113,8 +5122,9 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/b3d514663099b415dca06c5af15a258075072819(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
+  '@boxlite-ai/agentlite@file:../agentlite(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
     dependencies:
+      '@agentclientprotocol/sdk': 0.19.0(zod@4.3.6)
       '@boxlite-ai/boxlite': 0.4.3(playwright-core@1.58.2)
       better-sqlite3: 12.8.0
       cron-parser: 5.5.0
