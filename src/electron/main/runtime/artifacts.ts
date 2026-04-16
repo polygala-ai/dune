@@ -122,6 +122,7 @@ export function readAgentInstructions(
 /** IPC guide options. */
 export interface IpcGuideOptions {
   ipcMountPath?: string;
+  projectHostPath?: string;
   rootMountPath?: string;
 }
 
@@ -135,6 +136,9 @@ export function readIpcGuide(
   const filePath = path.join(resolveArtifactsDir(homeDir), ARTIFACT_FILES.ipcGuide);
   const rootMountPath = options.rootMountPath ?? '/workspace/extra/dune/';
   const ipcMountPath = options.ipcMountPath ?? `${rootMountPath}ipc/`;
+  const projectHostPath =
+    options.projectHostPath
+    ?? 'Not mounted. Omit `cwd` and let ACP use the default group workdir.';
 
   let template: string;
 
@@ -150,6 +154,7 @@ export function readIpcGuide(
 
   return template
     .replaceAll('{{projectId}}', projectId)
+    .replaceAll('{{projectHostPath}}', projectHostPath)
     .replaceAll('{{rootMountPath}}', rootMountPath)
     .replaceAll('{{ipcMountPath}}', ipcMountPath)
     .replaceAll('{{readyAssignmentsInboxPath}}', READY_ASSIGNMENTS_INBOX_MOUNT_PATH);

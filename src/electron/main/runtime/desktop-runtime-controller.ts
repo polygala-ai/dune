@@ -7,7 +7,6 @@ import type {
 } from '@/shared/agents/agent-runtime';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
-  CodingEngineEvent,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   UpdateAgentChannelInput,
@@ -18,7 +17,6 @@ import {
   resolveAgentLiteRuntimeRoot,
   type AgentRuntimeOptions,
 } from './agent-runtime';
-import type { AgentIpcManager } from '@/electron/main/agent-ipc/agent-ipc-manager';
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
@@ -34,7 +32,6 @@ type RealRuntime = ActiveRuntime & {
 /** Desktop runtime controller options. */
 export interface DesktopRuntimeControllerOptions
   extends AgentRuntimeOptions {
-  agentIpcManager?: AgentIpcManager;
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
 }
 
@@ -50,8 +47,6 @@ export class DesktopRuntimeController {
 
   private readonly runtimeRoot: string;
 
-  private readonly agentIpcManager: AgentIpcManager | null;
-
   private readonly runtimeOptions: DesktopRuntimeControllerOptions;
 
   private shutdownPromise: Promise<void> | null = null;
@@ -59,7 +54,6 @@ export class DesktopRuntimeController {
   constructor(options: DesktopRuntimeControllerOptions) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.runtimeOptions = options;
-    this.agentIpcManager = options.agentIpcManager ?? null;
     this.createRealRuntime =
       options.createRealRuntime ??
       ((runtimeOptions) => new AgentRuntime(runtimeOptions));
@@ -93,15 +87,6 @@ export class DesktopRuntimeController {
   /** Returns snapshot. */
   getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
-  }
-
-  /** Pushes coding engine event. */
-  pushCodingEngineEvent(agentId: string, event: CodingEngineEvent) {
-    const runtime = this.activeRuntime;
-
-    if (runtime instanceof AgentRuntime) {
-      runtime.pushCodingEngineEvent(agentId, event);
-    }
   }
 
   /** Subscribes to desktop runtime updates. */
@@ -191,8 +176,6 @@ export class DesktopRuntimeController {
     this.shutdownPromise = (async () => {
       this.activeRuntimeUnsubscribe?.();
       this.activeRuntimeUnsubscribe = null;
-
-      this.agentIpcManager?.stop();
 
       if (typeof this.activeRuntime.shutdown === 'function') {
         await this.activeRuntime.shutdown();

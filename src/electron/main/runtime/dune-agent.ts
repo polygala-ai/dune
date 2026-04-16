@@ -10,6 +10,20 @@ import type {
 
 import { DuneChannel } from './dune-channel';
 
+/** ACP peer config understood by newer AgentLite runtimes. */
+export interface DuneAcpPeerConfig {
+  args: string[];
+  command: string;
+  description?: string;
+  env?: Record<string, string>;
+  name: string;
+}
+
+/** ACP config understood by newer AgentLite runtimes. */
+export interface DuneAcpOptions {
+  peers?: DuneAcpPeerConfig[];
+}
+
 /** Dune agent options. */
 export interface DuneAgentOptions {
   agentLite: AgentLite;
@@ -18,6 +32,7 @@ export interface DuneAgentOptions {
   externalChannelFactory?: ChannelDriverFactory | undefined;
   groupFolder: string;
   instructions?: string | undefined;
+  acp?: DuneAcpOptions | undefined;
   mcpServers?: Record<string, McpServerConfig> | undefined;
   mounts?: Array<{
     containerPath: string;
@@ -28,6 +43,12 @@ export interface DuneAgentOptions {
   onExternalInbound?: (text: string, senderName: string) => void;
   onOutboundMessage: (chatJid: string, text: string) => void;
   primaryChatJid: string;
+  /**
+   * Called immediately after `agentLite.getOrCreateAgent(...)` returns, with
+   * the underlying AgentLite agent. Used to register custom actions before
+   * `agent.start()` opens the actions HTTP server.
+   */
+  registerActions?: ((agent: AgentLiteAgent) => void) | undefined;
   skills?: string[] | undefined;
 }
 
@@ -93,10 +114,11 @@ export class DuneAgent {
     };
     const mounts = options.mounts ?? [];
 
-    this.agent = options.agentLite.getOrCreateAgent(options.groupFolder, {
+    const agentOptions = {
       channels,
       credentials: options.credentials,
       ...(options.instructions ? { instructions: options.instructions } : {}),
+      ...(options.acp ? { acp: options.acp } : {}),
       ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
       ...(mounts.length > 0 ? {
         mountAllowlist: {
@@ -110,7 +132,13 @@ export class DuneAgent {
       } : {}),
       name: options.name,
       ...(options.skills && options.skills.length > 0 ? { skills: options.skills } : {}),
-    });
+    } as Parameters<AgentLite['getOrCreateAgent']>[1];
+
+    this.agent = options.agentLite.getOrCreateAgent(options.groupFolder, agentOptions);
+
+    if (options.registerActions) {
+      options.registerActions(this.agent);
+    }
 
     await this.agent.start();
     await this.registerPrimaryGroup();

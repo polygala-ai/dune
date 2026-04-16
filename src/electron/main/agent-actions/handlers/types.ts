@@ -1,16 +1,27 @@
-// Agent IPC tool types.
+// Dune action handler types shared by the action-registration layer.
 
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import type { CodingEngineEvent } from '@/renderer/features/agents/types';
-import type { ToolDefinition } from '../types';
 
-import type { ToolHandlerContext } from '../agent-ipc-connection';
+/** MCP-style tool definition. Used internally by RegisteredTool. */
+export interface ToolDefinition {
+  description: string;
+  inputSchema: Record<string, unknown>;
+  name: string;
+}
+
+/** Per-agent identity and IPC paths passed into every tool call. */
+export interface ToolHandlerContext {
+  agentId: string;
+  agentName: string;
+  projectId: string;
+  ipcHostDir: string;
+  ipcContainerDir: string;
+}
 
 /** Tool handler options. */
 export interface ToolHandlerOptions {
   getRuntimeController: () => DesktopRuntimeController;
-  onCodingEngineEvent?: (agentId: string, event: CodingEngineEvent) => void;
   onWorkflowChanged: () => void;
   workflowStore: AppStorage;
 }

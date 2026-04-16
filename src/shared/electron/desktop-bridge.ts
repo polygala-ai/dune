@@ -38,9 +38,7 @@ export interface DesktopBridge {
   restartApp?: () => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
-  startAgentIpc?: () => Promise<void>;
   startTelegramSetupSession?: (input: StartTelegramSetupSessionInput) => Promise<string>;
-  stopAgentIpc?: () => Promise<void>;
   storageDelete?: (store: string, key: string) => Promise<void>;
   storageGet?: (store: string, key: string) => Promise<unknown>;
   storageKeys?: (store: string) => Promise<string[]>;

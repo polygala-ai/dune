@@ -30,6 +30,8 @@ export function useTranscriptScroll({
       behavior: 'smooth',
     });
   }, [
+    agent?.activityEvents.length,
+    agent?.codingEngineEvents.length,
     agent?.id,
     agent?.messages.length,
     agent?.messages.at(-1)?.content,
