@@ -98,6 +98,7 @@ import { AgentRecords } from './agent-records';
 const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
+const MAX_ACTIVITY_EVENTS = 50;
 
 import type {
   AgentRuntimeContract,
@@ -1076,9 +1077,13 @@ export class AgentRuntime implements AgentRuntimeContract {
           return agent;
         }
 
+        const events = [...agent.activityEvents, event];
+
         return {
           ...agent,
-          activityEvents: [...agent.activityEvents, event],
+          activityEvents: events.length > MAX_ACTIVITY_EVENTS
+            ? events.slice(-MAX_ACTIVITY_EVENTS)
+            : events,
           updatedAt: this.now(),
         };
       }),
@@ -1712,7 +1717,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       if (record) {
         record.agent = {
           ...agent,
-          activityEvents: agent.activityEvents.map((event) => ({ ...event })),
+          activityEvents: [],
           channel: {
             ...agent.channel,
             target: agent.channel.target ? { ...agent.channel.target } : null,
