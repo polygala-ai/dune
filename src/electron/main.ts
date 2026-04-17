@@ -248,6 +248,10 @@ const createWindow = () => {
     }
   });
 
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
@@ -608,18 +612,10 @@ void app.whenReady().then(async () => {
   createWindow();
   scheduleRuntimeBootstrap(250);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-      scheduleRuntimeBootstrap(250);
-    }
-  });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
 });
 
 app.on('before-quit', (event) => {
