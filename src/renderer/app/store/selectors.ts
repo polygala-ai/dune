@@ -178,7 +178,7 @@ export function useWorkflowSession() {
           ...presentAgentSummary(agent),
           currentItemId: currentItem?.id ?? null,
           currentItemTitle: currentItem?.title ?? null,
-          isProjectMain: agent.role === 'project-main',
+          isProjectMain: agent.definition.archetype === 'project-main',
           projectId: agent.projectId ?? null,
         };
       })

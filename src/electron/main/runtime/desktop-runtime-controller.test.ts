@@ -89,12 +89,12 @@ describe('DesktopRuntimeController', () => {
     await expect(secondShutdown).resolves.toBeUndefined();
   });
 
-  it('forwards ready-assignment inbox signals to the active runtime service', async () => {
+  it('forwards scheduleReadyAssignment to the active runtime service', async () => {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
     tempDirs.push(homeDir);
-    const signalReadyAssignmentInbox = vi.fn(async () => undefined);
+    const scheduleReadyAssignment = vi.fn(async () => undefined);
     const mockRuntime = createMockAgentRuntime();
-    mockRuntime.service.signalReadyAssignmentInbox = signalReadyAssignmentInbox;
+    mockRuntime.service.scheduleReadyAssignment = scheduleReadyAssignment;
     const controller = new DesktopRuntimeController({
       agentStore: { get: async () => null, set: async () => {} },
       createRealRuntime: () => ({
@@ -105,14 +105,11 @@ describe('DesktopRuntimeController', () => {
     });
 
     await controller.start();
-    await controller.signalReadyAssignmentInbox('agent-1', {
-      generation: 4,
-      itemCount: 2,
-    });
+    await controller.scheduleReadyAssignment('agent-1', 'ASSIGNMENTS_UPDATED\nYou have 2 items.');
 
-    expect(signalReadyAssignmentInbox).toHaveBeenCalledWith('agent-1', {
-      generation: 4,
-      itemCount: 2,
-    });
+    expect(scheduleReadyAssignment).toHaveBeenCalledWith(
+      'agent-1',
+      'ASSIGNMENTS_UPDATED\nYou have 2 items.',
+    );
   });
 });

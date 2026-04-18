@@ -178,6 +178,19 @@ function roleLabel(role: PresentedAgent['messages'][number]['role']) {
   }
 }
 
+const compactNumberFormatter = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 1,
+  notation: 'compact',
+});
+
+function formatUsageCount(count: number) {
+  return compactNumberFormatter.format(count);
+}
+
+function formatUsageCost(costUsd: number) {
+  return `$${costUsd.toFixed(costUsd >= 0.01 ? 4 : 6).replace(/0+$/, '').replace(/\.$/, '')}`;
+}
+
 /** Renders the agent panel UI. */
 export function AgentPanel({
   agent,
@@ -219,6 +232,9 @@ export function AgentPanel({
             if (item.type === 'message') {
               const { message } = item;
               const isUser = message.role === 'user';
+              const usageLabel = message.usage
+                ? `${formatUsageCount(message.usage.inputTokens)}↑ ${formatUsageCount(message.usage.outputTokens)}↓`
+                : null;
 
               return (
                 <div
@@ -238,6 +254,18 @@ export function AgentPanel({
                       <span>{roleLabel(message.role)}</span>
                       <span className="h-1 w-1 rounded-full bg-app-border-strong" />
                       <span>{message.createdAtLabel}</span>
+                      {message.role === 'assistant' && usageLabel ? (
+                        <>
+                          <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+                          <span>{usageLabel}</span>
+                          {typeof message.usage?.costUsd === 'number' ? (
+                            <>
+                              <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+                              <span>{formatUsageCost(message.usage.costUsd)}</span>
+                            </>
+                          ) : null}
+                        </>
+                      ) : null}
                       {message.status === 'streaming' ? (
                         <>
                           <span className="h-1 w-1 rounded-full bg-app-border-strong" />

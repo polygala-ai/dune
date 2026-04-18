@@ -53,7 +53,7 @@ function createAgent(
     note: 'A durable agent workspace.',
     preview: 'Ready for a first instruction.',
     projectId: 'project-1',
-    role: 'custom',
+    definition: { archetype: 'custom', responsibilities: [] },
     status: 'ready',
     statusLabel: 'Ready',
     telegram: null,
@@ -126,5 +126,38 @@ describe('AgentPanel', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toContain('User prompt');
     expect(items[1]).toContain('Assistant reply');
+  });
+
+  it('renders assistant token usage beside the message metadata', () => {
+    const { container } = render(
+      <AgentPanel
+        agent={createAgent({
+          messages: [
+            createMessage({
+              content: 'Assistant reply',
+              createdAt: 100,
+              createdAtLabel: 'T100',
+              id: 'message-assistant',
+              role: 'assistant',
+              usage: {
+                costUsd: 0.0021,
+                inputTokens: 42,
+                outputTokens: 318,
+                sessionInputTotal: 420,
+                sessionOutputTotal: 3180,
+              },
+            }),
+          ],
+        })}
+        composerRef={createRef<HTMLTextAreaElement>()}
+        draft=""
+        onDraftChange={vi.fn()}
+        onSubmit={vi.fn(() => Promise.resolve(undefined))}
+        transcriptRef={createRef<HTMLDivElement>()}
+      />,
+    );
+
+    expect(container.textContent).toContain('42↑ 318↓');
+    expect(container.textContent).toContain('$0.0021');
   });
 });

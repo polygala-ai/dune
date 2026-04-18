@@ -13,7 +13,7 @@ describe('AgentCustomizationEditor', () => {
 
     render(
       <AgentCustomizationEditor
-        agentRole="custom"
+        agentArchetype="custom"
         artifactsPath="/tmp/dune-artifacts"
         onChange={vi.fn()}
         value={createEmptyAgentCustomizationDraft()}
@@ -32,7 +32,7 @@ describe('AgentCustomizationEditor', () => {
 
     render(
       <AgentCustomizationEditor
-        agentRole="project-main"
+        agentArchetype="project-main"
         artifactsPath="/tmp/dune-artifacts"
         onChange={vi.fn()}
         value={createEmptyAgentCustomizationDraft()}
@@ -42,7 +42,7 @@ describe('AgentCustomizationEditor', () => {
     await user.click(screen.getByRole('button', { name: /Open original file/i }));
 
     expect(window.duneDesktop?.openPath).toHaveBeenCalledWith(
-      '/tmp/dune-artifacts/project-main-instructions.md',
+      '/tmp/dune-artifacts/dune-main-agent-instructions.md',
     );
   });
 });

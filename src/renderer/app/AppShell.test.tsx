@@ -371,7 +371,7 @@ describe('AppShell', () => {
       const state = useAppStore.getState();
       const selectedProjectId = state.selectedProjectId;
       const projectMainAgents = state.agents.filter((agent) =>
-        agent.projectId === selectedProjectId && agent.role === 'project-main',
+        agent.projectId === selectedProjectId && agent.definition.archetype === 'project-main',
       );
 
       expect(projectMainAgents).toHaveLength(1);
@@ -390,7 +390,7 @@ describe('AppShell', () => {
       const state = useAppStore.getState();
       const studioProject = state.projects.find((project) => project.name === 'Studio Ops');
       const projectMainAgents = state.agents.filter((agent) =>
-        agent.projectId === studioProject?.id && agent.role === 'project-main',
+        agent.projectId === studioProject?.id && agent.definition.archetype === 'project-main',
       );
 
       expect(studioProject).toBeTruthy();

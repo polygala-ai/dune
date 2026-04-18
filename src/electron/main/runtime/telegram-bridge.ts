@@ -143,6 +143,7 @@ export interface ChannelBridgeCallbacks {
   getAgents: () => Agent[];
   now: () => number;
   onChange: () => Promise<void> | void;
+  onInboundMessage?: (agentId: string, chatJid: string, content: string, senderName: string, attachments: string[]) => Promise<void> | void;
 }
 
 /** Patch returned by syncAgentPatches — host applies to its snapshot. */
@@ -213,6 +214,8 @@ export class TelegramBridge {
   private readonly knownChats = new Map<string, Map<string, DiscoveredExternalChat>>();
 
   private readonly agentFingerprints = new Map<string, string>();
+
+  private disconnecting = false;
 
   constructor(options: TelegramBridgeOptions) {
     this.callbacks = options.callbacks;
@@ -380,6 +383,16 @@ export class TelegramBridge {
       this.agentFingerprints.set(agent.id, fingerprint);
     }
 
+    // Keep observers alive for agents that are already bound to a Telegram token.
+    for (const [agentId, fingerprint] of this.agentFingerprints.entries()) {
+      if (!requiredTokens.has(fingerprint)) {
+        const token = await this.readAgentToken(agentId);
+        if (token) {
+          requiredTokens.set(fingerprint, token);
+        }
+      }
+    }
+
     for (const session of this.setupSessions.values()) {
       requiredTokens.set(session.tokenFingerprint, session.token);
       const members = requiredObserverMembers.get(session.tokenFingerprint) ?? {
@@ -498,7 +511,7 @@ export class TelegramBridge {
         pairCode: activeSession?.pairingStatus === 'listening' ? activeSession.code : null,
         pairExpiresAt: activeSession?.pairingStatus === 'listening' ? activeSession.expiresAt : null,
         pairingStatus: activeSession?.pairingStatus ?? 'idle',
-        status: activeSession?.status ?? observer?.status ?? 'error',
+        status: activeSession?.status ?? observer?.status ?? (fingerprint ? 'connected' : 'error'),
       });
       const attachedLabel = boundChat?.name ?? agent.channel.label;
       const copy = boundChat ? createExternalAgentCopy(attachedLabel) : {
@@ -522,6 +535,8 @@ export class TelegramBridge {
 
   /** Disconnects all. */
   async disconnectAll() {
+    if (this.disconnecting) return;
+    this.disconnecting = true;
     for (const fingerprint of [...this.observers.keys()]) {
       await this.disconnectObserver(fingerprint);
     }
@@ -720,6 +735,7 @@ export class TelegramBridge {
       timestamp: string;
     },
   ) {
+    if (!this.observers.has(fingerprint)) return;
     if (!chatJid.startsWith('tg:') || message.is_from_me || message.is_bot_message) {
       return;
     }
@@ -760,10 +776,21 @@ export class TelegramBridge {
       }
     }
 
-    // Inbound message routing is handled by the external driver attached to
-    // DuneChannel. The observer only needs to run for the /pair setup flow.
-    // DuneChannel.onExternalInbound records the user message in the snapshot,
-    // and the external driver delivers it to AgentLite.
+    // Route inbound messages to matching agents.
+    const senderName = message.sender_name?.trim() || message.sender?.trim() || 'External';
+    const attachments = message.attachments ?? [];
+
+    for (const agent of this.callbacks.getAgents()) {
+      if (this.agentFingerprints.get(agent.id) !== fingerprint) {
+        continue;
+      }
+
+      if (agent.channel.target?.jid !== chatJid) {
+        continue;
+      }
+
+      await this.callbacks.onInboundMessage?.(agent.id, chatJid, trimmedContent, senderName, attachments);
+    }
   }
 
   private toPublicSetupSession(

@@ -16,9 +16,11 @@ import type {
   AgentChannelId,
   AgentChannelStatus,
   AgentExternalTarget,
+  AgentDefinition,
   AgentMessage,
-  AgentRole,
+  AgentMessageUsage,
   AgentRuntimeInfo,
+  AgentStatus,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
@@ -28,6 +30,11 @@ import type {
   TelegramSetupSession,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
+import {
+  cloneAgentDefinition,
+  createDefaultAgentDefinition,
+  normalizeAgentDefinition,
+} from '@/renderer/features/agents/model/agent-definition';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
@@ -42,12 +49,9 @@ import {
 } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import {
+  extractWorkspaceAttachmentPaths,
   summarizeMessagePreview,
 } from '@/shared/agents/message-content';
-import {
-  createReadyAssignmentsInboxSignalMessage,
-  type ReadyAssignmentsInboxSignal,
-} from '@/shared/agents/ready-assignments';
 import { normalizeProjectRootPath } from '@/shared/workflow/project-artifacts';
 import {
   normalizeAgentAttachments,
@@ -90,7 +94,6 @@ import {
   createRuntimeReadyMessage,
 } from './snapshot';
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
-import { ReadyInbox } from './ready-inbox';
 import { MessageStream, type PendingAssistantMessage } from './message-stream';
 import { Lifecycle } from './lifecycle';
 import { AgentRecords } from './agent-records';
@@ -99,6 +102,103 @@ const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 const MAX_ACTIVITY_EVENTS = 50;
+const SHUTDOWN_TIMEOUT_MS = 5_000;
+
+interface AgentSessionTokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+type AgentTokenUsageSnapshot = AgentMessageUsage;
+
+function asNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+
+  return Math.trunc(value);
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function captureAgentTokenUsageSnapshot(
+  message: unknown,
+  totals: AgentSessionTokenTotals,
+): AgentTokenUsageSnapshot | null {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+
+  const resultMessage = message as Record<string, unknown>;
+
+  if (resultMessage.subtype !== 'success') {
+    return null;
+  }
+
+  const usage = resultMessage.usage;
+
+  if (!usage || typeof usage !== 'object') {
+    return null;
+  }
+
+  const usageRecord = usage as Record<string, unknown>;
+  const inputTokens = asNonNegativeInteger(usageRecord.input_tokens);
+  const outputTokens = asNonNegativeInteger(usageRecord.output_tokens);
+
+  if (inputTokens === null || outputTokens === null) {
+    return null;
+  }
+
+  const costUsd = asFiniteNumber(resultMessage.total_cost_usd);
+
+  return {
+    ...(costUsd === null ? {} : { costUsd }),
+    inputTokens,
+    outputTokens,
+    sessionInputTotal: totals.inputTokens + inputTokens,
+    sessionOutputTotal: totals.outputTokens + outputTokens,
+  };
+}
+
+function formatTokenCount(count: number) {
+  return count.toLocaleString('en-US');
+}
+
+function formatTokenCost(costUsd: number) {
+  return `$${costUsd.toFixed(costUsd >= 0.01 ? 4 : 6).replace(/0+$/, '').replace(/\.$/, '')}`;
+}
+
+function formatAgentTokenUsageSummary(usage: AgentTokenUsageSnapshot) {
+  const parts = [
+    `📊 ${formatTokenCount(usage.inputTokens)} in / ${formatTokenCount(usage.outputTokens)} out tokens`,
+  ];
+
+  if (typeof usage.costUsd === 'number' && usage.costUsd > 0) {
+    parts.push(`${formatTokenCost(usage.costUsd)} this msg`);
+  }
+
+  parts.push(
+    `${formatTokenCount(usage.sessionInputTotal)} in / ${formatTokenCount(usage.sessionOutputTotal)} out session total`,
+  );
+
+  return parts.join(' • ');
+}
+
+function appendAgentTokenUsageSummary(content: string, summary: string) {
+  const trimmedContent = content.trimEnd();
+
+  if (!trimmedContent) {
+    return summary;
+  }
+
+  return `${trimmedContent}\n\n${summary}`;
+}
 
 import type {
   AgentRuntimeContract,
@@ -151,7 +251,7 @@ export interface AgentRuntimeOptions {
 }
 
 import {
-  readAgentInstructions,
+  composeAgentSystemPrompt,
   resolveBundledAgentDir,
   seedArtifacts,
 } from '../artifacts';
@@ -186,7 +286,14 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly messageStream = new MessageStream();
 
-  private readonly readyInbox = new ReadyInbox();
+  private readonly pendingTokenUsage = new Map<string, AgentMessageUsage>();
+
+  private readonly pendingTokenUsageSummaries = new Map<string, string>();
+
+  private readonly sessionTokenTotals = new Map<string, AgentSessionTokenTotals>();
+
+  /** Per-agent set of currently running agentlite scheduled task IDs. */
+  private readonly runningTaskIds = new Map<string, Set<string>>();
 
   private readonly records = new AgentRecords();
 
@@ -263,6 +370,8 @@ export class AgentRuntime implements AgentRuntimeContract {
         getAgents: () => this.snapshot.agents,
         now: () => this.now(),
         onChange: () => this.applyTelegramPatches(),
+        onInboundMessage: (agentId, chatJid, content, senderName, attachments) =>
+          this.handleObserverInboundMessage(agentId, chatJid, content, senderName, attachments),
       },
       createChannelFactory: this.createTelegramChannelFactory,
       resolveBotUsername:
@@ -312,13 +421,19 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.selectAgent(agentId);
       },
       sendMessage: async (agentId, text) => this.sendMessage(agentId, text),
-      signalReadyAssignmentInbox: async (agentId, signal) =>
-        this.signalReadyAssignmentInbox(agentId, signal),
+      scheduleReadyAssignment: async (agentId, prompt) =>
+        this.scheduleReadyAssignment(agentId, prompt),
       startTelegramSetupSession: async (input) =>
         this.telegram.startSetupSession(input),
       subscribe: (listener) => this.subscribe(listener),
       updateAgentChannel: async (input) => {
         await this.updateAgentChannel(input);
+      },
+      updateAgentDefinition: async (agentId, definition) => {
+        await this.updateAgentDefinition(agentId, definition);
+      },
+      postSystemMessage: async (agentId, body) => {
+        await this.postSystemMessage(agentId, body);
       },
     };
   }
@@ -378,16 +493,30 @@ export class AgentRuntime implements AgentRuntimeContract {
       return this.shutdownPromise;
     }
 
-    this.shutdownPromise = (async () => {
-      this.messageStream.clear();
-      this.telegram.clearAllSetupSessions();
+    this.shutdownPromise = Promise.race([
+      (async () => {
+        this.messageStream.clear();
+        this.pendingTokenUsage.clear();
+        this.pendingTokenUsageSummaries.clear();
+        this.sessionTokenTotals.clear();
+        this.runningTaskIds.clear();
+        this.telegram.clearAllSetupSessions();
 
-      try {
-        await this.telegram.disconnectAll();
-      } finally {
-        await this.lifecycle.stop();
-      }
-    })();
+        try {
+          await this.telegram.disconnectAll();
+        } finally {
+          // Detach external channels from all DuneAgent runtimes before
+          // stopping the engine so their socket drivers are cleanly closed
+          // while the Rust runtime is still alive.
+          const runtimes = [...this.lifecycle.allRuntimes()];
+          await Promise.allSettled(
+            runtimes.map(([, agent]) => agent.detachExternalChannel()),
+          );
+          await this.lifecycle.stop();
+        }
+      })(),
+      new Promise<void>(resolve => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
+    ]);
 
     return this.shutdownPromise;
   }
@@ -400,7 +529,10 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Resets agent. */
   reset() {
     this.messageStream.clear();
-    this.readyInbox.clear();
+    this.pendingTokenUsage.clear();
+    this.pendingTokenUsageSummaries.clear();
+    this.sessionTokenTotals.clear();
+    this.runningTaskIds.clear();
     this.telegram.reset();
     this.records.clear();
     this.lifecycle.clearRuntimes();
@@ -469,6 +601,10 @@ export class AgentRuntime implements AgentRuntimeContract {
     const now = this.now();
     const agentId = createAgentId();
     const groupFolder = createGroupFolder(trimmedName, agentId);
+    const definition = normalizeAgentDefinition(
+      input.definition,
+      input.definition?.archetype ?? 'custom',
+    );
     const nextAgent = createDraftAgent(
       agentId,
       trimmedName,
@@ -477,7 +613,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       telegramState,
       externalTarget,
       projectId,
-      'custom',
+      definition,
     );
 
     const persistedRecord = {
@@ -609,6 +745,100 @@ export class AgentRuntime implements AgentRuntimeContract {
     await this.telegram.refreshRuntimeState();
   }
 
+  private async updateAgentDefinition(
+    agentId: string,
+    definition: AgentDefinition,
+  ) {
+    const trimmedId = agentId.trim();
+    const record = this.records.get(trimmedId);
+
+    if (!record) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const now = this.now();
+    const nextDefinition = cloneAgentDefinition(definition);
+    record.agent = {
+      ...record.agent,
+      definition: nextDefinition,
+      updatedAt: now,
+    };
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === trimmedId
+          ? { ...agent, definition: cloneAgentDefinition(nextDefinition), updatedAt: now }
+          : agent,
+      ),
+    };
+    this.persistState();
+    this.emit();
+
+    // If the agent is live, rebuild its AgentLite instance so the updated
+    // system prompt is picked up on the next turn.
+    const existing = this.lifecycle.getRuntime(trimmedId);
+    if (existing) {
+      this.lifecycle.deleteRuntime(trimmedId);
+      try {
+        await this.ensureAgentRuntime(record);
+      } catch (error) {
+        console.error(`Failed to restart agent runtime after definition update.`, error);
+      }
+    }
+  }
+
+  private async postSystemMessage(agentId: string, body: string) {
+    const trimmedId = agentId.trim();
+    const trimmedBody = body.trim();
+
+    if (!trimmedBody) {
+      return;
+    }
+
+    const record = this.records.get(trimmedId);
+
+    if (!record) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const now = this.now();
+    const systemMessage: AgentMessage = {
+      attachments: [],
+      content: trimmedBody,
+      createdAt: now,
+      format: 'markdown',
+      id: `message-system-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      role: 'system',
+      status: 'complete',
+    };
+
+    record.agent = {
+      ...record.agent,
+      messages: [...record.agent.messages, systemMessage],
+      updatedAt: now,
+    };
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === trimmedId
+          ? { ...agent, messages: [...agent.messages, systemMessage], updatedAt: now }
+          : agent,
+      ),
+    };
+    this.persistState();
+    this.emit();
+
+    const duneAgent = this.lifecycle.getRuntime(trimmedId)
+      ?? await this.ensureAgentRuntime(record);
+
+    await duneAgent.pushUserMessage(
+      toAgentChatJid(trimmedId),
+      trimmedBody,
+      'system',
+    );
+  }
+
   private async ensureProjectMainAgent(
     projectId: string,
     projectName: string,
@@ -628,7 +858,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     const existingAgent = this.snapshot.agents.find((agent) =>
-      agent.projectId === trimmedProjectId && agent.role === 'project-main',
+      agent.projectId === trimmedProjectId && agent.definition.archetype === 'project-main',
     ) ?? null;
     const expectedName = createProjectMainAgentName(trimmedProjectId);
 
@@ -704,7 +934,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       null,
       null,
       trimmedProjectId,
-      'project-main',
+      createDefaultAgentDefinition('project-main'),
     );
     const persistedRecord = {
       agent: nextAgent,
@@ -738,7 +968,10 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     this.messageStream.forget(agentId);
-    this.readyInbox.forget(agentId);
+    this.pendingTokenUsage.delete(agentId);
+    this.pendingTokenUsageSummaries.delete(agentId);
+    this.sessionTokenTotals.delete(agentId);
+    this.runningTaskIds.delete(agentId);
     const deletedRecord = this.records.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
     this.records.delete(agentId);
@@ -844,64 +1077,28 @@ export class AgentRuntime implements AgentRuntimeContract {
     });
   }
 
-  private async signalReadyAssignmentInbox(
-    agentId: string,
-    signal: ReadyAssignmentsInboxSignal,
-  ) {
-    const itemCount = Math.max(0, signal.itemCount);
+  private async scheduleReadyAssignment(agentId: string, prompt: string) {
+    const record = this.records.get(agentId);
 
-    if (itemCount === 0) {
-      this.readyInbox.forget(agentId);
-      return;
-    }
-
-    const normalizedSignal = {
-      generation: signal.generation,
-      itemCount,
-    } satisfies ReadyAssignmentsInboxSignal;
-    const deliveredGeneration = this.readyInbox.getDeliveredGeneration(agentId);
-    const pendingGeneration = this.readyInbox.getPending(agentId)?.generation ?? 0;
-
-    if (
-      normalizedSignal.generation <= deliveredGeneration
-      || normalizedSignal.generation <= pendingGeneration
-    ) {
+    if (!record) {
       return;
     }
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
 
-    if (!agent?.channel.canCompose || !this.records.has(agentId)) {
-      return;
-    }
-
-    if (this.messageStream.has(agentId)) {
-      this.readyInbox.queue(agentId, normalizedSignal);
-      return;
-    }
-
-    await this.dispatchReadyAssignmentInboxSignal(agentId, normalizedSignal);
-  }
-
-  private async dispatchReadyAssignmentInboxSignal(
-    agentId: string,
-    signal: ReadyAssignmentsInboxSignal,
-  ) {
-    const persistedRecord = this.records.get(agentId);
-
-    if (!persistedRecord) {
+    if (!agent?.channel.canCompose) {
       return;
     }
 
     const duneAgent = this.lifecycle.getRuntime(agentId)
-      ?? await this.ensureAgentRuntime(persistedRecord);
+      ?? await this.ensureAgentRuntime(record);
 
-    this.readyInbox.markDelivered(agentId, signal.generation);
-
-    await duneAgent.pushControlMessage(
-      toAgentChatJid(agentId),
-      createReadyAssignmentsInboxSignalMessage(signal),
-    );
+    await duneAgent.agentLiteAgent.scheduleTask({
+      jid: toAgentChatJid(agentId),
+      prompt,
+      scheduleType: 'once',
+      scheduleValue: new Date().toISOString(),
+    });
   }
 
   private async dispatchAgentInput(
@@ -916,6 +1113,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       transcriptText: string;
     },
   ) {
+    this.pendingTokenUsage.delete(agentId);
+    this.pendingTokenUsageSummaries.delete(agentId);
     const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
@@ -968,31 +1167,106 @@ export class AgentRuntime implements AgentRuntimeContract {
     );
   }
 
-  private handleExternalInboundMessage(agentId: string, text: string, senderName: string) {
+  private handleExternalInboundMessage(agentId: string, text: string, senderName: string, attachmentSources: string[] = []) {
     const now = this.now();
-    const transcriptText = senderName !== 'External'
-      ? `${senderName}: ${text}`
-      : text;
+    const { content: strippedContent } = extractWorkspaceAttachmentPaths(text);
+    const agent = this.snapshot.agents.find((a) => a.id === agentId);
+    const chatTargetName = agent?.channel?.target?.name ?? '';
+    const transcriptText =
+      senderName !== 'External' && senderName !== chatTargetName
+        ? `${senderName}: ${strippedContent}`
+        : strippedContent;
+    const record = this.records.get(agentId);
+    const attachments = record
+      ? normalizeAgentAttachments(attachmentSources, { groupFolder: record.groupFolder, runtimeRoot: this.runtimeRoot })
+      : [];
     const userMessage = {
       ...createUserMessage(transcriptText, now),
+      attachments,
       format: 'plain' as const,
     };
 
     this.snapshot = {
       ...this.snapshot,
-      agents: this.snapshot.agents.map((agent) =>
-        agent.id === agentId
+      agents: this.snapshot.agents.map((a) =>
+        a.id === agentId
           ? {
-              ...agent,
-              messages: [...agent.messages, userMessage],
+              ...a,
+              messages: [...a.messages, userMessage],
               preview: summarizePreview(transcriptText),
               updatedAt: now,
             }
-          : agent,
+          : a,
       ),
     };
     this.persistState();
     this.emit();
+  }
+
+  private async handleObserverInboundMessage(
+    agentId: string,
+    _chatJid: string,
+    content: string,
+    senderName: string,
+    attachments: string[],
+  ) {
+    if (this.messageStream.has(agentId)) {
+      return;
+    }
+
+    const { content: strippedContent } = extractWorkspaceAttachmentPaths(content);
+    const agent = this.snapshot.agents.find((a) => a.id === agentId);
+    const chatTargetName = agent?.channel?.target?.name ?? '';
+    const transcriptText =
+      senderName && senderName !== 'External' && senderName !== chatTargetName
+        ? `${senderName}: ${strippedContent}`
+        : strippedContent;
+
+    await this.dispatchAgentInput(agentId, {
+      attachmentSources: attachments,
+      format: 'plain',
+      rawText: strippedContent,
+      senderName,
+      selectAgent: false,
+      timestamp: this.now(),
+      transcriptText,
+    });
+  }
+
+  private captureTokenUsageSummary(agentId: string, message: unknown) {
+    const currentTotals = this.sessionTokenTotals.get(agentId) ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    const usage = captureAgentTokenUsageSnapshot(message, currentTotals);
+
+    if (!usage) {
+      return;
+    }
+
+    this.sessionTokenTotals.set(agentId, {
+      inputTokens: usage.sessionInputTotal,
+      outputTokens: usage.sessionOutputTotal,
+    });
+    this.pendingTokenUsage.set(agentId, usage);
+    this.pendingTokenUsageSummaries.set(agentId, formatAgentTokenUsageSummary(usage));
+  }
+
+  private decorateOutboundMessage(chatJid: string, text: string) {
+    const agentId = this.resolveAgentIdByChatJid(chatJid);
+
+    if (!agentId) {
+      return text;
+    }
+
+    const summary = this.pendingTokenUsageSummaries.get(agentId);
+
+    if (!summary) {
+      return text;
+    }
+
+    this.pendingTokenUsageSummaries.delete(agentId);
+    return appendAgentTokenUsageSummary(text, summary);
   }
 
   private handleOutboundMessage(chatJid: string, text: string) {
@@ -1069,6 +1343,37 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
+  /** Tracks running scheduled tasks per agent and updates agent.status accordingly. */
+  private markTaskRunning(agentId: string, taskId: string, running: boolean) {
+    const set = this.runningTaskIds.get(agentId) ?? new Set<string>();
+
+    if (running) {
+      set.add(taskId);
+    } else {
+      set.delete(taskId);
+    }
+
+    if (set.size > 0) {
+      this.runningTaskIds.set(agentId, set);
+    } else {
+      this.runningTaskIds.delete(agentId);
+    }
+
+    const streaming = this.messageStream.has(agentId);
+    const isRunning = set.size > 0 || streaming;
+    const nextStatus: AgentStatus = isRunning ? 'live' : 'ready';
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId && agent.status !== 'draft' && agent.status !== nextStatus
+          ? { ...agent, status: nextStatus, updatedAt: this.now() }
+          : agent,
+      ),
+    };
+    this.emit();
+  }
+
   private pushActivityEvent(agentId: string, event: AgentActivityEvent) {
     this.snapshot = {
       ...this.snapshot,
@@ -1119,8 +1424,10 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     const now = this.now();
+    const usage = this.pendingTokenUsage.get(agentId);
 
     this.messageStream.forget(agentId);
+    this.pendingTokenUsage.delete(agentId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -1133,6 +1440,7 @@ export class AgentRuntime implements AgentRuntimeContract {
                   ? {
                       ...message,
                       status: 'complete',
+                      ...(usage ? { usage: { ...usage } } : {}),
                     }
                   : message,
               ),
@@ -1151,12 +1459,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     const completedMessage = agent?.messages.find((message) => message.id === pending.messageId);
 
     // Outbound Telegram delivery is handled by DuneChannel's external driver.
-
-    const pendingReadyInboxSignal = this.readyInbox.getPending(agentId);
-
-    if (pendingReadyInboxSignal) {
-      void this.dispatchReadyAssignmentInboxSignal(agentId, pendingReadyInboxSignal);
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -1356,7 +1658,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             projectRootPath,
             record.agent.id,
             record.agent.name,
-            record.agent.role,
+            record.agent.definition.archetype,
           );
           mounts.push({
             containerPath: 'dune',
@@ -1404,13 +1706,14 @@ export class AgentRuntime implements AgentRuntimeContract {
         agentLite,
         boundExternalJid,
         credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
+        decorateOutboundMessage: (chatJid, text) => this.decorateOutboundMessage(chatJid, text),
         externalChannelFactory,
         groupFolder: record.groupFolder,
-        instructions: readAgentInstructions(record.agent.role, this.homeDir),
+        instructions: composeAgentSystemPrompt(record.agent.definition, this.homeDir),
         ...(mounts.length > 0 ? { mounts } : {}),
         name: record.agent.name,
-        onExternalInbound: (text, senderName) => {
-          this.handleExternalInboundMessage(agentId, text, senderName);
+        onExternalInbound: (text, senderName, attachments) => {
+          this.handleExternalInboundMessage(agentId, text, senderName, attachments);
         },
         onOutboundMessage: (chatJid, text) => {
           this.handleOutboundMessage(chatJid, text);
@@ -1425,7 +1728,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             duneMountContainerDir,
           }),
         } : {}),
-        skills: record.agent.role === 'project-main'
+        skills: record.agent.definition.archetype === 'project-main'
           ? [this.duneSkillDir, this.projectKickoffSkillDir]
           : [this.duneSkillDir],
       });
@@ -1473,6 +1776,12 @@ export class AgentRuntime implements AgentRuntimeContract {
         const msg = event.message;
         const sdkType = event.sdkType;
         const sdkSubtype = event.sdkSubtype;
+
+        if (sdkType === 'result') {
+          this.pendingTokenUsage.delete(agentId);
+          this.pendingTokenUsageSummaries.delete(agentId);
+          this.captureTokenUsageSummary(agentId, msg);
+        }
 
         // Tool result feedback (user messages contain tool results)
         if (sdkType === 'user' && Array.isArray(msg?.message?.content)) {
@@ -1525,6 +1834,20 @@ export class AgentRuntime implements AgentRuntimeContract {
         }
       });
 
+      // Scheduled task lifecycle — drives agent.status for non-chat work.
+      alAgent.on('task.run.started', (event) => {
+        this.markTaskRunning(agentId, event.taskId, true);
+      });
+      alAgent.on('task.run.succeeded', (event) => {
+        this.markTaskRunning(agentId, event.taskId, false);
+      });
+      alAgent.on('task.run.failed', (event) => {
+        this.markTaskRunning(agentId, event.taskId, false);
+      });
+      alAgent.on('task.run.skipped', (event) => {
+        this.markTaskRunning(agentId, event.taskId, false);
+      });
+
       if (didUpdateRecord) {
         this.persistState();
       }
@@ -1575,9 +1898,12 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private rollbackOptimisticAgent(agentId: string) {
+    this.pendingTokenUsage.delete(agentId);
+    this.pendingTokenUsageSummaries.delete(agentId);
+    this.sessionTokenTotals.delete(agentId);
+    this.runningTaskIds.delete(agentId);
     this.records.delete(agentId);
     this.lifecycle.deleteRuntime(agentId);
-    this.readyInbox.forget(agentId);
 
     const nextAgents = this.snapshot.agents.filter((agent) => agent.id !== agentId);
     const nextSelectedAgentId = this.snapshot.selectedAgentId === agentId
@@ -1727,6 +2053,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           messages: agent.messages.map((message) => ({
             ...message,
             attachments: message.attachments.map((attachment) => ({ ...attachment })),
+            ...(message.usage ? { usage: { ...message.usage } } : {}),
           })),
           telegram: cloneTelegramAgentRuntimeState(agent.telegram),
         };

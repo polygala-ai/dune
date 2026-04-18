@@ -2,6 +2,7 @@
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
+  AgentDefinition,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
@@ -47,4 +48,5 @@ export interface DesktopBridge {
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
+  updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
 }

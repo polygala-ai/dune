@@ -18,7 +18,6 @@ import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-r
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 
 import { agentTools } from '@/electron/main/agent-actions/handlers/agents';
-import { assignmentTools } from '@/electron/main/agent-actions/handlers/assignments';
 import { itemTools } from '@/electron/main/agent-actions/handlers/items';
 import { projectTools } from '@/electron/main/agent-actions/handlers/projects';
 import { runtimeTools } from '@/electron/main/agent-actions/handlers/runtime';
@@ -58,7 +57,6 @@ const TOOLS_BY_NAME = new Map<string, RegisteredTool>(
     ...itemTools,
     ...taskTools,
     ...workProductTools,
-    ...assignmentTools,
     ...agentTools,
     ...runtimeTools,
   ].map((tool) => [tool.definition.name, tool] as const),
@@ -143,6 +141,8 @@ export function registerDuneActions(
     itemId: z.string().describe('Work item ID'),
     title: z.string().optional().describe('New title'),
     brief: z.string().optional().describe('New brief'),
+    primaryAgentId: z.string().nullable().optional()
+      .describe('Agent ID to assign, or null to unassign. Cannot change while item is done.'),
   });
   reg('workflow.items.move', {
     itemId: z.string().describe('Work item ID'),
@@ -174,15 +174,6 @@ export function registerDuneActions(
     body: z.string().describe('Work product content'),
   });
 
-  // ---- Assignments --------------------------------------------------------
-  reg('workflow.assignments.set_primary_agent', {
-    itemId: z.string().describe('Work item ID'),
-    agentId: z.string().describe('Agent ID to assign'),
-  });
-  reg('workflow.assignments.clear_primary_agent', {
-    itemId: z.string().describe('Work item ID'),
-  });
-
   // ---- Agents -------------------------------------------------------------
   reg('agents.list', {
     projectId: z.string().optional().describe('Project ID. Omit for current project.'),
@@ -198,11 +189,13 @@ export function registerDuneActions(
   reg('agents.delete', {
     agentId: z.string().describe('Agent ID'),
   });
-  reg('agents.ensure_project_main', {
-    projectId: z.string().optional().describe('Project ID. Omit for current project.'),
-    projectName: z.string().optional().describe('Project name (if known)'),
+  reg('agents.update', {
+    agentId: z.string().describe('Target agent ID (selector only; not mutated).'),
+    responsibilities: z.array(z.string())
+      .describe('New list of owned domains. Replaces the existing list entirely.'),
+    notice: z.string().optional()
+      .describe('Optional system-role message to send to the modified agent. If omitted, a default notice listing the new responsibilities is generated.'),
   });
-
   // ---- Runtime ------------------------------------------------------------
   reg('runtime.get_snapshot', {});
 

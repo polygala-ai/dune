@@ -14,8 +14,14 @@ export type CodingEngineEventKind = 'completed' | 'error' | 'started' | 'step';
 export type AgentActivityKind = 'subagent' | 'status' | 'tool';
 /** Agent status. */
 export type AgentStatus = 'draft' | 'live' | 'ready';
-/** Agent role shape. */
-export type AgentRole = 'custom' | 'project-main';
+/** Agent archetype — drives the base system-prompt file. */
+export type AgentArchetype = 'custom' | 'project-main';
+
+/** Structured agent definition shown to peers and folded into the system prompt. */
+export interface AgentDefinition {
+  archetype: AgentArchetype;
+  responsibilities: string[];
+}
 /** Identifier for agent channel. */
 export type AgentChannelId = 'discord' | 'dune-chat' | 'slack' | 'telegram';
 /** Identifier for external channel. */
@@ -112,6 +118,7 @@ export interface AgentChannelBinding {
 /** Create agent input shape. */
 export interface CreateAgentInput {
   channelId: AgentChannelId;
+  definition?: Partial<AgentDefinition>;
   externalTarget?: AgentExternalTarget | null;
   model?: { providerId: string; modelId: string };
   name: string;
@@ -144,6 +151,15 @@ export interface AgentAttachment {
   url: string;
 }
 
+/** Agent message usage shape. */
+export interface AgentMessageUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd?: number;
+  sessionInputTotal: number;
+  sessionOutputTotal: number;
+}
+
 /** Agent message shape. */
 export interface AgentMessage {
   attachments: AgentAttachment[];
@@ -153,6 +169,7 @@ export interface AgentMessage {
   createdAt: number;
   format: MessageFormat;
   status: MessageStatus;
+  usage?: AgentMessageUsage;
 }
 
 /** Agent activity event shape. */
@@ -191,9 +208,9 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
   codingEngineEvents: CodingEngineEvent[];
+  definition: AgentDefinition;
   note: string;
   projectId: string | null;
-  role: AgentRole;
   status: AgentStatus;
   telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;
@@ -207,10 +224,10 @@ export interface PresentedAgent extends AgentSummary {
   activityEvents: AgentActivityEvent[];
   channel: AgentChannelBinding;
   codingEngineEvents: CodingEngineEvent[];
+  definition: AgentDefinition;
   id: string;
   note: string;
   projectId: string | null;
-  role: AgentRole;
   status: AgentStatus;
   telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;

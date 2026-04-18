@@ -32,7 +32,7 @@ export function ArtifactsSettings({ runtimeInfo }: SettingsSectionComponentProps
 
   const files = [
     {
-      name: 'project-main-instructions.md',
+      name: 'dune-main-agent-instructions.md',
       title: 'Project-main agent instructions',
       description: 'System prompt for the lead coordinator agent. Handles triage, delegation, and project oversight.',
     },
@@ -42,8 +42,8 @@ export function ArtifactsSettings({ runtimeInfo }: SettingsSectionComponentProps
       description: 'System prompt for custom agents. Focused on executing assignments and reporting progress.',
     },
     {
-      name: 'ipc-guide.md',
-      title: 'IPC guide template',
+      name: 'dune-project-guide.md',
+      title: 'Project guide template',
       description: 'Mounted as CLAUDE.md inside agent containers. Uses {{projectId}}, {{ipcMountPath}}, etc.',
     },
   ];

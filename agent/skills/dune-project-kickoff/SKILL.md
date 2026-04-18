@@ -65,7 +65,7 @@ Once the user has confirmed:
    - `call_action({ name: "workflow_tasks_add", payload: { itemId, title } })`
 3. If you need specialized workers, create them and assign the items:
    - `call_action({ name: "agents_create", payload: { name } })`
-   - `call_action({ name: "workflow_assignments_set_primary_agent", payload: { itemId, agentId } })`
+   - `call_action({ name: "workflow_items_update", payload: { itemId, primaryAgentId: agentId } })`
 4. Report back with a short recap: "Project kicked off! Here's what's in motion: …"
 
 ## Rules

@@ -27,7 +27,7 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
     note: 'A durable agent workspace.',
     preview: 'Ready for a first instruction.',
     projectId: 'project-1',
-    role: 'custom',
+    definition: { archetype: 'custom', responsibilities: [] },
     status: 'ready',
     telegram: null,
     updatedAt: Date.now(),

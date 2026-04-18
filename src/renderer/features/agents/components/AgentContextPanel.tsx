@@ -87,9 +87,9 @@ function isSuppressedMockContextCard(card: AgentContextCard) {
   return card.eyebrow === 'Phase one' && card.title === 'UI first, runtime next';
 }
 
-/** Returns agent role label. */
-function getAgentRoleLabel(role: PresentedAgent['role']) {
-  return role === 'project-main' ? 'Project main' : 'Custom agent';
+/** Returns agent archetype label. */
+function getAgentArchetypeLabel(archetype: PresentedAgent['definition']['archetype']) {
+  return archetype === 'project-main' ? 'Project main' : 'Custom agent';
 }
 
 /** Inspector section props. */
@@ -208,7 +208,7 @@ export function AgentContextPanel({
     .filter((card) => !isSuppressedContextCard(card))
     .filter((card) => !isSuppressedMockContextCard(card))
     .slice(0, 2);
-  const canDeleteAgent = agent.role === 'custom' && !!onDeleteAgent;
+  const canDeleteAgent = agent.definition.archetype === 'custom' && !!onDeleteAgent;
   const hasCustomization = hasAgentCustomization(customization);
   const skillCount = customization ? countConfiguredSkills(customization.skills) : 0;
   const mcpCount = customization ? countConfiguredMcpServers(customization.mcpServers) : 0;
@@ -314,7 +314,7 @@ export function AgentContextPanel({
           <div className="mt-6">
             <InspectorCard>
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                <span>{getAgentRoleLabel(agent.role)}</span>
+                <span>{getAgentArchetypeLabel(agent.definition.archetype)}</span>
                 <span className="h-1 w-1 rounded-full bg-app-border-strong" />
                 <span>{agent.statusLabel}</span>
               </div>

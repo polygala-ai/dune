@@ -1,6 +1,7 @@
 // Agent runtime snapshot builders.
 
 import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
+import { cloneAgentDefinition } from '@/renderer/features/agents/model/agent-definition';
 import {
   cloneExternalChannelsState,
   cloneTelegramAgentRuntimeState,
@@ -22,12 +23,13 @@ export function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnaps
       },
       codingEngineEvents: agent.codingEngineEvents.map((event) => ({ ...event })),
       contextCards: agent.contextCards.map((card) => ({ ...card })),
+      definition: cloneAgentDefinition(agent.definition),
       messages: agent.messages.map((message) => ({
         ...message,
         attachments: message.attachments.map((attachment) => ({ ...attachment })),
+        ...(message.usage ? { usage: { ...message.usage } } : {}),
       })),
       projectId: agent.projectId ?? null,
-      role: agent.role,
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
     })),
     codingEngines: snapshot.codingEngines.map((engine) => ({ ...engine })),

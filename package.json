@@ -13,7 +13,6 @@
     "dev": "electron-forge start",
     "prestart": "pnpm run check:install-hygiene",
     "start": "electron-forge start",
-    "postinstall": "node build/prepare-agentlite-runtime.cjs",
     "prepackage": "pnpm run check:install-hygiene",
     "package": "electron-forge package",
     "prepackage:mac": "pnpm run check:install-hygiene",
@@ -74,7 +73,7 @@
     "vitest": "^4.1.1"
   },
   "dependencies": {
-    "@boxlite-ai/agentlite": "file:../agentlite",
+    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#82e0a1d",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -106,7 +105,7 @@
   "pnpm": {
     "overrides": {
       "better-sqlite3": "^12.8.0",
-      "@boxlite-ai/agentlite": "file:../agentlite"
+      "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#82e0a1d"
     }
   }
 }

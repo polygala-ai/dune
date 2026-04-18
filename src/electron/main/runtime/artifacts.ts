@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { READY_ASSIGNMENTS_INBOX_MOUNT_PATH } from '@/shared/agents/ready-assignments';
+import type {
+  AgentArchetype,
+  AgentDefinition,
+} from '@/renderer/features/agents/types';
 
 const ARTIFACTS_DIR_NAME = 'artifacts';
 
@@ -53,8 +56,8 @@ const PROMPTS_SUBDIR = 'prompts';
 /** Artifact files constant. */
 export const ARTIFACT_FILES = {
   agentInstructions: 'dune-agent-instructions.md',
-  ipcGuide: 'ipc-guide.md',
-  projectMainInstructions: 'project-main-instructions.md',
+  projectGuide: 'dune-project-guide.md',
+  projectMainInstructions: 'dune-main-agent-instructions.md',
 } as const;
 
 /** Resolves artifacts dir. */
@@ -99,11 +102,11 @@ export function seedArtifacts(
 
 /** Read agent instructions from the artifacts directory, falling back to source. */
 export function readAgentInstructions(
-  role: 'project-main' | 'custom' = 'custom',
+  archetype: AgentArchetype = 'custom',
   homeDir: string = os.homedir(),
   sourceDir: string = SOURCE_DIR,
 ): string {
-  const filename = role === 'project-main'
+  const filename = archetype === 'project-main'
     ? ARTIFACT_FILES.projectMainInstructions
     : ARTIFACT_FILES.agentInstructions;
   const artifactPath = path.join(resolveArtifactsDir(homeDir), filename);
@@ -119,6 +122,30 @@ export function readAgentInstructions(
   }
 }
 
+/**
+ * Compose an agent's full system prompt: the archetype base instructions plus
+ * a Responsibilities block when the definition carries any. Empty definitions
+ * return just the base instructions.
+ */
+export function composeAgentSystemPrompt(
+  definition: AgentDefinition,
+  homeDir: string = os.homedir(),
+  sourceDir: string = SOURCE_DIR,
+): string {
+  const base = readAgentInstructions(definition.archetype, homeDir, sourceDir);
+  const items = definition.responsibilities
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  if (items.length === 0) {
+    return base;
+  }
+
+  const block = ['## Responsibilities', ...items.map((entry) => `- ${entry}`)].join('\n');
+
+  return base ? `${base}\n\n${block}` : block;
+}
+
 /** IPC guide options. */
 export interface IpcGuideOptions {
   ipcMountPath?: string;
@@ -126,19 +153,19 @@ export interface IpcGuideOptions {
   rootMountPath?: string;
 }
 
-/** Read IPC guide template from artifacts and interpolate variables. */
-export function readIpcGuide(
+/** Read project guide template from artifacts and interpolate variables. */
+export function readProjectGuide(
   projectId: string,
   options: IpcGuideOptions = {},
   homeDir: string = os.homedir(),
   sourceDir: string = SOURCE_DIR,
 ): string {
-  const filePath = path.join(resolveArtifactsDir(homeDir), ARTIFACT_FILES.ipcGuide);
+  const filePath = path.join(resolveArtifactsDir(homeDir), ARTIFACT_FILES.projectGuide);
   const rootMountPath = options.rootMountPath ?? '/workspace/extra/dune/';
   const ipcMountPath = options.ipcMountPath ?? `${rootMountPath}ipc/`;
   const projectHostPath =
     options.projectHostPath
-    ?? 'Not mounted. Omit `cwd` and let ACP use the default group workdir.';
+    ?? 'Not mounted. No host-visible project folder configured.';
 
   let template: string;
 
@@ -146,7 +173,7 @@ export function readIpcGuide(
     template = fs.readFileSync(filePath, 'utf-8');
   } catch {
     try {
-      template = readSourceFile(ARTIFACT_FILES.ipcGuide, sourceDir);
+      template = readSourceFile(ARTIFACT_FILES.projectGuide, sourceDir);
     } catch {
       template = '';
     }
@@ -156,6 +183,5 @@ export function readIpcGuide(
     .replaceAll('{{projectId}}', projectId)
     .replaceAll('{{projectHostPath}}', projectHostPath)
     .replaceAll('{{rootMountPath}}', rootMountPath)
-    .replaceAll('{{ipcMountPath}}', ipcMountPath)
-    .replaceAll('{{readyAssignmentsInboxPath}}', READY_ASSIGNMENTS_INBOX_MOUNT_PATH);
+    .replaceAll('{{ipcMountPath}}', ipcMountPath);
 }

@@ -9,9 +9,9 @@ import {
   resolveAgentDuneDir,
   resolveProjectDuneDir,
 } from '@/electron/main/dune-paths';
-import type { AgentRole } from '@/renderer/features/agents/types';
+import type { AgentArchetype } from '@/renderer/features/agents/types';
 
-import { copyDirRecursive, readIpcGuide } from '../artifacts';
+import { copyDirRecursive, readProjectGuide } from '../artifacts';
 
 export { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 
@@ -54,7 +54,7 @@ export function createDuneMountLayout(
   projectRootPath: string | null,
   agentId: string,
   agentName: string,
-  agentRole: AgentRole,
+  agentArchetype: AgentArchetype,
 ): { duneMountRoot: string } {
   const projectDir = resolveProjectDuneDir(homeDir, projectId, projectName);
   const agentDir = resolveAgentDuneDir(homeDir, projectId, projectName, agentName, agentId);
@@ -65,7 +65,7 @@ export function createDuneMountLayout(
 
   fs.writeFileSync(
     path.join(projectDir, 'CLAUDE.md'),
-    readIpcGuide(projectId, {
+    readProjectGuide(projectId, {
       ipcMountPath: `/workspace/extra/dune/agents/${path.basename(agentDir)}/`,
       rootMountPath: '/workspace/extra/dune/',
       ...(resolvedProjectRootPath ? { projectHostPath: resolvedProjectRootPath } : {}),
@@ -73,7 +73,7 @@ export function createDuneMountLayout(
   );
   fs.writeFileSync(
     path.join(agentDir, 'CLAUDE.md'),
-    readIpcGuide(
+    readProjectGuide(
       projectId,
       resolvedProjectRootPath ? { projectHostPath: resolvedProjectRootPath } : {},
       homeDir,
@@ -95,6 +95,6 @@ export function createDuneMountLayout(
   }
 
   return {
-    duneMountRoot: agentRole === 'project-main' ? projectDir : agentDir,
+    duneMountRoot: agentArchetype === 'project-main' ? projectDir : agentDir,
   };
 }

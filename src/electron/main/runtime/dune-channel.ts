@@ -12,8 +12,9 @@ import { isDuneAgentChatJid } from '@/shared/agents/agent-id';
 export interface DuneChannelOptions {
   boundExternalJid?: string | undefined;
   config: ChannelDriverConfig;
+  decorateOutboundMessage?: ((chatJid: string, text: string) => Promise<string> | string) | undefined;
   externalChannelFactory?: ChannelDriverFactory | undefined;
-  onExternalInbound?: ((text: string, senderName: string) => Promise<void> | void) | undefined;
+  onExternalInbound?: ((text: string, senderName: string, attachments?: string[]) => Promise<void> | void) | undefined;
   onOutboundMessage: (chatJid: string, text: string) => Promise<void> | void;
   primaryJid: string;
 }
@@ -23,6 +24,8 @@ export class DuneChannel implements ChannelDriver {
   private connected = false;
 
   private readonly config: ChannelDriverConfig;
+
+  private readonly decorateOutboundMessage: DuneChannelOptions['decorateOutboundMessage'];
 
   private externalDriver: ChannelDriver | null = null;
 
@@ -38,6 +41,7 @@ export class DuneChannel implements ChannelDriver {
 
   constructor(options: DuneChannelOptions) {
     this.config = options.config;
+    this.decorateOutboundMessage = options.decorateOutboundMessage;
     this.onExternalInbound = options.onExternalInbound;
     this.onOutboundMessage = options.onOutboundMessage;
     this.primaryJid = options.primaryJid;
@@ -89,7 +93,8 @@ export class DuneChannel implements ChannelDriver {
         // Record inbound external messages in the snapshot so they appear in the UI.
         if (!msg.is_from_me && !msg.is_bot_message && this.onExternalInbound) {
           const senderName = msg.sender_name?.trim() || msg.sender?.trim() || 'External';
-          void this.onExternalInbound(msg.content, senderName);
+          const attachments = Array.isArray(msg.attachments) ? (msg.attachments as string[]) : [];
+          void this.onExternalInbound(msg.content, senderName, attachments);
         }
 
         this.config.onMessage(this.primaryJid, {
@@ -131,6 +136,9 @@ export class DuneChannel implements ChannelDriver {
 
   /** Sends message. */
   async sendMessage(jid: string, text: string) {
+    const outboundText = this.decorateOutboundMessage
+      ? await this.decorateOutboundMessage(jid, text)
+      : text;
     const timestamp = new Date().toISOString();
     const group = this.config.registeredGroups()[jid];
 
@@ -144,7 +152,7 @@ export class DuneChannel implements ChannelDriver {
 
     this.config.onMessage(jid, {
       chat_jid: jid,
-      content: text,
+      content: outboundText,
       is_bot_message: true,
       is_from_me: true,
       sender: 'dune-assistant',
@@ -153,10 +161,10 @@ export class DuneChannel implements ChannelDriver {
     });
 
     if (this.externalDriver && this.boundExternalJid) {
-      await this.externalDriver.sendMessage(this.boundExternalJid, text);
+      await this.externalDriver.sendMessage(this.boundExternalJid, outboundText);
     }
 
-    await this.onOutboundMessage(jid, text);
+    await this.onOutboundMessage(jid, outboundText);
   }
 
   /** Pushes inbound message. */

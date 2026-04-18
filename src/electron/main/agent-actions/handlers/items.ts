@@ -34,6 +34,7 @@ import {
   assertAgentCanCreateItem,
   assertAgentCanEditItem,
   assertAgentCanMoveItem,
+  assertAgentCanSetPrimaryAgent,
 } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
@@ -115,41 +116,79 @@ export const itemTools: RegisteredTool[] = [
   },
   {
     definition: {
-      description: 'Update a Dune work item.',
+      description: 'Update a Dune work item. Supports title/brief edits (inbox only) and primaryAgentId assignment (any status except done).',
       inputSchema: objectSchema(
         {
           brief: optionalStringSchema,
           itemId: stringSchema,
+          primaryAgentId: { type: ['string', 'null'] },
           title: optionalStringSchema,
         },
         ['itemId'],
       ),
       name: 'workflow.items.update',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const title = optionalString(args.title);
+      const now = Date.now();
 
-      assertAgentCanEditItem(item);
+      const touchesDetails = args.title !== undefined || args.brief !== undefined;
+      const touchesAssignment = args.primaryAgentId !== undefined;
 
-      if (args.title !== undefined && !title) {
-        throw new ToolHandlerError('validation-error', 'Work item title cannot be empty.');
+      if (touchesDetails) {
+        assertAgentCanEditItem(item);
+
+        if (args.title !== undefined && !title) {
+          throw new ToolHandlerError('validation-error', 'Work item title cannot be empty.');
+        }
+
+        if (title) {
+          item.title = title;
+        }
+
+        if (args.brief !== undefined) {
+          item.brief = optionalString(args.brief) ?? '';
+        }
+
+        item.workflowEvents.unshift(
+          createWorkflowEvent('item', 'Work item details were updated.', now, agentContext.agentName),
+        );
       }
 
-      if (title) {
-        item.title = title;
+      if (touchesAssignment) {
+        assertAgentCanSetPrimaryAgent(item);
+
+        const nextAgentId = args.primaryAgentId;
+
+        if (nextAgentId === null) {
+          item.primaryAgentId = null;
+          item.workflowEvents.unshift(
+            createWorkflowEvent('assignment', 'Primary agent cleared.', now, agentContext.agentName),
+          );
+        } else if (typeof nextAgentId === 'string') {
+          const agent = getRuntimeController().getSnapshot().agents.find((candidate) => candidate.id === nextAgentId);
+
+          if (!agent) {
+            throw new ToolHandlerError('not-found', `Agent ${nextAgentId} not found.`);
+          }
+
+          item.primaryAgentId = nextAgentId;
+          item.workflowEvents.unshift(
+            createWorkflowEvent('assignment', `Primary agent set to "${agent.name}".`, now, agentContext.agentName),
+          );
+        } else {
+          throw new ToolHandlerError('validation-error', 'primaryAgentId must be a string or null.');
+        }
       }
 
-      if (args.brief !== undefined) {
-        item.brief = optionalString(args.brief) ?? '';
+      if (!touchesDetails && !touchesAssignment) {
+        return { item: presentItem(snapshot, item) };
       }
 
-      item.updatedAt = Date.now();
-      item.workflowEvents.unshift(
-        createWorkflowEvent('item', 'Work item details were updated.', item.updatedAt, agentContext.agentName),
-      );
-      touchProject(snapshot, item.projectId, item.updatedAt);
+      item.updatedAt = now;
+      touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
       return { item: presentItem(snapshot, item) };

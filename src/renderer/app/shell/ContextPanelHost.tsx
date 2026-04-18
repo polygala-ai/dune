@@ -55,7 +55,7 @@ interface ContextPanelHostProps {
 
 /** Customization surface props. */
 interface CustomizationSurfaceProps {
-  agentRole: PresentedAgent['role'];
+  agentArchetype: PresentedAgent['definition']['archetype'];
   artifactsPath?: string | undefined;
   draft: AgentCustomizationDraft;
   onBack?: () => void;
@@ -79,7 +79,7 @@ interface TelegramSetupSurfaceProps {
 
 /** Renders the agent customization surface UI. */
 function AgentCustomizationSurface({
-  agentRole,
+  agentArchetype,
   artifactsPath,
   draft,
   onBack,
@@ -129,7 +129,7 @@ function AgentCustomizationSurface({
       <ScrollArea className="min-h-0 flex-1" contentWidth="fill">
         <div className="px-6 py-6">
           <AgentCustomizationEditor
-            agentRole={agentRole}
+            agentArchetype={agentArchetype}
             artifactsPath={artifactsPath}
             value={draft}
             onChange={onChange}
@@ -409,7 +409,7 @@ export function ContextPanelHost({
         >
           <DialogContent className="flex h-[min(90vh,860px)] w-[min(94vw,900px)] flex-col overflow-hidden p-0">
             <AgentCustomizationSurface
-              agentRole={agent.role}
+              agentArchetype={agent.definition.archetype}
               artifactsPath={artifactsPath}
               draft={draft}
               onCancel={closeCustomizationEditor}
@@ -463,7 +463,7 @@ export function ContextPanelHost({
       >
         {isEditingCustomization ? (
           <AgentCustomizationSurface
-            agentRole={agent.role}
+            agentArchetype={agent.definition.archetype}
             artifactsPath={artifactsPath}
             draft={draft}
             onBack={closeCustomizationEditor}

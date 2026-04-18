@@ -25,6 +25,7 @@ export const ipcChannels = {
   startTelegramSetupSession: 'dune:runtime:start-telegram-setup-session',
   selectProjectDirectory: 'dune:runtime:select-project-directory',
   updateAgentChannel: 'dune:runtime:update-agent-channel',
+  updateAgentDefinition: 'dune:runtime:update-agent-definition',
   workflowChanged: 'dune:runtime:workflow-changed',
   storageDelete: 'dune:storage:delete',
   storageGet: 'dune:storage:get',

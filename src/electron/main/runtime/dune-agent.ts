@@ -29,6 +29,7 @@ export interface DuneAgentOptions {
   agentLite: AgentLite;
   boundExternalJid?: string | undefined;
   credentials: () => Promise<Record<string, string>>;
+  decorateOutboundMessage?: (chatJid: string, text: string) => Promise<string> | string;
   externalChannelFactory?: ChannelDriverFactory | undefined;
   groupFolder: string;
   instructions?: string | undefined;
@@ -40,7 +41,7 @@ export interface DuneAgentOptions {
     readonly?: boolean;
   }>;
   name: string;
-  onExternalInbound?: (text: string, senderName: string) => void;
+  onExternalInbound?: (text: string, senderName: string, attachments?: string[]) => void;
   onOutboundMessage: (chatJid: string, text: string) => void;
   primaryChatJid: string;
   /**
@@ -102,6 +103,7 @@ export class DuneAgent {
         this.duneChannel = new DuneChannel({
           boundExternalJid: options.boundExternalJid,
           config,
+          decorateOutboundMessage: options.decorateOutboundMessage,
           externalChannelFactory: options.externalChannelFactory,
           onExternalInbound: options.onExternalInbound,
           onOutboundMessage: (jid, text) => {
