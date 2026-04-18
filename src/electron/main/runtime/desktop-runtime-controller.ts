@@ -7,11 +7,11 @@ import type {
 } from '@/shared/agents/agent-runtime';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
+  AgentDefinition,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
-import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 import {
   AgentRuntime,
   resolveAgentLiteRuntimeRoot,
@@ -140,9 +140,9 @@ export class DesktopRuntimeController {
     await this.activeRuntime.service.sendMessage(agentId, text);
   }
 
-  /** Signals ready assignment inbox. */
-  async signalReadyAssignmentInbox(agentId: string, signal: ReadyAssignmentsInboxSignal) {
-    await this.activeRuntime.service.signalReadyAssignmentInbox(agentId, signal);
+  /** Schedules ready assignment via agentlite task. */
+  async scheduleReadyAssignment(agentId: string, prompt: string) {
+    await this.activeRuntime.service.scheduleReadyAssignment(agentId, prompt);
   }
 
   /** Starts Telegram setup session. */
@@ -153,6 +153,16 @@ export class DesktopRuntimeController {
   /** Updates agent channel. */
   async updateAgentChannel(input: UpdateAgentChannelInput) {
     await this.activeRuntime.service.updateAgentChannel(input);
+  }
+
+  /** Updates agent definition (archetype + responsibilities). */
+  async updateAgentDefinition(agentId: string, definition: AgentDefinition) {
+    await this.activeRuntime.service.updateAgentDefinition(agentId, definition);
+  }
+
+  /** Posts a system-role message to an agent so it processes it as context. */
+  async postSystemMessage(agentId: string, body: string) {
+    await this.activeRuntime.service.postSystemMessage(agentId, body);
   }
 
   /** Selects agent. */

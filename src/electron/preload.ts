@@ -40,6 +40,8 @@ const bridge: DesktopBridge = {
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   updateAgentChannel: (input) => ipcRenderer.invoke(ipcChannels.updateAgentChannel, input),
+  updateAgentDefinition: (agentId, definition) =>
+    ipcRenderer.invoke(ipcChannels.updateAgentDefinition, agentId, definition),
   sendAgentMessage: (agentId, text) =>
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
   startTelegramSetupSession: (input) =>

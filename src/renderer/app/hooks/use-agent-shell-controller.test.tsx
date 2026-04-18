@@ -28,7 +28,7 @@ function createPresentedAgent(): PresentedAgent {
     note: 'A durable agent workspace.',
     preview: 'Ready for a first instruction.',
     projectId: 'project-1',
-    role: 'custom',
+    definition: { archetype: 'custom', responsibilities: [] },
     status: 'draft',
     statusLabel: 'Draft',
     telegram: null,

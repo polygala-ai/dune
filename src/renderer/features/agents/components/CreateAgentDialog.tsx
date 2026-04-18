@@ -389,7 +389,7 @@ export function CreateAgentDialog({
                 <>
                   <Separator className="my-4" />
                   <AgentCustomizationEditor
-                    agentRole="custom"
+                    agentArchetype="custom"
                     artifactsPath={artifactsPath}
                     value={customizationDraft}
                     onChange={setCustomizationDraft}

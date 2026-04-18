@@ -2,6 +2,7 @@
 
 import type {
   Agent,
+  AgentDefinition,
   AgentRuntimeInfo,
   CodingEngineStatus,
   CreateAgentInput,
@@ -10,8 +11,6 @@ import type {
   TelegramSetupSession,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
-import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
-
 /**
  * The full read-model of the agent runtime. Whatever process owns the
  * canonical state (today: the desktop main process) computes this and
@@ -49,13 +48,15 @@ export interface AgentService {
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;
   sendMessage: (agentId: string, text: string) => Promise<void>;
-  signalReadyAssignmentInbox: (
-    agentId: string,
-    signal: ReadyAssignmentsInboxSignal,
-  ) => Promise<void>;
+  scheduleReadyAssignment: (agentId: string, prompt: string) => Promise<void>;
   startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
   subscribe: (listener: AgentServiceListener) => () => void;
   updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;
+  updateAgentDefinition: (
+    agentId: string,
+    definition: AgentDefinition,
+  ) => Promise<void>;
+  postSystemMessage: (agentId: string, body: string) => Promise<void>;
 }
 
 /**

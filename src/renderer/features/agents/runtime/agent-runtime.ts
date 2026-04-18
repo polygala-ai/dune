@@ -14,11 +14,11 @@ import {
 } from '@/renderer/features/agents/model/channels';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
+  AgentDefinition,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
-import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 
 /** Creates initial bridge snapshot. */
 function createInitialBridgeSnapshot(): AgentServiceSnapshot {
@@ -127,10 +127,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     sendMessage: async (agentId: string, text: string) => {
       await this.bridge.sendAgentMessage(agentId, text);
     },
-    signalReadyAssignmentInbox: async (
-      _agentId: string,
-      _signal: ReadyAssignmentsInboxSignal,
-    ) => undefined,
+    scheduleReadyAssignment: async () => undefined,
     startTelegramSetupSession: async (input: StartTelegramSetupSessionInput) => {
       return this.bridge.startTelegramSetupSession(input);
     },
@@ -138,6 +135,10 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     updateAgentChannel: async (input: UpdateAgentChannelInput) => {
       await this.bridge.updateAgentChannel(input);
     },
+    updateAgentDefinition: async (agentId: string, definition: AgentDefinition) => {
+      await this.bridge.updateAgentDefinition?.(agentId, definition);
+    },
+    postSystemMessage: async () => undefined,
   };
 
   constructor(private readonly bridge: ConnectedBridge) {
@@ -171,6 +172,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
         messages: agent.messages.map((message) => ({
           ...message,
           attachments: message.attachments.map((attachment) => ({ ...attachment })),
+          ...(message.usage ? { usage: { ...message.usage } } : {}),
         })),
         telegram: cloneTelegramAgentRuntimeState(agent.telegram),
       })),

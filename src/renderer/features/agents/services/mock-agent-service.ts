@@ -8,15 +8,20 @@ import type {
 } from '@/shared/agents/agent-runtime';
 import type {
   Agent,
+  AgentArchetype,
+  AgentDefinition,
   AgentExternalTarget,
   AgentMessage,
-  AgentRole,
   AgentRuntimeInfo,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
+import {
+  cloneAgentDefinition,
+  createDefaultAgentDefinition,
+} from '@/renderer/features/agents/model/agent-definition';
 import {
   cloneExternalChannelsState,
   createChannelBinding,
@@ -27,7 +32,6 @@ import {
 } from '@/renderer/features/agents/model/channels';
 import { summarizeMessagePreview } from '@/shared/agents/message-content';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
-import type { ReadyAssignmentsInboxSignal } from '@/shared/agents/ready-assignments';
 import { sanitizeSlug } from '@/shared/sanitize';
 
 /** Creates agent ID. */
@@ -63,7 +67,7 @@ function createDraftAgent(
   externalTarget: AgentExternalTarget | null,
   telegramSetupSession: TelegramSetupSession | null,
   projectId: string | null,
-  role: AgentRole,
+  definition: AgentDefinition,
 ): Agent {
   const telegramState = channelId === 'telegram'
     ? createDefaultTelegramAgentRuntimeState({
@@ -95,7 +99,7 @@ function createDraftAgent(
     projectId,
     activityEvents: [],
     codingEngineEvents: [],
-    role,
+    definition: cloneAgentDefinition(definition),
     telegram: telegramState,
     updatedAt: now,
     status: 'draft',
@@ -184,9 +188,10 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       messages: agent.messages.map((message) => ({
         ...message,
         attachments: message.attachments.map((attachment) => ({ ...attachment })),
+        ...(message.usage ? { usage: { ...message.usage } } : {}),
       })),
       projectId: agent.projectId ?? null,
-      role: agent.role,
+      definition: cloneAgentDefinition(agent.definition),
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
     })),
     externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
@@ -320,7 +325,12 @@ class MockAgentService implements AgentService {
       externalTarget,
       telegramSession,
       input.projectId ?? null,
-      'custom',
+      {
+        archetype: (input.definition?.archetype as AgentArchetype | undefined) ?? 'custom',
+        responsibilities: Array.isArray(input.definition?.responsibilities)
+          ? input.definition!.responsibilities!.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+      },
     );
 
     if (input.channelId === 'telegram' && telegramSession) {
@@ -356,7 +366,7 @@ class MockAgentService implements AgentService {
     }
 
     const existingAgent = this.snapshot.agents.find((agent) =>
-      agent.projectId === trimmedProjectId && agent.role === 'project-main',
+      agent.projectId === trimmedProjectId && agent.definition.archetype === 'project-main',
     );
     const expectedName = createProjectMainAgentName(trimmedProjectId);
 
@@ -391,7 +401,7 @@ class MockAgentService implements AgentService {
       null,
       null,
       trimmedProjectId,
-      'project-main',
+      createDefaultAgentDefinition('project-main'),
     );
 
     this.snapshot = {
@@ -519,6 +529,65 @@ class MockAgentService implements AgentService {
     this.syncTelegramSetupSessionsSnapshot();
     this.emit();
 
+    return Promise.resolve();
+  }
+
+  /** Updates agent definition (archetype + responsibilities). */
+  updateAgentDefinition(agentId: string, definition: AgentDefinition) {
+    const trimmedId = agentId.trim();
+    const agent = this.snapshot.agents.find((item) => item.id === trimmedId);
+
+    if (!agent) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((item) =>
+        item.id === trimmedId
+          ? { ...item, definition: cloneAgentDefinition(definition), updatedAt: Date.now() }
+          : item,
+      ),
+    };
+    this.emit();
+    return Promise.resolve();
+  }
+
+  /** Posts a system-role message to the agent transcript. */
+  postSystemMessage(agentId: string, body: string) {
+    const trimmedId = agentId.trim();
+    const trimmedBody = body.trim();
+
+    if (!trimmedBody) {
+      return Promise.resolve();
+    }
+
+    const agent = this.snapshot.agents.find((item) => item.id === trimmedId);
+
+    if (!agent) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const now = Date.now();
+    const message: AgentMessage = {
+      attachments: [],
+      content: trimmedBody,
+      createdAt: now,
+      format: 'markdown',
+      id: createMessageId('system', now),
+      role: 'system',
+      status: 'complete',
+    };
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((item) =>
+        item.id === trimmedId
+          ? { ...item, messages: [...item.messages, message], updatedAt: now }
+          : item,
+      ),
+    };
+    this.emit();
     return Promise.resolve();
   }
 
@@ -660,8 +729,8 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
-  /** Signals ready assignment inbox. */
-  signalReadyAssignmentInbox(_agentId: string, _signal: ReadyAssignmentsInboxSignal) {
+  /** Schedules ready assignment. */
+  scheduleReadyAssignment(_agentId: string, _prompt: string) {
     return Promise.resolve();
   }
 

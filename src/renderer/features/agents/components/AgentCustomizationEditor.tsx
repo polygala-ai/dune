@@ -22,7 +22,7 @@ import {
   type AgentCustomizationDraft,
   type AgentMcpServerDraft,
 } from '@/renderer/features/agents/model/agent-customization';
-import type { AgentRole } from '@/renderer/features/agents/types';
+import type { AgentArchetype } from '@/renderer/features/agents/types';
 import { Button } from '@/renderer/shared/ui/button';
 import { Input } from '@/renderer/shared/ui/input';
 import { Separator } from '@/renderer/shared/ui/separator';
@@ -30,7 +30,7 @@ import { Textarea } from '@/renderer/shared/ui/textarea';
 
 /** Agent customization editor props. */
 interface AgentCustomizationEditorProps {
-  agentRole?: AgentRole;
+  agentArchetype?: AgentArchetype;
   artifactsPath?: string | undefined;
   className?: string;
   value: AgentCustomizationDraft;
@@ -148,9 +148,9 @@ function getCommandError(server: AgentMcpServerDraft) {
 }
 
 /** Returns instructions template filename. */
-function getInstructionsTemplateFilename(role: AgentRole) {
-  return role === 'project-main'
-    ? 'project-main-instructions.md'
+function getInstructionsTemplateFilename(archetype: AgentArchetype) {
+  return archetype === 'project-main'
+    ? 'dune-main-agent-instructions.md'
     : 'dune-agent-instructions.md';
 }
 
@@ -165,7 +165,7 @@ function joinPath(basePath: string, filename: string) {
 
 /** Renders the agent customization editor UI. */
 export function AgentCustomizationEditor({
-  agentRole = 'custom',
+  agentArchetype = 'custom',
   artifactsPath,
   className,
   value,
@@ -177,7 +177,7 @@ export function AgentCustomizationEditor({
     [value.mcpServers],
   );
   const selectedSkills = value.skills.filter((skill) => skill.name.trim() || skill.path.trim());
-  const instructionsTemplateFilename = getInstructionsTemplateFilename(agentRole);
+  const instructionsTemplateFilename = getInstructionsTemplateFilename(agentArchetype);
   const instructionsTemplatePath = artifactsPath
     ? joinPath(artifactsPath, instructionsTemplateFilename)
     : null;

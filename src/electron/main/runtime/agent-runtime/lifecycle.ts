@@ -102,6 +102,11 @@ export class Lifecycle {
     }
   }
 
+  /** Returns all active runtimes. */
+  allRuntimes(): IterableIterator<[string, DuneAgent]> {
+    return this.runtimes.entries();
+  }
+
   // ---------- Wholesale operations ----------
 
   /**

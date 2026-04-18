@@ -29,10 +29,13 @@ export function presentItem(snapshot: WorkflowSnapshot, item: WorkflowItem) {
 /** Sanitizes agent. */
 export function sanitizeAgent(agent: RuntimeAgent) {
   return {
+    definition: {
+      archetype: agent.definition.archetype,
+      responsibilities: [...agent.definition.responsibilities],
+    },
     id: agent.id,
     name: agent.name,
     projectId: agent.projectId,
-    role: agent.role,
     status: agent.status,
     updatedAt: agent.updatedAt,
   };

@@ -6,6 +6,8 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  powerMonitor,
+  powerSaveBlocker,
   shell,
   session,
 } from 'electron';
@@ -22,8 +24,13 @@ if (app.isPackaged) {
   fixPath();
 }
 
+// Prevent GPU compositor crash / black screen on some macOS configurations.
+app.commandLine.appendSwitch('--disable-gpu-sandbox');
+app.commandLine.appendSwitch('--disable-software-rasterizer');
+
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import {
   getBootstrappedRuntimeSnapshot,
   pushCurrentRuntimeSnapshot,
@@ -39,11 +46,8 @@ import { loadNetworkSettings } from '@/renderer/features/settings/model/network-
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
-import {
-  normalizeReadyAssignmentsWorkflowSnapshot,
-  syncReadyAssignmentInboxSnapshots,
-  type ReadyAssignmentInboxState,
-} from '@/electron/main/workflow/ready-assignment-inbox';
+import { isPlainObject } from '@/shared/is-record';
+import { resolveMountedItemArtifactPath } from '@/shared/workflow/project-artifacts';
 import {
   assertEmptyProjectRootDirectory,
   ensureProjectArtifactFolder,
@@ -61,7 +65,87 @@ let networkProxyManager: NetworkProxyManager | null = null;
 let runtimeController: DesktopRuntimeController | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
+let powerBlockerId: number | null = null;
+let telegramReconnectPromise: Promise<void> | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
+
+/** Returns whether Telegram polling or setup observers should stay alive. */
+function hasActiveTelegramChannels(snapshot: AgentServiceSnapshot) {
+  return snapshot.agents.some((agent) =>
+    agent.channel.id === 'telegram' && agent.telegram?.status !== 'not-configured'
+  ) || snapshot.telegramSetupSessions.length > 0;
+}
+
+/** Starts the App Nap blocker for Telegram long-polling on macOS. */
+function startPowerBlocker() {
+  if (process.platform !== 'darwin' || powerBlockerId !== null) {
+    return;
+  }
+
+  powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+  console.info('Started the macOS App Nap blocker for Telegram polling.', {
+    powerBlockerId,
+  });
+}
+
+/** Stops the App Nap blocker when Telegram is no longer active. */
+function stopPowerBlocker() {
+  if (powerBlockerId === null) {
+    return;
+  }
+
+  powerSaveBlocker.stop(powerBlockerId);
+  console.info('Stopped the macOS App Nap blocker for Telegram polling.', {
+    powerBlockerId,
+  });
+  powerBlockerId = null;
+}
+
+/** Keeps the App Nap blocker in sync with Telegram activity. */
+function syncTelegramPowerBlocker(snapshot: AgentServiceSnapshot) {
+  if (hasActiveTelegramChannels(snapshot)) {
+    startPowerBlocker();
+    return;
+  }
+
+  stopPowerBlocker();
+}
+
+/** Forces Telegram long-polling to reconnect after wake/unlock. */
+async function reconnectTelegramChannels(reason: 'resume' | 'unlock-screen') {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+
+  if (telegramReconnectPromise) {
+    return telegramReconnectPromise;
+  }
+
+  telegramReconnectPromise = (async () => {
+    const controller = runtimeController;
+
+    if (!controller) {
+      return;
+    }
+
+    const snapshot = controller.getSnapshot();
+
+    if (!hasActiveTelegramChannels(snapshot)) {
+      return;
+    }
+
+    console.info(`macOS ${reason} detected. Reconnecting Telegram polling.`);
+    await controller.reloadExternalChannels();
+  })()
+    .catch((error) => {
+      console.error(`Failed to reconnect Telegram polling after macOS ${reason}.`, error);
+    })
+    .finally(() => {
+      telegramReconnectPromise = null;
+    });
+
+  return telegramReconnectPromise;
+}
 
 /** Nudges idle main agents. */
 async function nudgeIdleMainAgents(
@@ -99,7 +183,7 @@ async function nudgeIdleMainAgents(
     const runtimeSnapshot = controller.getSnapshot();
 
     for (const agent of runtimeSnapshot.agents) {
-      if (agent.role !== 'project-main' || agent.status !== 'ready' || !agent.projectId) continue;
+      if (agent.definition.archetype !== 'project-main' || agent.status !== 'ready' || !agent.projectId) continue;
 
       const projectItems = workflow.items.filter((item) => item.projectId === agent.projectId);
       const hasInboxItems = projectItems.some((item) => item.status === 'inbox');
@@ -165,9 +249,8 @@ async function nudgeIdleMainAgents(
       }
     }
 
-    // Active items are now included in the ready-assignment inbox snapshot.
-    // The sync mechanism (syncReadyAssignmentInboxes) handles signaling
-    // agents about their active assignments automatically.
+    // dispatchReadyAssignments handles signaling agents about their
+    // ready, active, and review assignments automatically.
   } catch {
     // ignore — controller may not be ready
   }
@@ -182,6 +265,7 @@ const quitCoordinator = createQuitCoordinator({
       clearInterval(nudgeIntervalHandle);
       nudgeIntervalHandle = null;
     }
+    stopPowerBlocker();
     await runtimeController?.shutdown();
   },
 });
@@ -285,36 +369,161 @@ void app.whenReady().then(async () => {
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
-  let readyAssignmentInboxStates = new Map<string, ReadyAssignmentInboxState>();
+  const assignmentSignatures = new Map<string, string>();
 
-  /** Synchronizes ready assignment inboxes. */
-  async function syncReadyAssignmentInboxes(snapshotValue: unknown) {
-    const snapshot = normalizeReadyAssignmentsWorkflowSnapshot(snapshotValue)
-      ?? { items: [], projects: [] };
-
-    if (!runtimeController) {
+  /** Dispatches ready assignments to agents via agentlite scheduleTask. */
+  async function dispatchReadyAssignments(snapshotValue: unknown) {
+    if (!runtimeController || !isPlainObject(snapshotValue)) {
       return;
     }
 
-    const result = syncReadyAssignmentInboxSnapshots({
-      agents: runtimeController.getSnapshot().agents,
-      homeDir: duneHomeDir,
-      snapshot,
-      states: readyAssignmentInboxStates,
-    });
+    const items = Array.isArray(snapshotValue.items) ? snapshotValue.items : [];
+    const projects = Array.isArray(snapshotValue.projects) ? snapshotValue.projects : [];
+    const projectsById = new Map<string, { id: string; name: string; rootPath: string | null }>();
 
-    readyAssignmentInboxStates = result.states;
+    for (const project of projects) {
+      if (isPlainObject(project) && typeof project.id === 'string' && typeof project.name === 'string') {
+        projectsById.set(project.id, {
+          id: project.id,
+          name: project.name,
+          rootPath: typeof project.rootPath === 'string' ? project.rootPath : null,
+        });
+      }
+    }
 
-    await Promise.all(result.updates.map(async (update) => {
-      if (!update.shouldWake && update.itemCount > 0) {
-        return;
+    const agents = runtimeController.getSnapshot().agents;
+
+    for (const agent of agents) {
+      if (!agent.projectId) {
+        continue;
       }
 
-      await runtimeController?.signalReadyAssignmentInbox(update.agentId, {
-        generation: update.generation,
-        itemCount: update.itemCount,
-      });
-    }));
+      const agentItems = items
+        .filter((item): item is Record<string, unknown> =>
+          isPlainObject(item)
+          && typeof item.primaryAgentId === 'string'
+          && item.primaryAgentId === agent.id
+          && typeof item.status === 'string'
+          && (item.status === 'ready' || item.status === 'active' || item.status === 'review'),
+        )
+        .sort((a, b) => {
+          const projectCmp = String(a.projectId ?? '').localeCompare(String(b.projectId ?? ''));
+          if (projectCmp !== 0) return projectCmp;
+          const orderCmp = (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0);
+          if (orderCmp !== 0) return orderCmp;
+          return (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0);
+        });
+
+      const signature = JSON.stringify(agentItems);
+      const previousSignature = assignmentSignatures.get(agent.id);
+      assignmentSignatures.set(agent.id, signature);
+
+      if (agentItems.length === 0 || signature === previousSignature) {
+        continue;
+      }
+
+      // Skip if the change is removal-only (items were removed but no new ones added).
+      if (previousSignature) {
+        const previousIds = extractItemIds(previousSignature);
+        const nextIds = agentItems.map((item) => String(item.id ?? ''));
+
+        if (isRemovalOnly(previousIds, nextIds)) {
+          continue;
+        }
+      }
+
+      const prompt = formatAssignmentPrompt(agentItems, projectsById);
+
+      try {
+        await runtimeController.scheduleReadyAssignment(agent.id, prompt);
+      } catch {
+        // ignore — agent may not be ready
+      }
+    }
+  }
+
+  /** Extracts item IDs from a previous signature JSON string. */
+  function extractItemIds(signature: string): string[] {
+    try {
+      const parsed = JSON.parse(signature) as Array<Record<string, unknown>>;
+      return parsed.map((item) => String(item.id ?? ''));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Returns whether the ID change is removal-only (no new items added). */
+  function isRemovalOnly(previousIds: string[], nextIds: string[]): boolean {
+    if (nextIds.length > previousIds.length) {
+      return false;
+    }
+
+    let previousIndex = 0;
+
+    for (const nextId of nextIds) {
+      while (previousIndex < previousIds.length && previousIds[previousIndex] !== nextId) {
+        previousIndex += 1;
+      }
+
+      if (previousIndex >= previousIds.length) {
+        return false;
+      }
+
+      previousIndex += 1;
+    }
+
+    return true;
+  }
+
+  /** Formats assignment prompt with inlined item details. */
+  function formatAssignmentPrompt(
+    items: Array<Record<string, unknown>>,
+    projectsById: Map<string, { id: string; name: string; rootPath: string | null }>,
+  ): string {
+    const lines = [
+      'ASSIGNMENTS_UPDATED',
+      '',
+      `You have ${items.length} assigned work item(s):`,
+    ];
+
+    for (const item of items) {
+      const project = projectsById.get(String(item.projectId ?? ''));
+      const artifactPath = resolveMountedItemArtifactPath(
+        project?.rootPath ?? null,
+        typeof item.artifactFolderName === 'string' ? item.artifactFolderName : '',
+      );
+      const tasks = Array.isArray(item.tasks) ? item.tasks : [];
+
+      lines.push(
+        '',
+        '---',
+        `## ${String(item.title ?? 'Untitled')}`,
+        `- **Status**: ${String(item.status ?? 'unknown')}`,
+        `- **Project**: ${project?.name ?? 'unknown'}`,
+        `- **Brief**: ${String(item.brief ?? '')}`,
+        ...(artifactPath ? [`- **Artifact path**: ${artifactPath}`] : []),
+      );
+
+      if (tasks.length > 0) {
+        lines.push('### Tasks:');
+
+        for (const task of tasks) {
+          if (!isPlainObject(task)) continue;
+          const status = String(task.status ?? 'todo');
+          const title = String(task.title ?? '');
+          lines.push(`- [${status}] ${title}`);
+        }
+      }
+    }
+
+    lines.push(
+      '',
+      '---',
+      '',
+      'Review your assignments and begin working on the highest-priority item.',
+    );
+
+    return lines.join('\n');
   }
 
   const workflowStore = {
@@ -328,7 +537,7 @@ void app.whenReady().then(async () => {
         return;
       }
 
-      await syncReadyAssignmentInboxes(value);
+      await dispatchReadyAssignments(value);
     },
   } satisfies AppStorage;
 
@@ -422,6 +631,7 @@ void app.whenReady().then(async () => {
       });
 
       runtimeController.subscribe((snapshot) => {
+        syncTelegramPowerBlocker(snapshot);
         for (const window of BrowserWindow.getAllWindows()) {
           window.webContents.send(ipcChannels.runtimeSnapshotUpdated, snapshot);
         }
@@ -432,7 +642,7 @@ void app.whenReady().then(async () => {
         settingsStore: stores.settings,
       });
       await runtimeController.start();
-      await syncReadyAssignmentInboxes(await workflowStore.get('snapshot'));
+      await dispatchReadyAssignments(await workflowStore.get('snapshot'));
 
       // Periodic check: nudge idle project-main agents when inbox is empty
       nudgeIntervalHandle = setInterval(() => {
@@ -570,6 +780,13 @@ void app.whenReady().then(async () => {
     await ensureRuntime();
     return requireRuntimeController().updateAgentChannel(input);
   });
+  ipcMain.handle(
+    ipcChannels.updateAgentDefinition,
+    async (_event, agentId: string, definition) => {
+      await ensureRuntime();
+      return requireRuntimeController().updateAgentDefinition(agentId, definition);
+    },
+  );
   ipcMain.handle(ipcChannels.sendAgentMessage, async (
     _event,
     agentId: string,
@@ -611,6 +828,21 @@ void app.whenReady().then(async () => {
   await applyPersistedNetworkSettings();
   createWindow();
   scheduleRuntimeBootstrap(250);
+
+  if (process.platform === 'darwin') {
+    powerMonitor.on('suspend', () => {
+      console.info('macOS suspend detected.');
+    });
+    powerMonitor.on('lock-screen', () => {
+      console.info('macOS lock-screen detected.');
+    });
+    powerMonitor.on('resume', () => {
+      void reconnectTelegramChannels('resume');
+    });
+    powerMonitor.on('unlock-screen', () => {
+      void reconnectTelegramChannels('unlock-screen');
+    });
+  }
 
 });
 

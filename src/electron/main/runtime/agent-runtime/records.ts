@@ -2,12 +2,16 @@
 
 import type {
   Agent,
+  AgentDefinition,
   AgentExternalTarget,
   AgentMessage,
-  AgentRole,
   CreateAgentInput,
   TelegramAgentRuntimeState,
 } from '@/renderer/features/agents/types';
+import {
+  cloneAgentDefinition,
+  normalizeAgentDefinition,
+} from '@/renderer/features/agents/model/agent-definition';
 import {
   cloneTelegramAgentRuntimeState,
   createDefaultTelegramAgentRuntimeState,
@@ -28,6 +32,53 @@ export interface PersistedAgentRecord {
   projectRootPath?: string | null;
 }
 
+function asNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+
+  return Math.trunc(value);
+}
+
+function asFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function normalizeAgentMessageUsage(usage: unknown): AgentMessage['usage'] {
+  if (!usage || typeof usage !== 'object') {
+    return undefined;
+  }
+
+  const usageRecord = usage as Record<string, unknown>;
+  const inputTokens = asNonNegativeInteger(usageRecord.inputTokens);
+  const outputTokens = asNonNegativeInteger(usageRecord.outputTokens);
+  const sessionInputTotal = asNonNegativeInteger(usageRecord.sessionInputTotal);
+  const sessionOutputTotal = asNonNegativeInteger(usageRecord.sessionOutputTotal);
+
+  if (
+    inputTokens === null
+    || outputTokens === null
+    || sessionInputTotal === null
+    || sessionOutputTotal === null
+  ) {
+    return undefined;
+  }
+
+  const costUsd = asFiniteNumber(usageRecord.costUsd);
+
+  return {
+    ...(costUsd === undefined ? {} : { costUsd }),
+    inputTokens,
+    outputTokens,
+    sessionInputTotal,
+    sessionOutputTotal,
+  };
+}
+
 /** Normalizes persisted messages. */
 export function normalizePersistedMessages(
   messages: AgentMessage[],
@@ -35,12 +86,17 @@ export function normalizePersistedMessages(
 ): AgentMessage[] {
   const persistedMessages = Array.isArray(messages) ? messages : [];
   const lastPersistedMessage = persistedMessages.at(-1);
-  const normalizedMessages = persistedMessages.map((message) => ({
-    ...message,
-    attachments: normalizeAgentAttachments(message.attachments, options),
-    format: (message.format === 'markdown' ? 'markdown' : 'plain') as AgentMessage['format'],
-    status: message.status === 'streaming' ? 'complete' : message.status,
-  }));
+  const normalizedMessages = persistedMessages.map((message) => {
+    const usage = normalizeAgentMessageUsage(message.usage);
+
+    return {
+      ...message,
+      attachments: normalizeAgentAttachments(message.attachments, options),
+      format: (message.format === 'markdown' ? 'markdown' : 'plain') as AgentMessage['format'],
+      status: message.status === 'streaming' ? 'complete' : message.status,
+      ...(usage ? { usage } : {}),
+    };
+  });
 
   if (
     lastPersistedMessage?.role === 'assistant'
@@ -88,7 +144,7 @@ export function createDraftAgent(
   telegramState: TelegramAgentRuntimeState | null,
   externalTarget: AgentExternalTarget | null,
   projectId: string,
-  role: AgentRole,
+  definition: AgentDefinition,
 ): Agent {
   const channel = createChannelBinding(channelId, telegramState, externalTarget);
   const attachedLabel = channel.target?.name ?? channel.label;
@@ -101,13 +157,13 @@ export function createDraftAgent(
     activityEvents: [],
     codingEngineEvents: [],
     contextCards: [],
+    definition: cloneAgentDefinition(definition),
     id: agentId,
     messages: [] satisfies AgentMessage[],
     name,
     note: copy.note,
     preview: copy.preview,
     projectId,
-    role,
     status: 'draft',
     telegram: channelId === 'telegram'
       ? telegramState ?? createDefaultTelegramAgentRuntimeState({ boundChat: externalTarget })
@@ -149,6 +205,9 @@ export function normalizePersistedAgentRecord(
   runtimeRoot: string,
 ): PersistedAgentRecord {
   const groupFolder = record.groupFolder || createGroupFolder(record.agent.name, record.agent.id);
+  const legacyRole = (record.agent as unknown as { role?: unknown }).role;
+  const fallbackArchetype = legacyRole === 'project-main' ? 'project-main' : 'custom';
+  const definition = normalizeAgentDefinition(record.agent.definition, fallbackArchetype);
 
   return {
     agent: {
@@ -164,12 +223,12 @@ export function normalizePersistedAgentRecord(
         ? record.agent.codingEngineEvents.map((event) => ({ ...event }))
         : [],
       contextCards: record.agent.contextCards.map((card) => ({ ...card })),
+      definition,
       messages: normalizePersistedMessages(record.agent.messages, {
         groupFolder,
         runtimeRoot,
       }),
       projectId: typeof record.agent.projectId === 'string' ? record.agent.projectId : null,
-      role: record.agent.role === 'project-main' ? 'project-main' : 'custom',
       status: record.agent.status === 'live' ? 'ready' : record.agent.status,
       telegram: cloneTelegramAgentRuntimeState(record.agent.telegram),
     },

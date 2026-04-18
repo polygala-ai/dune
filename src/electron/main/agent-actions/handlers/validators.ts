@@ -1,6 +1,6 @@
 //  validation helpers IPC tool handlers.
 
-import { ToolHandlerError } from './types';
+import { ToolHandlerError, type RuntimeAgent } from './types';
 import {
   createWorkflowEvent,
   touchProject,
@@ -8,6 +8,23 @@ import {
   type WorkflowItemStatus,
   type WorkflowSnapshot,
 } from './snapshot';
+
+/** Asserts the caller agent may update the target agent's definition. */
+export function assertAgentCanUpdateAgent(
+  callerAgentId: string,
+  callerProjectId: string,
+  target: RuntimeAgent,
+) {
+  if (target.projectId && target.projectId !== callerProjectId) {
+    throw new ToolHandlerError(
+      'validation-error',
+      'Agents can only update peers in the same project.',
+    );
+  }
+
+  // Self-update is always allowed; same-project peers are allowed for now.
+  void callerAgentId;
+}
 
 /** Asserts agent can create item. */
 export function assertAgentCanCreateItem(status: string) {
@@ -121,10 +138,10 @@ export function assertAgentCanAddWorkProduct(agentId: string, item: WorkflowItem
 
 /** Asserts agent can set primary agent. */
 export function assertAgentCanSetPrimaryAgent(item: WorkflowItem) {
-  if (item.status !== 'ready') {
+  if (item.status === 'done') {
     throw new ToolHandlerError(
       'validation-error',
-      'Primary agent assignment can only change while a work item is in ready.',
+      'Cannot change primary agent on a done work item.',
     );
   }
 }

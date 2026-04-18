@@ -30,7 +30,6 @@ import {
 import type { DuneChannel } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
-import { createReadyAssignmentsInboxSignalMessage } from '@/shared/agents/ready-assignments';
 
 /** Agent lite module shape. */
 type AgentLiteModule = typeof import('@boxlite-ai/agentlite');
@@ -855,7 +854,7 @@ describe('AgentRuntime', () => {
     expect(snapshotAgent).toMatchObject({
       name: createProjectMainAgentName(projectId),
       projectId,
-      role: 'project-main',
+      definition: { archetype: 'project-main' },
     });
 
     const mockAgent = harness.mockAgent();
@@ -1021,7 +1020,7 @@ describe('AgentRuntime', () => {
             note: 'Dune runtime agent',
             preview: 'Ready for a first instruction.',
             projectId,
-            role: 'project-main',
+            definition: { archetype: 'project-main', responsibilities: [] },
             status: 'draft',
             telegram: null,
             updatedAt: 1,
@@ -1095,7 +1094,7 @@ describe('AgentRuntime', () => {
             note: 'West lead',
             preview: 'Partial west response',
             projectId: 'project-west',
-            role: 'custom',
+            definition: { archetype: 'custom', responsibilities: [] },
             status: 'live',
             telegram: null,
             updatedAt: 2,
@@ -1136,7 +1135,7 @@ describe('AgentRuntime', () => {
             note: 'East lead',
             preview: 'Investigate east',
             projectId: 'project-east',
-            role: 'custom',
+            definition: { archetype: 'custom', responsibilities: [] },
             status: 'live',
             telegram: null,
             updatedAt: 4,
@@ -1431,135 +1430,6 @@ describe('AgentRuntime', () => {
     ]);
   });
 
-  it('signals ready-assignment inbox updates without adding transcript messages', async () => {
-    const homeDir = createTempHome();
-    const harness = createAgentLiteModuleHarness();
-
-    tempDirs.push(homeDir);
-
-    const host = new AgentRuntime({
-      agentStore: createMemoryStore(),
-      homeDir,
-      loadAgentLiteModule: harness.loadAgentLiteModule,
-      resolveModelCredentials: async () => ({}),
-    });
-
-    await host.start();
-
-    const agentId = await host.service.createAgent({
-      channelId: 'dune-chat',
-      name: 'Navigator',
-      projectId: 'project-1',
-    });
-    const duneChannel = harness.duneChannel();
-    const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
-
-    await host.service.signalReadyAssignmentInbox(agentId, {
-      generation: 1,
-      itemCount: 2,
-    });
-
-    expect(pushInboundMessage).toHaveBeenCalledWith(
-      toAgentChatJid(agentId),
-      createReadyAssignmentsInboxSignalMessage({ generation: 1, itemCount: 2 }),
-      'Dune Control',
-    );
-    expect(host.getSnapshot().agents.find((agent) => agent.id === agentId)?.messages).toEqual([]);
-  });
-
-  it('defers ready-assignment inbox signals until the current turn finishes', async () => {
-    vi.useFakeTimers();
-
-    const homeDir = createTempHome();
-    const harness = createAgentLiteModuleHarness();
-
-    tempDirs.push(homeDir);
-
-    try {
-      const host = new AgentRuntime({
-        agentStore: createMemoryStore(),
-        homeDir,
-        loadAgentLiteModule: harness.loadAgentLiteModule,
-        resolveModelCredentials: async () => ({}),
-      });
-
-      await host.start();
-
-      const agentId = await host.service.createAgent({
-        channelId: 'dune-chat',
-        name: 'Navigator',
-        projectId: 'project-1',
-      });
-      const duneChannel = harness.duneChannel();
-      const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
-
-      await host.service.sendMessage(agentId, 'First pass.');
-      await host.service.signalReadyAssignmentInbox(agentId, {
-        generation: 2,
-        itemCount: 1,
-      });
-
-      expect(pushInboundMessage).toHaveBeenCalledTimes(1);
-
-      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Reply.');
-      await vi.advanceTimersByTimeAsync(400);
-
-      expect(pushInboundMessage).toHaveBeenCalledTimes(2);
-      expect(pushInboundMessage).toHaveBeenLastCalledWith(
-        toAgentChatJid(agentId),
-        createReadyAssignmentsInboxSignalMessage({ generation: 2, itemCount: 1 }),
-        'Dune Control',
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('clears pending ready-assignment inbox signals when the queue becomes empty', async () => {
-    vi.useFakeTimers();
-
-    const homeDir = createTempHome();
-    const harness = createAgentLiteModuleHarness();
-
-    tempDirs.push(homeDir);
-
-    try {
-      const host = new AgentRuntime({
-        agentStore: createMemoryStore(),
-        homeDir,
-        loadAgentLiteModule: harness.loadAgentLiteModule,
-        resolveModelCredentials: async () => ({}),
-      });
-
-      await host.start();
-
-      const agentId = await host.service.createAgent({
-        channelId: 'dune-chat',
-        name: 'Navigator',
-        projectId: 'project-1',
-      });
-      const duneChannel = harness.duneChannel();
-      const pushInboundMessage = vi.spyOn(duneChannel, 'pushInboundMessage');
-
-      await host.service.sendMessage(agentId, 'First pass.');
-      await host.service.signalReadyAssignmentInbox(agentId, {
-        generation: 2,
-        itemCount: 1,
-      });
-      await host.service.signalReadyAssignmentInbox(agentId, {
-        generation: 3,
-        itemCount: 0,
-      });
-
-      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Reply.');
-      await vi.advanceTimersByTimeAsync(400);
-
-      expect(pushInboundMessage).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('starts a Telegram setup session and matches the first chat that submits the pair code', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -1803,6 +1673,124 @@ describe('AgentRuntime', () => {
     );
 
     expect(telegramHarness.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('appends token usage summaries to outbound Telegram responses and keeps per-session totals', async () => {
+    vi.useFakeTimers();
+
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    tempDirs.push(homeDir);
+
+    try {
+      const host = new AgentRuntime({
+        agentStore: createMemoryStore(),
+        createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+        homeDir,
+        loadAgentLiteModule: harness.loadAgentLiteModule,
+        resolveModelCredentials: async () => ({}),
+        resolveTelegramBotUsername: async () => 'agentlite_test_bot',
+        telegramSecretsStore,
+      });
+
+      await host.start();
+
+      const sessionId = await host.service.startTelegramSetupSession({
+        token: 'telegram-bot-token',
+      });
+      const pairCode = host.getSnapshot().telegramSetupSessions.find((session) => session.id === sessionId)?.pairCode ?? '';
+
+      telegramHarness.emitChatMetadata('tg:123', {
+        isGroup: true,
+        name: 'Product QA',
+      });
+      telegramHarness.emitIncomingMessage('tg:123', {
+        content: `/pair ${pairCode}`,
+        sender: 'alice',
+        senderName: 'Alice',
+      });
+      await flushMicrotasks();
+
+      const agentId = await host.service.createAgent({
+        channelId: 'telegram',
+        name: 'Release triage',
+        projectId: 'project-1',
+        telegramSetupSessionId: sessionId,
+      });
+
+      const duneChannel = harness.duneChannel('release-triage');
+      const mockAgent = harness.mockAgent('release-triage');
+
+      await host.service.sendMessage(agentId, 'First pass.');
+
+      mockAgent._emit('run.sdk_message', {
+        agentId,
+        jid: toAgentChatJid(agentId),
+        message: {
+          result: 'Investigating now.',
+          subtype: 'success',
+          total_cost_usd: 0.0012,
+          usage: {
+            input_tokens: 123,
+            output_tokens: 456,
+          },
+        },
+        sdkType: 'result',
+        timestamp: new Date('2026-04-17T00:00:00.000Z').toISOString(),
+      });
+
+      await duneChannel.sendMessage(
+        toAgentChatJid(agentId),
+        'Investigating now.',
+      );
+
+      expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
+        'tg:123',
+        'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
+      );
+      expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
+        content: 'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
+        role: 'assistant',
+      });
+
+      await vi.advanceTimersByTimeAsync(400);
+
+      await host.service.sendMessage(agentId, 'Second pass.');
+
+      mockAgent._emit('run.sdk_message', {
+        agentId,
+        jid: toAgentChatJid(agentId),
+        message: {
+          result: 'Fixed.',
+          subtype: 'success',
+          usage: {
+            input_tokens: 10,
+            output_tokens: 20,
+          },
+        },
+        sdkType: 'result',
+        timestamp: new Date('2026-04-17T00:00:01.000Z').toISOString(),
+      });
+
+      await duneChannel.sendMessage(
+        toAgentChatJid(agentId),
+        'Fixed.',
+      );
+
+      expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
+        'tg:123',
+        'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
+      );
+      expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
+        content: 'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
+        role: 'assistant',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('preserves Telegram media as attachment metadata instead of only inline placeholder text', async () => {

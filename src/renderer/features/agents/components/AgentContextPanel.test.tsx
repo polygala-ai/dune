@@ -60,7 +60,7 @@ function createAgent(
     note: 'A durable agent workspace.',
     preview: 'Ready for a first instruction.',
     projectId: 'project-1',
-    role: 'custom',
+    definition: { archetype: 'custom', responsibilities: [] },
     status: 'ready',
     statusLabel: 'Ready',
     telegram: null,
@@ -117,7 +117,7 @@ describe('AgentContextPanel', () => {
 
     rerender(
       <AgentContextPanel
-        agent={createAgent({ role: 'project-main' })}
+        agent={createAgent({ definition: { archetype: 'project-main', responsibilities: [] } })}
         onClose={vi.fn()}
         onDeleteAgent={vi.fn()}
       />,
