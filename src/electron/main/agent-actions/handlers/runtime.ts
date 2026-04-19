@@ -66,14 +66,4 @@ export const runtimeTools: RegisteredTool[] = [
       });
     },
   },
-  {
-    definition: {
-      description: 'Get real-time activity status for all active agent sessions.',
-      inputSchema: emptyObjectSchema,
-      name: 'runtime.get_agent_activity',
-    },
-    handler: async ({ getRuntimeController }) => {
-      return getRuntimeController().getAgentActivitySnapshot();
-    },
-  },
 ];

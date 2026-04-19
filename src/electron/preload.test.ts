@@ -104,6 +104,8 @@ describe('preload bridge', () => {
 
     const listener = vi.fn();
     const unsubscribe = desktopBridge?.subscribe?.(listener);
+    const activityListener = vi.fn();
+    const unsubscribeActivity = desktopBridge?.subscribeAgentActivity?.(activityListener);
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
@@ -184,24 +186,18 @@ describe('preload bridge', () => {
       ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
     );
-
-    unsubscribe?.();
-
-    expect(removeListener).toHaveBeenCalledWith(
-      ipcChannels.runtimeSnapshotUpdated,
-      expect.any(Function),
-    );
-
-    const activityListener = vi.fn();
-    const unsubscribeActivity = desktopBridge?.subscribeAgentActivity?.(activityListener);
-
     expect(on).toHaveBeenCalledWith(
       ipcChannels.agentActivityUpdated,
       expect.any(Function),
     );
 
+    unsubscribe?.();
     unsubscribeActivity?.();
 
+    expect(removeListener).toHaveBeenCalledWith(
+      ipcChannels.runtimeSnapshotUpdated,
+      expect.any(Function),
+    );
     expect(removeListener).toHaveBeenCalledWith(
       ipcChannels.agentActivityUpdated,
       expect.any(Function),
@@ -267,8 +263,8 @@ describe('preload bridge', () => {
       'storageGet',
       'storageKeys',
       'storageSet',
-      'subscribe',
       'subscribeAgentActivity',
+      'subscribe',
     ];
 
     for (const method of expectedMethods) {

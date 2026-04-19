@@ -1,10 +1,7 @@
 // Shared Electron desktop bridge contract.
 
-import type {
-  AgentActivitySnapshot,
-  AgentActivityUpdatePayload,
-} from '@/shared/agents/agent-activity';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
+import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 import type {
   AgentDefinition,
   AgentTranscriptPage,
@@ -41,7 +38,7 @@ export interface DesktopBridge {
     agentId: string,
     options?: { beforeMessageId?: string | null; limit?: number },
   ) => Promise<AgentTranscriptPage>;
-  getAgentActivity?: () => Promise<AgentActivitySnapshot>;
+  getAgentActivity?: () => Promise<AgentActivityStatus[]>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
   listProjectArtifactEntries?: (
@@ -72,7 +69,7 @@ export interface DesktopBridge {
     listener: (payload: { itemId: string; isWorking: boolean }) => void,
   ) => () => void;
   subscribeAgentActivity?: (
-    listener: (payload: AgentActivityUpdatePayload) => void,
+    listener: (statuses: AgentActivityStatus[]) => void,
   ) => () => void;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;

@@ -1,34 +1,20 @@
-// Sidebar panel for live agent activity.
+// Real-time agent activity panel.
 
 import { useEffect, useState } from 'react';
-import {
-  Activity,
-  ChevronDown,
-  ChevronRight,
-} from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
-import type {
-  AgentActivityEntry,
-  AgentActivitySnapshot,
-  AgentActivityStatus,
-  AgentActivityUpdatePayload,
-} from '@/shared/agents/agent-activity';
+import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { cn } from '@/renderer/shared/lib/utils';
-import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
+import { Button } from '@/renderer/shared/ui/button';
+import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 
-const STORAGE_KEY = 'dune.agent-activity-panel.open';
-const ONE_SECOND_IN_MS = 1_000;
-const ONE_MINUTE_IN_MS = 60_000;
-const ONE_HOUR_IN_MS = 60 * ONE_MINUTE_IN_MS;
-const ONE_DAY_IN_MS = 24 * ONE_HOUR_IN_MS;
+const PANEL_OPEN_STORAGE_KEY = 'dune.agent-activity-panel.open';
+const STALE_WARNING_MS = 5 * 60_000;
+const STALE_ERROR_MS = 15 * 60_000;
 
-function readStoredOpenState(): boolean {
-  if (typeof window === 'undefined') {
-    return true;
-  }
-
+function readPanelOpenPreference() {
   try {
-    const storedValue = window.localStorage.getItem(STORAGE_KEY);
+    const storedValue = window.localStorage.getItem(PANEL_OPEN_STORAGE_KEY);
 
     if (storedValue === null) {
       return true;
@@ -40,167 +26,114 @@ function readStoredOpenState(): boolean {
   }
 }
 
-function compareActivities(left: AgentActivityEntry, right: AgentActivityEntry): number {
-  const weight = (activity: AgentActivityEntry) => {
-    switch (activity.status?.status) {
-      case 'working':
-        return 0;
-      case 'error':
-        return 1;
-      case 'idle':
-        return 2;
-      case 'done':
-        return 3;
-      default:
-        return activity.isAlive ? 4 : 1;
-    }
-  };
+function formatLastUpdated(updatedAt: string, now: number) {
+  const updatedAtMs = Date.parse(updatedAt);
 
-  const weightDifference = weight(left) - weight(right);
-
-  if (weightDifference !== 0) {
-    return weightDifference;
+  if (!Number.isFinite(updatedAtMs)) {
+    return 'Unknown';
   }
 
-  const leftUpdatedAt = left.status ? Date.parse(left.status.updatedAt) : 0;
-  const rightUpdatedAt = right.status ? Date.parse(right.status.updatedAt) : 0;
-  const updatedAtDifference = rightUpdatedAt - leftUpdatedAt;
+  const ageMs = Math.max(0, now - updatedAtMs);
 
-  if (updatedAtDifference !== 0) {
-    return updatedAtDifference;
-  }
-
-  return left.agentName.localeCompare(right.agentName);
-}
-
-function getStatusDotClassName(activity: AgentActivityEntry): string {
-  if (!activity.isAlive || activity.status?.status === 'error') {
-    return 'bg-red-500';
-  }
-
-  if (activity.status?.status === 'working') {
-    return 'bg-emerald-400';
-  }
-
-  return 'bg-slate-400';
-}
-
-function getPrimaryLabel(status: AgentActivityStatus | null, isAlive: boolean): string {
-  if (!status) {
-    return isAlive ? 'Waiting for status update' : 'No active session';
-  }
-
-  if (status.status === 'working') {
-    return status.currentTool
-      ?? status.toolArgsSummary
-      ?? 'Working';
-  }
-
-  if (status.toolArgsSummary) {
-    return status.toolArgsSummary;
-  }
-
-  if (status.currentTool) {
-    return `Last tool: ${status.currentTool}`;
-  }
-
-  switch (status.status) {
-    case 'error':
-      return 'Agent reported an error';
-    case 'done':
-      return 'Session finished';
-    case 'idle':
-    default:
-      return 'Idle';
-  }
-}
-
-function formatRelativeAge(updatedAt: string, now: number): string {
-  const timestamp = Date.parse(updatedAt);
-
-  if (!Number.isFinite(timestamp)) {
-    return 'No status yet';
-  }
-
-  const ageInMs = Math.max(0, now - timestamp);
-
-  if (ageInMs < ONE_SECOND_IN_MS) {
+  if (ageMs < 60_000) {
     return 'just now';
   }
 
-  if (ageInMs < ONE_MINUTE_IN_MS) {
-    return `${Math.floor(ageInMs / ONE_SECOND_IN_MS)}s ago`;
+  if (ageMs < 60 * 60_000) {
+    return `${Math.floor(ageMs / 60_000)}m ago`;
   }
 
-  if (ageInMs < ONE_HOUR_IN_MS) {
-    return `${Math.floor(ageInMs / ONE_MINUTE_IN_MS)}m ago`;
+  if (ageMs < 24 * 60 * 60_000) {
+    return `${Math.floor(ageMs / (60 * 60_000))}h ago`;
   }
 
-  if (ageInMs < ONE_DAY_IN_MS) {
-    return `${Math.floor(ageInMs / ONE_HOUR_IN_MS)}h ago`;
-  }
-
-  return `${Math.floor(ageInMs / ONE_DAY_IN_MS)}d ago`;
+  return `${Math.floor(ageMs / (24 * 60 * 60_000))}d ago`;
 }
 
-function getMetaLabel(activity: AgentActivityEntry, now: number): string {
-  const segments = [
-    activity.status ? formatRelativeAge(activity.status.updatedAt, now) : 'No status yet',
-  ];
+function getStatusDotClass(status: AgentActivityStatus, now: number) {
+  const updatedAtMs = Date.parse(status.updatedAt);
+  const ageMs = Number.isFinite(updatedAtMs) ? Math.max(0, now - updatedAtMs) : Number.POSITIVE_INFINITY;
 
-  if (activity.status?.lastToolDurationMs !== null && activity.status?.lastToolDurationMs !== undefined) {
-    segments.push(`${activity.status.lastToolDurationMs} ms`);
+  if (status.status === 'error' || status.status === 'done' || ageMs >= STALE_ERROR_MS) {
+    return 'bg-red-500';
   }
 
-  if ((activity.status?.turnCount ?? 0) > 0) {
-    segments.push(`${activity.status?.turnCount} turns`);
+  if (ageMs >= STALE_WARNING_MS) {
+    return 'bg-amber-400';
   }
 
-  return segments.join(' · ');
+  return 'bg-emerald-500';
 }
 
-function activityEntriesFromSnapshot(snapshot: AgentActivitySnapshot): Record<string, AgentActivityEntry> {
-  return Object.fromEntries(snapshot.agents.map((activity) => [activity.agentId, activity]));
+function getActivitySummary(status: AgentActivityStatus) {
+  if (status.currentTool) {
+    return status.toolArgsSummary
+      ? `${status.currentTool} · ${status.toolArgsSummary}`
+      : status.currentTool;
+  }
+
+  if (status.status === 'error') {
+    return 'Run ended with an error';
+  }
+
+  if (status.status === 'done') {
+    return 'Session finished';
+  }
+
+  if (status.toolArgsSummary) {
+    const durationSuffix = status.lastToolDurationMs === null
+      ? ''
+      : ` · ${status.lastToolDurationMs}ms`;
+
+    return `Last: ${status.toolArgsSummary}${durationSuffix}`;
+  }
+
+  return 'Idle';
 }
 
-/** Renders the real-time agent activity sidebar panel. */
+function getWorkItemTitle(
+  status: AgentActivityStatus,
+  titlesById: Map<string, string>,
+) {
+  if (status.workItemTitle) {
+    return status.workItemTitle;
+  }
+
+  if (!status.workItemId) {
+    return null;
+  }
+
+  return titlesById.get(status.workItemId) ?? null;
+}
+
 export function AgentActivityPanel() {
-  const [isOpen, setIsOpen] = useState(readStoredOpenState);
-  const [activities, setActivities] = useState<Record<string, AgentActivityEntry>>({});
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, String(isOpen));
-    } catch {
-      // Ignore storage failures in restricted environments.
-    }
-  }, [isOpen]);
+  const items = useAppStore((state) => state.items);
+  const [statuses, setStatuses] = useState<AgentActivityStatus[]>([]);
+  const [isOpen, setIsOpen] = useState(() => readPanelOpenPreference());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let isDisposed = false;
+    let didReceiveLiveUpdate = false;
 
-    const loadActivities = async () => {
-      const snapshot = await window.duneDesktop?.getAgentActivity?.();
+    const load = async () => {
+      const initialStatuses = await window.duneDesktop?.getAgentActivity?.();
 
-      if (isDisposed || !snapshot) {
+      if (isDisposed || didReceiveLiveUpdate || !initialStatuses) {
         return;
       }
 
-      setActivities(activityEntriesFromSnapshot(snapshot));
+      setStatuses(initialStatuses);
+      setNow(Date.now());
     };
 
-    void loadActivities().catch((error) => {
-      console.error('Failed to load initial agent activity snapshot.', error);
-    });
+    void load();
 
-    const unsubscribe = window.duneDesktop?.subscribeAgentActivity?.(
-      (payload: AgentActivityUpdatePayload) => {
-        setActivities((currentActivities) => ({
-          ...currentActivities,
-          [payload.agentId]: payload,
-        }));
-      },
-    );
+    const unsubscribe = window.duneDesktop?.subscribeAgentActivity?.((nextStatuses) => {
+      didReceiveLiveUpdate = true;
+      setStatuses(nextStatuses);
+      setNow(Date.now());
+    });
 
     return () => {
       isDisposed = true;
@@ -208,69 +141,134 @@ export function AgentActivityPanel() {
     };
   }, []);
 
-  const orderedActivities = Object.values(activities).sort(compareActivities);
-  const now = Date.now();
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANEL_OPEN_STORAGE_KEY, String(isOpen));
+    } catch {
+      // Ignore storage failures in non-browser test environments.
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const nextRefreshInMs = statuses
+      .map((status) => {
+        const updatedAtMs = Date.parse(status.updatedAt);
+
+        if (!Number.isFinite(updatedAtMs)) {
+          return null;
+        }
+
+        const ageMs = Math.max(0, now - updatedAtMs);
+
+        if (ageMs < STALE_WARNING_MS) {
+          return STALE_WARNING_MS - ageMs;
+        }
+
+        if (ageMs < STALE_ERROR_MS) {
+          return STALE_ERROR_MS - ageMs;
+        }
+
+        return null;
+      })
+      .filter((value): value is number => value !== null)
+      .sort((left, right) => left - right)[0];
+
+    if (nextRefreshInMs === undefined) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setNow(Date.now());
+    }, Math.max(50, nextRefreshInMs + 50));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [now, statuses]);
+
+  const itemTitlesById = new Map(items.map((item) => [item.id, item.title] as const));
 
   return (
-    <section className="shrink-0 px-1 pt-4" data-testid="agent-activity-panel">
-      <button
-        aria-expanded={isOpen}
-        className="flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left transition-colors hover:bg-app-card"
-        onClick={() => setIsOpen((open) => !open)}
-        type="button"
-      >
-        <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-          <Activity className="h-3.5 w-3.5" />
-          Activity
-        </span>
-        <span className="flex items-center gap-2 text-[11px] text-app-muted">
-          <span>{orderedActivities.length}</span>
-          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </span>
-      </button>
+    <section
+      className="shrink-0 border-t border-app-border bg-app-panel/60"
+      data-testid="agent-activity-panel"
+    >
+      <div className="flex items-center justify-between gap-4 px-6 py-3">
+        <div className="min-w-0">
+          <div className="surface-eyebrow">Observability</div>
+          <div className="mt-1 flex items-center gap-2">
+            <h2 className="truncate text-sm font-semibold text-app-text">Agent activity</h2>
+            <span className="rounded-full border border-app-border bg-app-card/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-app-muted">
+              {statuses.length}
+            </span>
+          </div>
+        </div>
+
+        <Button
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Hide agent activity' : 'Show agent activity'}
+          onClick={() => setIsOpen((currentValue) => !currentValue)}
+          size="icon"
+          type="button"
+          variant="quiet"
+        >
+          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </Button>
+      </div>
 
       {isOpen ? (
-        orderedActivities.length > 0 ? (
-          <ScrollArea className="mt-2 max-h-64 pr-1" contentWidth="fill">
-            <div className="space-y-2 pr-2">
-              {orderedActivities.map((activity) => (
-                <article
-                  className="rounded-[16px] border border-app-border bg-app-card/60 px-3 py-3"
-                  key={activity.agentId}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={cn(
-                        'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full',
-                        getStatusDotClassName(activity),
-                      )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-medium text-app-text">
-                        {activity.agentName}
-                      </div>
-                      <div className="mt-1 text-[12px] leading-5 text-app-muted">
-                        {getPrimaryLabel(activity.status, activity.isAlive)}
-                      </div>
-                      {activity.status?.workItemTitle || activity.status?.workItemId ? (
-                        <div className="mt-1 truncate text-[11px] leading-5 text-app-muted">
-                          {activity.status?.workItemTitle ?? `Work item ${activity.status?.workItemId}`}
+        <div className="max-h-56 overflow-y-auto px-6 pb-4">
+          {statuses.length === 0 ? (
+            <div className="rounded-[18px] border border-dashed border-app-border bg-app-card/40 px-4 py-4 text-sm text-app-muted">
+              No live agent activity yet.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {statuses.map((status) => {
+                const workItemTitle = getWorkItemTitle(status, itemTitlesById);
+
+                return (
+                  <article
+                    className="rounded-[18px] border border-app-border bg-app-card/70 px-4 py-3"
+                    key={status.agentId}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full',
+                            getStatusDotClass(status, now),
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-app-text">
+                            {status.agentName}
+                          </div>
+                          <div className="mt-1 text-xs leading-5 text-app-muted">
+                            {getActivitySummary(status)}
+                          </div>
+                          {workItemTitle ? (
+                            <div className="mt-1 text-xs leading-5 text-app-muted">
+                              Work item · <span className="text-app-text">{workItemTitle}</span>
+                            </div>
+                          ) : null}
+                          <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-app-muted">
+                            {status.status} · turn {status.turnCount}
+                          </div>
                         </div>
-                      ) : null}
-                      <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-app-muted">
-                        {getMetaLabel(activity, now)}
+                      </div>
+
+                      <div className="shrink-0 text-[11px] text-app-muted">
+                        {formatLastUpdated(status.updatedAt, now)}
                       </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
-          </ScrollArea>
-        ) : (
-          <div className="mt-2 rounded-[16px] border border-dashed border-app-border px-3 py-4 text-[12px] leading-5 text-app-muted">
-            No live agent sessions yet.
-          </div>
-        )
+          )}
+        </div>
       ) : null}
     </section>
   );

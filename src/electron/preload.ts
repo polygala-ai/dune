@@ -97,9 +97,9 @@ const bridge: DesktopBridge = {
   subscribeAgentActivity: (listener) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      payload: Parameters<typeof listener>[0],
+      statuses: Parameters<typeof listener>[0],
     ) => {
-      listener(payload);
+      listener(statuses);
     };
 
     ipcRenderer.on(ipcChannels.agentActivityUpdated, handler);

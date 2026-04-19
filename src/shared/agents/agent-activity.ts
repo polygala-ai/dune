@@ -1,4 +1,4 @@
-// Shared real-time agent activity types.
+// Shared agent activity status payloads.
 
 export interface AgentActivityStatus {
   schemaVersion: 1;
@@ -16,16 +16,3 @@ export interface AgentActivityStatus {
   sessionId: string;
   sessionStartedAt: string;
 }
-
-export interface AgentActivityEntry {
-  agentId: string;
-  agentName: string;
-  status: AgentActivityStatus | null;
-  isAlive: boolean;
-}
-
-export interface AgentActivitySnapshot {
-  agents: AgentActivityEntry[];
-}
-
-export interface AgentActivityUpdatePayload extends AgentActivityEntry {}

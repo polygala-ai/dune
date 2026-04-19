@@ -5,7 +5,6 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
-import type { AgentActivitySnapshot } from '@/shared/agents/agent-activity';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
@@ -22,8 +21,6 @@ import {
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
-  getAgentActivitySnapshot?: () => Promise<AgentActivitySnapshot>;
-  getAgentActivityWatchTargets?: () => Array<{ agentId: string; dataDir: string }>;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -91,16 +88,6 @@ export class DesktopRuntimeController {
   /** Returns snapshot. */
   getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
-  }
-
-  /** Returns normalized agent activity records for the renderer/watcher. */
-  async getAgentActivitySnapshot(): Promise<AgentActivitySnapshot> {
-    return this.activeRuntime.getAgentActivitySnapshot?.() ?? { agents: [] };
-  }
-
-  /** Returns live watch targets for per-agent activity status files. */
-  getAgentActivityWatchTargets(): Array<{ agentId: string; dataDir: string }> {
-    return this.activeRuntime.getAgentActivityWatchTargets?.() ?? [];
   }
 
   /** Subscribes to desktop runtime updates. */
