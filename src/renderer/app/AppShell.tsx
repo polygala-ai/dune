@@ -41,6 +41,7 @@ import {
   useSettingsState,
   useShellState,
   useWorkflowSession,
+  useWorkflowSearchSession,
 } from '@/renderer/app/store/selectors';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { AgentWorkspace } from '@/renderer/app/workspaces/AgentWorkspace';
@@ -91,6 +92,10 @@ export default function AppShell() {
     selectedProjectScreen,
     selectedProjectView,
   } = useWorkflowSession();
+  const {
+    searchAgents,
+    searchIndex,
+  } = useWorkflowSearchSession();
   const {
     canNavigateBack,
     canNavigateForward,
@@ -602,6 +607,8 @@ export default function AppShell() {
           onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
           projects={projects}
+          searchAgentOptions={searchAgents}
+          searchIndex={searchIndex}
         />
 
         <CreateAgentDialog

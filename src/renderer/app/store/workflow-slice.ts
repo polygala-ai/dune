@@ -491,6 +491,7 @@ export function createWorkflowSlice(
             id: itemId,
             primaryAgentId: null,
             projectId: input.projectId,
+            reviewerName: null,
             scheduledTaskId: null,
             sortOrder: getProjectItems(
               state.items.filter((item) => item.status === input.status),
@@ -784,6 +785,9 @@ export function createWorkflowSlice(
 
           const updatedAt = Date.now();
           const normalizedNote = normalizeNote(input.note);
+          const normalizedReviewerName = input.reviewerName !== undefined
+            ? normalizeNote(input.reviewerName)
+            : undefined;
 
           return {
             ...withSelection({
@@ -794,14 +798,23 @@ export function createWorkflowSlice(
 
                 const title = input.title?.trim();
                 const brief = input.brief?.trim();
+                const didUpdateDetails =
+                  title !== undefined ||
+                  brief !== undefined;
+                const didUpdateReviewer =
+                  normalizedReviewerName !== undefined &&
+                  normalizedReviewerName !== item.reviewerName;
                 const nextItem = {
                   ...item,
                   ...(title ? { title } : {}),
                   ...(brief !== undefined ? { brief } : {}),
+                  ...(normalizedReviewerName !== undefined
+                    ? { reviewerName: normalizedReviewerName }
+                    : {}),
                   updatedAt,
                 };
 
-                if (title === undefined && brief === undefined) {
+                if (!didUpdateDetails && !didUpdateReviewer) {
                   return item;
                 }
 
@@ -809,7 +822,19 @@ export function createWorkflowSlice(
                   nextItem,
                   [
                     ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
-                    { description: 'Work item details were updated.', kind: 'item' as const },
+                    ...(didUpdateReviewer
+                      ? [
+                          {
+                            description: normalizedReviewerName
+                              ? `Reviewer set to “${normalizedReviewerName}”.`
+                              : 'Reviewer cleared.',
+                            kind: 'assignment' as const,
+                          },
+                        ]
+                      : []),
+                    ...(didUpdateDetails
+                      ? [{ description: 'Work item details were updated.', kind: 'item' as const }]
+                      : []),
                   ],
                   updatedAt,
                 );
