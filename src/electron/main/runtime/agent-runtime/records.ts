@@ -191,6 +191,7 @@ export function createDraftAgent(
     contextCards: [],
     definition: cloneAgentDefinition(definition),
     id: agentId,
+    lastActiveAt: now,
     messages: [] satisfies AgentMessage[],
     name,
     note: copy.note,
@@ -268,6 +269,10 @@ export function normalizePersistedAgentRecord(
         : [],
       contextCards: record.agent.contextCards.map((card) => ({ ...card })),
       definition,
+      lastActiveAt:
+        typeof record.agent.lastActiveAt === 'number'
+          ? record.agent.lastActiveAt
+          : record.agent.updatedAt,
       messages: normalizedLiveMessages,
       projectId: typeof record.agent.projectId === 'string' ? record.agent.projectId : null,
       status: record.agent.status === 'live' ? 'ready' : record.agent.status,
