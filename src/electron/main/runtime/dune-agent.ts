@@ -29,7 +29,6 @@ export interface DuneAgentOptions {
   agentLite: AgentLite;
   boundExternalJid?: string | undefined;
   credentials: () => Promise<Record<string, string>>;
-  decorateOutboundMessage?: (chatJid: string, text: string) => Promise<string> | string;
   externalChannelFactory?: ChannelDriverFactory | undefined;
   groupFolder: string;
   instructions?: string | undefined;
@@ -103,7 +102,6 @@ export class DuneAgent {
         this.duneChannel = new DuneChannel({
           boundExternalJid: options.boundExternalJid,
           config,
-          decorateOutboundMessage: options.decorateOutboundMessage,
           externalChannelFactory: options.externalChannelFactory,
           onExternalInbound: options.onExternalInbound,
           onOutboundMessage: (jid, text) => {

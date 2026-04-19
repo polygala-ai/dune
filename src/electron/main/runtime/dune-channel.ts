@@ -12,7 +12,6 @@ import { isDuneAgentChatJid } from '@/shared/agents/agent-id';
 export interface DuneChannelOptions {
   boundExternalJid?: string | undefined;
   config: ChannelDriverConfig;
-  decorateOutboundMessage?: ((chatJid: string, text: string) => Promise<string> | string) | undefined;
   externalChannelFactory?: ChannelDriverFactory | undefined;
   onExternalInbound?: ((text: string, senderName: string, attachments?: string[]) => Promise<void> | void) | undefined;
   onOutboundMessage: (chatJid: string, text: string) => Promise<void> | void;
@@ -24,8 +23,6 @@ export class DuneChannel implements ChannelDriver {
   private connected = false;
 
   private readonly config: ChannelDriverConfig;
-
-  private readonly decorateOutboundMessage: DuneChannelOptions['decorateOutboundMessage'];
 
   private externalDriver: ChannelDriver | null = null;
 
@@ -41,7 +38,6 @@ export class DuneChannel implements ChannelDriver {
 
   constructor(options: DuneChannelOptions) {
     this.config = options.config;
-    this.decorateOutboundMessage = options.decorateOutboundMessage;
     this.onExternalInbound = options.onExternalInbound;
     this.onOutboundMessage = options.onOutboundMessage;
     this.primaryJid = options.primaryJid;
@@ -136,9 +132,6 @@ export class DuneChannel implements ChannelDriver {
 
   /** Sends message. */
   async sendMessage(jid: string, text: string) {
-    const outboundText = this.decorateOutboundMessage
-      ? await this.decorateOutboundMessage(jid, text)
-      : text;
     const timestamp = new Date().toISOString();
     const group = this.config.registeredGroups()[jid];
 
@@ -152,7 +145,7 @@ export class DuneChannel implements ChannelDriver {
 
     this.config.onMessage(jid, {
       chat_jid: jid,
-      content: outboundText,
+      content: text,
       is_bot_message: true,
       is_from_me: true,
       sender: 'dune-assistant',
@@ -161,10 +154,10 @@ export class DuneChannel implements ChannelDriver {
     });
 
     if (this.externalDriver && this.boundExternalJid) {
-      await this.externalDriver.sendMessage(this.boundExternalJid, outboundText);
+      await this.externalDriver.sendMessage(this.boundExternalJid, text);
     }
 
-    await this.onOutboundMessage(jid, outboundText);
+    await this.onOutboundMessage(jid, text);
   }
 
   /** Pushes inbound message. */
