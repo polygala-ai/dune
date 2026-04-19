@@ -531,7 +531,43 @@ export class TelegramBridge {
     return patches;
   }
 
-  // sendReply removed — DuneChannel's external driver handles outbound delivery.
+  /** Sends a one-off system message with any configured Telegram bot token. */
+  async sendSystemMessage(chatJid: string, text: string): Promise<boolean> {
+    const trimmedChatJid = chatJid.trim();
+    const trimmedText = text.trim();
+
+    if (!trimmedChatJid || !trimmedText) {
+      return false;
+    }
+
+    const connectedObserver = [...this.observers.values()]
+      .find((observer) => observer.status === 'connected' && observer.driver);
+
+    if (connectedObserver?.driver) {
+      await connectedObserver.driver.sendMessage(trimmedChatJid, trimmedText);
+      return true;
+    }
+
+    const token = await this.resolveNotificationToken();
+
+    if (!token) {
+      return false;
+    }
+
+    const driver = await this.createStandaloneDriver(token);
+
+    try {
+      await connectDriverWithTimeout(driver, TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS);
+      await driver.sendMessage(trimmedChatJid, trimmedText);
+      return true;
+    } finally {
+      try {
+        await driver.disconnect();
+      } catch (error) {
+        console.warn('Failed to disconnect the Telegram notification driver cleanly.', error);
+      }
+    }
+  }
 
   /** Disconnects all. */
   async disconnectAll() {
@@ -656,6 +692,16 @@ export class TelegramBridge {
     };
 
     return createChannel(config);
+  }
+
+  private async createStandaloneDriver(token: string) {
+    const createChannel = await this.createChannelFactory(token);
+
+    return createChannel({
+      onChatMetadata: () => undefined,
+      onMessage: () => undefined,
+      registeredGroups: () => ({}),
+    });
   }
 
   private async disconnectObserver(fingerprint: string) {
@@ -807,5 +853,45 @@ export class TelegramBridge {
       pairingStatus: session.pairingStatus,
       status: session.status,
     };
+  }
+
+  private async resolveNotificationToken(): Promise<string | null> {
+    for (const observer of this.observers.values()) {
+      if (observer.token.trim()) {
+        return observer.token.trim();
+      }
+    }
+
+    for (const session of this.setupSessions.values()) {
+      if (session.token.trim()) {
+        return session.token.trim();
+      }
+    }
+
+    for (const agent of this.callbacks.getAgents()) {
+      const token = await this.readAgentToken(agent.id);
+
+      if (token) {
+        return token;
+      }
+    }
+
+    if (!this.secretsStore.keys) {
+      return null;
+    }
+
+    for (const key of await this.secretsStore.keys()) {
+      if (!key.endsWith(':telegram:bot-token')) {
+        continue;
+      }
+
+      const token = await this.secretsStore.get<string>(key);
+
+      if (typeof token === 'string' && token.trim()) {
+        return token.trim();
+      }
+    }
+
+    return null;
   }
 }
