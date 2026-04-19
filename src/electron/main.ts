@@ -74,6 +74,10 @@ import {
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
 } from '@/shared/workflow/activity';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
+import { NotificationManager } from '@/electron/main/notifications/notification-manager';
+import { MacOSNotifier } from '@/electron/main/notifications/macos-notifier';
+import { TelegramNotifier } from '@/electron/main/notifications/telegram-notifier';
+import type { NotificationSettingsPatch } from '@/electron/main/notifications/types';
 
 if (started) {
   app.quit();
@@ -82,6 +86,7 @@ if (started) {
 let mainWindow: BrowserWindow | null = null;
 let networkProxyManager: NetworkProxyManager | null = null;
 let runtimeController: DesktopRuntimeController | null = null;
+let notificationManager: NotificationManager | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let taskSweepIntervalHandle: ReturnType<typeof setInterval> | null = null;
@@ -292,6 +297,7 @@ const quitCoordinator = createQuitCoordinator({
       clearInterval(taskSweepIntervalHandle);
       taskSweepIntervalHandle = null;
     }
+    notificationManager?.stop();
     stopPowerBlocker();
     await runtimeController?.shutdown();
   },
@@ -313,6 +319,15 @@ function requireNetworkProxyManager() {
   }
 
   return networkProxyManager;
+}
+
+/** Returns notification manager or throws. */
+function requireNotificationManager() {
+  if (!notificationManager) {
+    throw new Error('Notification manager is unavailable.');
+  }
+
+  return notificationManager;
 }
 
 /** Creates window. */
@@ -435,6 +450,59 @@ function recordDuneScheduledTaskEvent(
     [createWorkflowEvent('assignment', description, createdAt, 'Dune')],
     createdAt,
   );
+}
+
+function formatCurrency(value: number) {
+  return `$${value.toFixed(value >= 10 ? 0 : 2).replace(/\.00$/, '')}`;
+}
+
+function describeAgentErrorContext(context: string) {
+  switch (context) {
+    case 'message-dispatch':
+      return 'while dispatching a message';
+    case 'runtime-restart':
+      return 'while restarting';
+    case 'runtime-rotate':
+      return 'while rotating its compacted session';
+    case 'runtime-start':
+      return 'while starting';
+    case 'scheduled-task':
+      return 'while running a scheduled task';
+    default:
+      return 'during runtime work';
+  }
+}
+
+async function notifyWorkflowStatusTransitions(previous: unknown, next: unknown) {
+  if (!notificationManager || !isWorkflowSnapshotLike(previous) || !isWorkflowSnapshotLike(next)) {
+    return;
+  }
+
+  const previousItemsById = new Map(previous.items.map((item) => [item.id, item]));
+
+  for (const item of next.items) {
+    const previousItem = previousItemsById.get(item.id);
+
+    if (!previousItem || previousItem.status === item.status) {
+      continue;
+    }
+
+    if (item.status === 'review') {
+      await notificationManager.notify('item_review', {
+        body: item.title,
+        itemId: item.id,
+        title: 'Work item moved to review',
+      });
+    }
+
+    if (item.status === 'acceptance') {
+      await notificationManager.notify('item_acceptance', {
+        body: item.title,
+        itemId: item.id,
+        title: 'Work item moved to acceptance',
+      });
+    }
+  }
 }
 
 void app.whenReady().then(async () => {
@@ -723,8 +791,16 @@ void app.whenReady().then(async () => {
         await compactWorkflowActivity(value);
       }
       await stores.workflow.set(key, value);
+      await notifyWorkflowStatusTransitions(previous, value);
     },
   } satisfies AppStorage;
+
+  notificationManager = new NotificationManager({
+    getAgents: () => runtimeController?.getSnapshot().agents ?? [],
+    macosNotifier: new MacOSNotifier(() => mainWindow),
+    store: stores.settings,
+    telegramNotifier: new TelegramNotifier(() => runtimeController?.getTelegramBridge() ?? null),
+  });
 
   /** Resolves store. */
   function resolveStore(name: string): AppStorage {
@@ -791,8 +867,22 @@ void app.whenReady().then(async () => {
         agentStore: stores.agents,
         bundledAgentDir: path.join(app.getAppPath(), 'agent'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
+        onAgentError: ({ agentId, agentName, context, error }) => {
+          void requireNotificationManager().notify('agent_error', {
+            body: `${agentName} hit an error ${describeAgentErrorContext(context)}. ${error}`,
+            itemId: agentId,
+            title: 'Agent error',
+          });
+        },
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
+        },
+        onBudgetWarning: ({ agentId, agentName, thresholdUsd, totalCostUsd }) => {
+          void requireNotificationManager().notify('budget_warning', {
+            body: `${agentName} crossed the ${formatCurrency(thresholdUsd)} warning threshold at ${formatCurrency(totalCostUsd)}.`,
+            itemId: agentId,
+            title: 'Budget warning',
+          });
         },
         onItemActivityChanged: (payload) => {
           for (const window of BrowserWindow.getAllWindows()) {
@@ -832,6 +922,7 @@ void app.whenReady().then(async () => {
         settingsStore: stores.settings,
       });
       await runtimeController.start();
+      requireNotificationManager().startIdleCheck();
 
       // Periodic check: nudge idle project-main agents when inbox is empty
       nudgeIntervalHandle = setInterval(() => {
@@ -1022,6 +1113,20 @@ void app.whenReady().then(async () => {
       await ensureRuntime();
       return requireRuntimeController().runIsolatedResearch(agentId, input);
     },
+  );
+  ipcMain.handle(ipcChannels.getNotificationSettings, async () =>
+    requireNotificationManager().getSettings(),
+  );
+  ipcMain.handle(
+    ipcChannels.updateNotificationSettings,
+    async (_event, patch: NotificationSettingsPatch) =>
+      requireNotificationManager().updateSettings(patch),
+  );
+  ipcMain.handle(ipcChannels.getNotificationHistory, async () =>
+    requireNotificationManager().getHistory(),
+  );
+  ipcMain.handle(ipcChannels.clearNotificationHistory, async () =>
+    requireNotificationManager().clearHistory(),
   );
 
   ipcMain.handle(ipcChannels.storageGet, async (_event, store: string, key: string) =>

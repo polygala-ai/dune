@@ -65,10 +65,31 @@ beforeEach(() => {
   window.duneDesktop = {
     applyNetworkSettings: vi.fn(() => Promise.resolve(undefined)),
     cancelTelegramSetupSession: vi.fn(() => Promise.resolve(undefined)),
+    clearNotificationHistory: vi.fn(() => Promise.resolve([])),
     copyText: vi.fn(() => Promise.resolve(undefined)),
     ensureProjectArtifactFolder: vi.fn(() => Promise.resolve('/tmp/project/item-123')),
     ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    getNotificationHistory: vi.fn(() => Promise.resolve([])),
+    getNotificationSettings: vi.fn(() => Promise.resolve({
+      channels: {
+        macos: true,
+        telegram: false,
+      },
+      doNotDisturb: {
+        enabled: false,
+        endHour: 8,
+        startHour: 23,
+      },
+      telegramNotifyChatId: '',
+      triggers: {
+        agent_error: true,
+        agent_idle: false,
+        budget_warning: true,
+        item_acceptance: true,
+        item_review: true,
+      },
+    })),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       codingEngines: [],
@@ -95,6 +116,36 @@ beforeEach(() => {
     storageGet: vi.fn(() => Promise.resolve(null)),
     storageKeys: vi.fn(() => Promise.resolve([])),
     storageSet: vi.fn(() => Promise.resolve(undefined)),
+    updateNotificationSettings: vi.fn((patch: {
+      channels?: { macos?: boolean; telegram?: boolean };
+      doNotDisturb?: { enabled?: boolean; endHour?: number; startHour?: number };
+      telegramNotifyChatId?: string;
+      triggers?: {
+        agent_error?: boolean;
+        agent_idle?: boolean;
+        budget_warning?: boolean;
+        item_acceptance?: boolean;
+        item_review?: boolean;
+      };
+    }) => Promise.resolve({
+      channels: {
+        macos: patch.channels?.macos ?? true,
+        telegram: patch.channels?.telegram ?? false,
+      },
+      doNotDisturb: {
+        enabled: patch.doNotDisturb?.enabled ?? false,
+        endHour: patch.doNotDisturb?.endHour ?? 8,
+        startHour: patch.doNotDisturb?.startHour ?? 23,
+      },
+      telegramNotifyChatId: patch.telegramNotifyChatId ?? '',
+      triggers: {
+        agent_error: patch.triggers?.agent_error ?? true,
+        agent_idle: patch.triggers?.agent_idle ?? false,
+        budget_warning: patch.triggers?.budget_warning ?? true,
+        item_acceptance: patch.triggers?.item_acceptance ?? true,
+        item_review: patch.triggers?.item_review ?? true,
+      },
+    })),
   };
   document.documentElement.dataset.theme = 'light';
 });

@@ -12,6 +12,7 @@ const bridge: DesktopBridge = {
   applyNetworkSettings: () => ipcRenderer.invoke(ipcChannels.applyNetworkSettings),
   cancelTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.cancelTelegramSetupSession, sessionId),
+  clearNotificationHistory: () => ipcRenderer.invoke(ipcChannels.clearNotificationHistory),
   copyText: (text) => ipcRenderer.invoke(ipcChannels.copyText, text),
   platform: process.platform,
   createAgent: (input) => ipcRenderer.invoke(ipcChannels.createAgent, input),
@@ -26,6 +27,8 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  getNotificationHistory: () => ipcRenderer.invoke(ipcChannels.getNotificationHistory),
+  getNotificationSettings: () => ipcRenderer.invoke(ipcChannels.getNotificationSettings),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
@@ -57,6 +60,8 @@ const bridge: DesktopBridge = {
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
+  updateNotificationSettings: (patch) =>
+    ipcRenderer.invoke(ipcChannels.updateNotificationSettings, patch),
   subscribe: (listener) => {
     /** Handles snapshot. */
     const handleSnapshot = (
