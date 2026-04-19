@@ -29,6 +29,14 @@ app.commandLine.appendSwitch('--disable-gpu-sandbox');
 app.commandLine.appendSwitch('--disable-software-rasterizer');
 
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
+import { MacOsNotifier } from '@/electron/main/notifications/macos-notifier';
+import { NotificationManager } from '@/electron/main/notifications/notification-manager';
+import { TelegramNotifier } from '@/electron/main/notifications/telegram-notifier';
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NotificationTrigger,
+  type NotificationSettingsUpdate,
+} from '@/electron/main/notifications/types';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import {
@@ -81,6 +89,7 @@ if (started) {
 
 let mainWindow: BrowserWindow | null = null;
 let networkProxyManager: NetworkProxyManager | null = null;
+let notificationManager: NotificationManager | null = null;
 let runtimeController: DesktopRuntimeController | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
@@ -284,6 +293,7 @@ const quitCoordinator = createQuitCoordinator({
     console.error('Failed to shutdown the Dune runtime cleanly before quit.', error);
   },
   shutdownRuntime: async () => {
+    notificationManager?.shutdown();
     if (nudgeIntervalHandle) {
       clearInterval(nudgeIntervalHandle);
       nudgeIntervalHandle = null;
@@ -448,6 +458,14 @@ void app.whenReady().then(async () => {
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
+  notificationManager = new NotificationManager({
+    getAgents: () => runtimeController?.getSnapshot().agents ?? [],
+    macosNotifier: new MacOsNotifier(() => mainWindow),
+    settingsStore: stores.settings,
+    telegramNotifier: new TelegramNotifier(() => runtimeController?.getTelegramBridge() ?? null),
+  });
+  await notificationManager.initialize();
+  notificationManager.start();
 
   async function compactWorkflowActivity(snapshot: StoredWorkflowSnapshot): Promise<void> {
     const activeItemIds = new Set(snapshot.items.map((item) => item.id));
@@ -719,6 +737,7 @@ void app.whenReady().then(async () => {
 
       const previous = await stores.workflow.get('snapshot');
       await reconcileAssignments(previous, value);
+      runtimeController?.handleWorkflowSnapshotChange(previous, value);
       if (isWorkflowSnapshotLike(value)) {
         await compactWorkflowActivity(value);
       }
@@ -791,6 +810,14 @@ void app.whenReady().then(async () => {
         agentStore: stores.agents,
         bundledAgentDir: path.join(app.getAppPath(), 'agent'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
+        onAgentError: ({ agentId, agentName, error }) => {
+          void notificationManager?.notify(NotificationTrigger.agent_error, {
+            agentId,
+            body: `${agentName}: ${error}`,
+            throttleId: agentId,
+            title: 'Agent error',
+          });
+        },
         onAgentIdle: (_agentId) => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
         },
@@ -798,6 +825,24 @@ void app.whenReady().then(async () => {
           for (const window of BrowserWindow.getAllWindows()) {
             window.webContents.send(ipcChannels.itemActivityUpdated, payload);
           }
+        },
+        onItemStatusChange: ({ itemId, nextStatus, title }) => {
+          void notificationManager?.notify(
+            nextStatus === 'review'
+              ? NotificationTrigger.item_review
+              : NotificationTrigger.item_acceptance,
+            {
+              body:
+                nextStatus === 'review'
+                  ? `${title} moved into review.`
+                  : `${title} moved into acceptance.`,
+              itemId,
+              title:
+                nextStatus === 'review'
+                  ? 'Item moved to review'
+                  : 'Item moved to acceptance',
+            },
+          );
         },
         resolveProjectName: async (projectId) => {
           const snapshot = await stores.workflow.get<{
@@ -885,6 +930,36 @@ void app.whenReady().then(async () => {
     await applyPersistedNetworkSettings();
     await ensureRuntime();
     await requireRuntimeController().reloadExternalChannels();
+  });
+  ipcMain.handle(ipcChannels.getNotificationSettings, async () => {
+    return notificationManager?.getSettings() ?? {
+      triggers: { ...DEFAULT_NOTIFICATION_SETTINGS.triggers },
+      channels: { ...DEFAULT_NOTIFICATION_SETTINGS.channels },
+      doNotDisturb: { ...DEFAULT_NOTIFICATION_SETTINGS.doNotDisturb },
+      telegramNotifyChatId: DEFAULT_NOTIFICATION_SETTINGS.telegramNotifyChatId,
+    };
+  });
+  ipcMain.handle(ipcChannels.updateNotificationSettings, async (
+    _event,
+    update: NotificationSettingsUpdate,
+  ) => {
+    if (!notificationManager) {
+      return {
+        triggers: { ...DEFAULT_NOTIFICATION_SETTINGS.triggers },
+        channels: { ...DEFAULT_NOTIFICATION_SETTINGS.channels },
+        doNotDisturb: { ...DEFAULT_NOTIFICATION_SETTINGS.doNotDisturb },
+        telegramNotifyChatId: DEFAULT_NOTIFICATION_SETTINGS.telegramNotifyChatId,
+      };
+    }
+
+    return notificationManager.updateSettings(update);
+  });
+  ipcMain.handle(
+    ipcChannels.getNotificationHistory,
+    async () => notificationManager?.getHistory() ?? [],
+  );
+  ipcMain.handle(ipcChannels.clearNotificationHistory, async () => {
+    notificationManager?.clearHistory();
   });
   ipcMain.handle(ipcChannels.copyText, (_event, text: string) => {
     clipboard.writeText(text);

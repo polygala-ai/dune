@@ -253,6 +253,7 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   channel: AgentChannelBinding;
   codingEngineEvents: CodingEngineEvent[];
   definition: AgentDefinition;
+  lastActiveAt?: number | null;
   note: string;
   projectId: string | null;
   status: AgentStatus;
@@ -271,6 +272,7 @@ export interface PresentedAgent extends AgentSummary {
   codingEngineEvents: CodingEngineEvent[];
   definition: AgentDefinition;
   id: string;
+  lastActiveAt?: number | null;
   note: string;
   projectId: string | null;
   status: AgentStatus;

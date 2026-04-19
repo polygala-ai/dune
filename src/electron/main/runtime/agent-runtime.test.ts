@@ -101,7 +101,21 @@ interface MockAgent {
   addChannel: ReturnType<typeof vi.fn>;
   channelDrivers: Map<string, ChannelDriver>;
   getGroup: ReturnType<typeof vi.fn>;
-  getTask: ReturnType<typeof vi.fn>;
+  getTask: (taskId: string) => {
+    contextMode: 'group' | 'isolated';
+    createdAt: string;
+    groupFolder: string;
+    id: string;
+    jid: string;
+    lastResult: string | null;
+    lastRun: string | null;
+    nextRun: string | null;
+    prompt: string;
+    runs: unknown[];
+    scheduleType: 'once';
+    scheduleValue: string;
+    status: 'active' | 'completed';
+  } | undefined;
   name: string;
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;

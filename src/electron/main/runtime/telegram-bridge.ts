@@ -531,6 +531,36 @@ export class TelegramBridge {
     return patches;
   }
 
+  /** Sends a host-level notification message through any connected observer. */
+  async sendNotificationMessage(chatId: string, text: string) {
+    const trimmedChatId = chatId.trim();
+    const trimmedText = text.trim();
+    const jid = trimmedChatId.startsWith('tg:') ? trimmedChatId : `tg:${trimmedChatId}`;
+
+    if (!trimmedChatId || !trimmedText) {
+      return false;
+    }
+
+    const connectedObservers = [...this.observers.values()].filter((observer) =>
+      observer.status === 'connected' && observer.driver,
+    );
+
+    if (connectedObservers.length === 0) {
+      return false;
+    }
+
+    for (const observer of connectedObservers) {
+      try {
+        await observer.driver?.sendMessage(jid, trimmedText);
+        return true;
+      } catch (error) {
+        console.warn('Failed to send a Telegram notification message.', error);
+      }
+    }
+
+    return false;
+  }
+
   // sendReply removed — DuneChannel's external driver handles outbound delivery.
 
   /** Disconnects all. */

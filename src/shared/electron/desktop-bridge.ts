@@ -2,6 +2,11 @@
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
+  NotificationRecord,
+  NotificationSettings,
+  NotificationSettingsUpdate,
+} from '@/electron/main/notifications/types';
+import type {
   AgentDefinition,
   AgentTranscriptPage,
   CreateAgentInput,
@@ -18,6 +23,7 @@ import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 export interface DesktopBridge {
   applyNetworkSettings?: () => Promise<void>;
   cancelTelegramSetupSession?: (sessionId: string) => Promise<void>;
+  clearNotificationHistory?: () => Promise<void>;
   copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
   createAgent?: (input: CreateAgentInput) => Promise<string>;
@@ -29,6 +35,8 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  getNotificationHistory?: () => Promise<NotificationRecord[]>;
+  getNotificationSettings?: () => Promise<NotificationSettings>;
   getProjectActivityPage?: (
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },
@@ -66,6 +74,9 @@ export interface DesktopBridge {
   subscribeItemActivity?: (
     listener: (payload: { itemId: string; isWorking: boolean }) => void,
   ) => () => void;
+  updateNotificationSettings?: (
+    update: NotificationSettingsUpdate,
+  ) => Promise<NotificationSettings>;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
 }

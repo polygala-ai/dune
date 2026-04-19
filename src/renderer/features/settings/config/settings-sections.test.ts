@@ -2,24 +2,28 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { SettingsRoute } from '@/renderer/features/settings/types';
-
 import { settingsSectionRegistry, settingsSections } from './settings-sections';
-
-const allRoutes: SettingsRoute[] = ['appearance', 'models', 'network', 'shortcuts', 'nuclear'];
 
 describe('settingsSectionRegistry', () => {
   it('has an entry for every SettingsRoute', () => {
-    for (const route of allRoutes) {
-      expect(settingsSectionRegistry[route]).toBeDefined();
-    }
+    expect(Object.keys(settingsSectionRegistry).sort()).toEqual([
+      'appearance',
+      'artifacts',
+      'models',
+      'network',
+      'notifications',
+      'nuclear',
+      'shortcuts',
+    ]);
   });
 
-  it('renders network below models in the section order', () => {
+  it('renders notifications below artifacts in the section order', () => {
     expect(settingsSections.map((section) => section.id)).toEqual([
       'appearance',
       'models',
       'network',
+      'artifacts',
+      'notifications',
       'shortcuts',
       'nuclear',
     ]);

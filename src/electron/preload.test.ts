@@ -70,6 +70,7 @@ describe('preload bridge', () => {
     await desktopBridge?.getRuntimeSnapshot?.();
     await desktopBridge?.applyNetworkSettings?.();
     await desktopBridge?.cancelTelegramSetupSession?.('telegram-session-1');
+    await desktopBridge?.clearNotificationHistory?.();
     await desktopBridge?.createAgent?.({
       channelId: 'dune-chat',
       name: 'Navigator',
@@ -83,6 +84,8 @@ describe('preload bridge', () => {
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
+    await desktopBridge?.getNotificationHistory?.();
+    await desktopBridge?.getNotificationSettings?.();
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
     await desktopBridge?.openPath?.('/tmp/project-1');
     await desktopBridge?.prepareProjectRootPath?.('/tmp/project-1', ['homepage-copy-abcd1234']);
@@ -96,6 +99,9 @@ describe('preload bridge', () => {
     await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
+    await desktopBridge?.updateNotificationSettings?.({
+      telegramNotifyChatId: '123456',
+    });
     await desktopBridge?.updateAgentChannel?.({
       agentId: 'agent-1',
       channelId: 'dune-chat',
@@ -110,6 +116,7 @@ describe('preload bridge', () => {
       ipcChannels.cancelTelegramSetupSession,
       'telegram-session-1',
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.clearNotificationHistory);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.createAgent, {
       channelId: 'dune-chat',
       name: 'Navigator',
@@ -144,6 +151,8 @@ describe('preload bridge', () => {
       'homepage-copy-abcd1234',
     );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.copyText, '@agentlite_test_bot');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationHistory);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationSettings);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.openExternal, 'https://t.me/BotFather');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.openPath, '/tmp/project-1');
     expect(invoke).toHaveBeenCalledWith(
@@ -170,6 +179,12 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.startTelegramSetupSession,
       { token: 'bot-token' },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.updateNotificationSettings,
+      {
+        telegramNotifyChatId: '123456',
+      },
     );
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.updateAgentChannel,
@@ -243,8 +258,12 @@ describe('preload bridge', () => {
       'selectProjectDirectory',
       'selectAgent',
       'sendAgentMessage',
+      'clearNotificationHistory',
+      'getNotificationHistory',
+      'getNotificationSettings',
       'startTelegramSetupSession',
       'updateAgentChannel',
+      'updateNotificationSettings',
       'storageDelete',
       'storageGet',
       'storageKeys',

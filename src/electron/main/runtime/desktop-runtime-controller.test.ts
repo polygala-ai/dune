@@ -114,4 +114,39 @@ describe('DesktopRuntimeController', () => {
     expect(cancelItemAssignment).toHaveBeenCalledWith('agent-1', 'task-123');
     expect(taskId).toBe('task-123');
   });
+
+  it('emits item status changes only for review and acceptance transitions', () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
+    tempDirs.push(homeDir);
+    const onItemStatusChange = vi.fn();
+    const controller = new DesktopRuntimeController({
+      agentStore: { get: async () => null, set: async () => {} },
+      homeDir,
+      onItemStatusChange,
+    });
+
+    controller.handleWorkflowSnapshotChange(
+      {
+        items: [
+          { id: 'item-1', status: 'active', title: 'Alpha' },
+          { id: 'item-2', status: 'review', title: 'Beta' },
+        ],
+      },
+      {
+        items: [
+          { id: 'item-1', status: 'review', title: 'Alpha' },
+          { id: 'item-2', status: 'done', title: 'Beta' },
+          { id: 'item-3', status: 'acceptance', title: 'Gamma' },
+        ],
+      },
+    );
+
+    expect(onItemStatusChange).toHaveBeenCalledTimes(1);
+    expect(onItemStatusChange).toHaveBeenCalledWith({
+      itemId: 'item-1',
+      nextStatus: 'review',
+      previousStatus: 'active',
+      title: 'Alpha',
+    });
+  });
 });

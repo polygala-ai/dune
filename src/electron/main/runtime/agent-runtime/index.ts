@@ -425,6 +425,7 @@ export interface AgentRuntimeOptions {
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
+  onAgentError?: (payload: { agentId: string; agentName: string; error: string }) => void;
   onAgentIdle?: (agentId: string) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
@@ -489,6 +490,8 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
+  private readonly onAgentError: AgentRuntimeOptions['onAgentError'];
+
   private readonly onItemActivityChanged: AgentRuntimeOptions['onItemActivityChanged'];
 
   /** Per-item ephemeral run state driven by AgentLite task.run.* events. */
@@ -530,6 +533,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.agentStore = options.agentStore;
     this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
+    this.onAgentError = options.onAgentError;
     this.onAgentIdle = options.onAgentIdle;
     this.onItemActivityChanged = options.onItemActivityChanged;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
@@ -721,6 +725,11 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.telegram.refreshRuntimeState({ forceReconnect: true });
+  }
+
+  /** Returns the runtime Telegram bridge. */
+  getTelegramBridge() {
+    return this.telegram;
   }
 
   /** Resets agent. */
@@ -1977,6 +1986,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.scheduleFinalizeAssistantMessage(agentId);
     this.persistState();
     this.emit();
+    this.touchAgentActivity(agentId, now);
   }
 
   /** Tracks running scheduled tasks per agent and updates agent.status accordingly. */
@@ -2008,6 +2018,10 @@ export class AgentRuntime implements AgentRuntimeContract {
       ),
     };
     this.emit();
+
+    if (running) {
+      this.touchAgentActivity(agentId);
+    }
   }
 
   private pushActivityEvent(agentId: string, event: AgentActivityEvent) {
@@ -2030,6 +2044,38 @@ export class AgentRuntime implements AgentRuntimeContract {
       }),
     };
     this.emit();
+    this.touchAgentActivity(agentId, event.timestamp);
+  }
+
+  private touchAgentActivity(agentId: string, timestamp: number = this.now()) {
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId && agent.status !== 'draft'
+          ? {
+              ...agent,
+              lastActiveAt: timestamp,
+              updatedAt: Math.max(agent.updatedAt, timestamp),
+            }
+          : agent,
+      ),
+    };
+    this.persistState();
+    this.emit();
+  }
+
+  private reportAgentError(agentId: string, error: string) {
+    const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
+
+    if (!agent) {
+      return;
+    }
+
+    this.onAgentError?.({
+      agentId,
+      agentName: agent.name,
+      error,
+    });
   }
 
   private scheduleFinalizeAssistantMessage(agentId: string) {
@@ -2502,6 +2548,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         void this.updateItemActivityForTask(event.taskId, false);
+        this.reportAgentError(agentId, event.error || `Scheduled task ${event.taskId} failed.`);
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);

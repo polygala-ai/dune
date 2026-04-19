@@ -1,10 +1,12 @@
 // Desktop runtime controller and backend fallback wiring.
 
+import { isPlainObject } from '@/shared/is-record';
 import type {
   AgentRuntimeContract,
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
+import type { WorkflowItemStatus } from '@/renderer/features/workflow/types';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
@@ -18,9 +20,11 @@ import {
   resolveAgentLiteRuntimeRoot,
   type AgentRuntimeOptions,
 } from './agent-runtime';
+import type { TelegramBridge } from './telegram-bridge';
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
+  getTelegramBridge?: () => TelegramBridge;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -34,6 +38,12 @@ type RealRuntime = ActiveRuntime & {
 export interface DesktopRuntimeControllerOptions
   extends AgentRuntimeOptions {
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
+  onItemStatusChange?: (payload: {
+    itemId: string;
+    nextStatus: Extract<WorkflowItemStatus, 'acceptance' | 'review'>;
+    previousStatus: WorkflowItemStatus;
+    title: string;
+  }) => void;
 }
 
 /** Coordinates desktop runtime. */
@@ -144,6 +154,11 @@ export class DesktopRuntimeController {
     await this.activeRuntime.reloadExternalChannels?.();
   }
 
+  /** Returns the live Telegram bridge when available. */
+  getTelegramBridge() {
+    return this.activeRuntime.getTelegramBridge?.() ?? null;
+  }
+
   /** Runs an isolated multi-target research pass and reduces the results. */
   async runIsolatedResearch(agentId: string, input: RunIsolatedResearchInput) {
     return this.activeRuntime.service.runIsolatedResearch(agentId, input);
@@ -201,6 +216,43 @@ export class DesktopRuntimeController {
     }
   }
 
+  /** Emits item status changes for workflow transitions the host cares about. */
+  handleWorkflowSnapshotChange(previous: unknown, next: unknown) {
+    const onItemStatusChange = this.runtimeOptions.onItemStatusChange;
+
+    if (!onItemStatusChange || !isWorkflowSnapshotItems(previous) || !isWorkflowSnapshotItems(next)) {
+      return;
+    }
+
+    const previousStatuses = new Map<string, { status: WorkflowItemStatus; title: string }>();
+
+    for (const item of previous.items) {
+      previousStatuses.set(item.id, {
+        status: item.status,
+        title: item.title,
+      });
+    }
+
+    for (const item of next.items) {
+      if (item.status !== 'review' && item.status !== 'acceptance') {
+        continue;
+      }
+
+      const previousItem = previousStatuses.get(item.id);
+
+      if (!previousItem || previousItem.status === item.status) {
+        continue;
+      }
+
+      onItemStatusChange({
+        itemId: item.id,
+        nextStatus: item.status,
+        previousStatus: previousItem.status,
+        title: item.title,
+      });
+    }
+  }
+
   /** Shuts down desktop runtime. */
   shutdown(): Promise<void> {
     if (this.shutdownPromise) {
@@ -237,4 +289,30 @@ export class DesktopRuntimeController {
       this.emit(snapshot);
     });
   }
+}
+
+function isWorkflowItemStatus(value: unknown): value is WorkflowItemStatus {
+  return (
+    value === 'inbox'
+    || value === 'ready'
+    || value === 'active'
+    || value === 'review'
+    || value === 'acceptance'
+    || value === 'done'
+  );
+}
+
+function isWorkflowSnapshotItems(value: unknown): value is {
+  items: Array<{ id: string; status: WorkflowItemStatus; title: string }>;
+} {
+  if (!isPlainObject(value) || !Array.isArray(value.items)) {
+    return false;
+  }
+
+  return value.items.every((item) =>
+    isPlainObject(item)
+    && typeof item.id === 'string'
+    && typeof item.title === 'string'
+    && isWorkflowItemStatus(item.status),
+  );
 }

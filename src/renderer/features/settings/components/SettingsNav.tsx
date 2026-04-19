@@ -45,7 +45,8 @@ export function SettingsNav({
             onClick={() => onSelectRoute(section.id)}
             type="button"
           >
-            <span className="block text-sm font-semibold text-app-text">
+            <span className="flex items-center gap-2 text-sm font-semibold text-app-text">
+              <section.icon className="h-4 w-4 text-app-muted" />
               {section.title}
             </span>
             <span className="mt-1 block text-xs leading-5 opacity-80">
