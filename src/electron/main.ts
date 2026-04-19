@@ -66,85 +66,42 @@ let runtimeController: DesktopRuntimeController | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let powerBlockerId: number | null = null;
-let telegramReconnectPromise: Promise<void> | null = null;
+const log = console;
 const NUDGE_INTERVAL_MS = 60_000;
 
-/** Returns whether Telegram polling or setup observers should stay alive. */
-function hasActiveTelegramChannels(snapshot: AgentServiceSnapshot) {
-  return snapshot.agents.some((agent) =>
-    agent.channel.id === 'telegram' && agent.telegram?.status !== 'not-configured'
-  ) || snapshot.telegramSetupSessions.length > 0;
-}
-
-/** Starts the App Nap blocker for Telegram long-polling on macOS. */
 function startPowerBlocker() {
-  if (process.platform !== 'darwin' || powerBlockerId !== null) {
-    return;
-  }
-
-  powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
-  console.info('Started the macOS App Nap blocker for Telegram polling.', {
-    powerBlockerId,
-  });
-}
-
-/** Stops the App Nap blocker when Telegram is no longer active. */
-function stopPowerBlocker() {
   if (powerBlockerId === null) {
-    return;
+    powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    log.info('[power] blocker started', powerBlockerId);
   }
-
-  powerSaveBlocker.stop(powerBlockerId);
-  console.info('Stopped the macOS App Nap blocker for Telegram polling.', {
-    powerBlockerId,
-  });
-  powerBlockerId = null;
 }
 
-/** Keeps the App Nap blocker in sync with Telegram activity. */
+function stopPowerBlocker() {
+  if (powerBlockerId !== null) {
+    powerSaveBlocker.stop(powerBlockerId);
+    powerBlockerId = null;
+    log.info('[power] blocker stopped');
+  }
+}
+
 function syncTelegramPowerBlocker(snapshot: AgentServiceSnapshot) {
-  if (hasActiveTelegramChannels(snapshot)) {
-    startPowerBlocker();
-    return;
-  }
+  const hasTelegram = snapshot.agents.some(
+    (agent) =>
+      agent.channel.id === 'telegram'
+      && (agent.channel.status === 'connected' || agent.channel.status === 'connecting'),
+  );
 
-  stopPowerBlocker();
+  if (hasTelegram) {
+    startPowerBlocker();
+  } else {
+    stopPowerBlocker();
+  }
 }
 
-/** Forces Telegram long-polling to reconnect after wake/unlock. */
-async function reconnectTelegramChannels(reason: 'resume' | 'unlock-screen') {
-  if (process.platform !== 'darwin') {
-    return;
-  }
-
-  if (telegramReconnectPromise) {
-    return telegramReconnectPromise;
-  }
-
-  telegramReconnectPromise = (async () => {
-    const controller = runtimeController;
-
-    if (!controller) {
-      return;
-    }
-
-    const snapshot = controller.getSnapshot();
-
-    if (!hasActiveTelegramChannels(snapshot)) {
-      return;
-    }
-
-    console.info(`macOS ${reason} detected. Reconnecting Telegram polling.`);
-    await controller.reloadExternalChannels();
-  })()
-    .catch((error) => {
-      console.error(`Failed to reconnect Telegram polling after macOS ${reason}.`, error);
-    })
-    .finally(() => {
-      telegramReconnectPromise = null;
-    });
-
-  return telegramReconnectPromise;
+function reconnectTelegramChannels() {
+  const controller = runtimeController;
+  log.info('[power] reconnecting Telegram channels after wake');
+  void controller?.reloadExternalChannels();
 }
 
 /** Nudges idle main agents. */
@@ -829,20 +786,10 @@ void app.whenReady().then(async () => {
   createWindow();
   scheduleRuntimeBootstrap(250);
 
-  if (process.platform === 'darwin') {
-    powerMonitor.on('suspend', () => {
-      console.info('macOS suspend detected.');
-    });
-    powerMonitor.on('lock-screen', () => {
-      console.info('macOS lock-screen detected.');
-    });
-    powerMonitor.on('resume', () => {
-      void reconnectTelegramChannels('resume');
-    });
-    powerMonitor.on('unlock-screen', () => {
-      void reconnectTelegramChannels('unlock-screen');
-    });
-  }
+  powerMonitor.on('suspend', () => log.info('[power] system suspend'));
+  powerMonitor.on('lock-screen', () => log.info('[power] screen locked'));
+  powerMonitor.on('resume', () => reconnectTelegramChannels());
+  powerMonitor.on('unlock-screen', () => reconnectTelegramChannels());
 
 });
 
