@@ -387,6 +387,7 @@ void app.whenReady().then(async () => {
 
     const nextItems = Array.isArray(next.items) ? next.items : [];
     const prevItemsById = new Map<string, Record<string, unknown>>();
+    const actionableStatuses = new Set(['ready', 'active', 'review']);
 
     if (isPlainObject(previous) && Array.isArray(previous.items)) {
       for (const item of previous.items) {
@@ -409,13 +410,19 @@ void app.whenReady().then(async () => {
       const prev = prevItemsById.get(item.id);
       const prevAgentId = prev && typeof prev.primaryAgentId === 'string' ? prev.primaryAgentId : null;
       const prevTaskId = prev && typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
+      const prevStatus = prev && typeof prev.status === 'string' ? prev.status : null;
       const nextAgentId = typeof item.primaryAgentId === 'string' ? item.primaryAgentId : null;
       const nextStatus = typeof item.status === 'string' ? item.status : null;
 
+      const prevActionable = actionableStatuses.has(prevStatus ?? '');
+      const nextActionable = actionableStatuses.has(nextStatus ?? '');
       const agentChanged = prevAgentId !== nextAgentId;
-      const movedToDone = nextStatus === 'done' && (!prev || prev.status !== 'done');
+      const movedToDone = nextStatus === 'done' && prevStatus !== 'done';
+      const becameActionable = !prevActionable && nextActionable && !!nextAgentId;
+      const shouldSchedule = (agentChanged || becameActionable) && nextActionable;
+      const lostActionable = prevActionable && !nextActionable;
 
-      if (!agentChanged && !movedToDone) {
+      if (!agentChanged && !movedToDone && !becameActionable && !lostActionable) {
         // scheduledTaskId is owned by the main process; the renderer only echoes
         // a stale copy. Always restore the authoritative value from the previous
         // stored snapshot so unrelated edits don't wipe it.
@@ -429,6 +436,16 @@ void app.whenReady().then(async () => {
 
       if (movedToDone || !nextAgentId) {
         item.scheduledTaskId = null;
+        continue;
+      }
+
+      if (!nextActionable) {
+        item.scheduledTaskId = null;
+        continue;
+      }
+
+      if (!shouldSchedule) {
+        item.scheduledTaskId = prevTaskId;
         continue;
       }
 

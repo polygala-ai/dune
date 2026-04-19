@@ -1105,7 +1105,10 @@ export class AgentRuntime implements AgentRuntimeContract {
 
     const task = await duneAgent.agentLiteAgent.scheduleTask({
       jid: toAgentChatJid(agentId),
-      prompt: `You have been assigned work item id: ${itemId}`,
+      prompt: `ASSIGNMENTS_UPDATED
+
+You have been assigned work item id: ${itemId}.
+Review your assignments and begin working on the highest-priority item.`,
       scheduleType: 'once',
       scheduleValue: new Date().toISOString(),
     });
