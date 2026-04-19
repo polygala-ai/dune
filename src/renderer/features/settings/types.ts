@@ -6,6 +6,7 @@ export type SettingsRoute =
   | 'artifacts'
   | 'models'
   | 'network'
+  | 'templates'
   | 'shortcuts'
   | 'nuclear';
 /** Theme preference shape. */

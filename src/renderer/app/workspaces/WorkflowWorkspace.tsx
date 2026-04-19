@@ -77,6 +77,7 @@ export function WorkflowWorkspace({
   const [loadingActivityProjectId, setLoadingActivityProjectId] = useState<string | null>(null);
   const {
     addTask,
+    agents,
     assignPrimaryAgent,
     clearAgentAssignments,
     closeProjectSettings,
@@ -91,6 +92,7 @@ export function WorkflowWorkspace({
   } = useAppStore(
     useShallow((state) => ({
       addTask: state.addTask,
+      agents: state.agents,
       assignPrimaryAgent: state.assignPrimaryAgent,
       clearAgentAssignments: state.clearAgentAssignments,
       closeProjectSettings: state.closeProjectSettings,
@@ -155,7 +157,7 @@ export function WorkflowWorkspace({
   }
 
   /** Handles primary agent assignment. Persisting the snapshot triggers the main-process scheduler. */
-  const handleAssignPrimaryAgent = async (
+  const handleAssignPrimaryAgent = (
     itemId: string,
     input: { agentId: string | null; agentName?: string | null },
   ) => {
@@ -184,7 +186,7 @@ export function WorkflowWorkspace({
       { openRoute: false },
     );
 
-    await handleAssignPrimaryAgent(itemId, {
+    handleAssignPrimaryAgent(itemId, {
       agentId,
       agentName: suggestedName,
     });
@@ -624,11 +626,30 @@ export function WorkflowWorkspace({
       />
 
       <CreateWorkItemDialog
+        agents={agents.map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          projectId: agent.projectId,
+        }))}
         initialProjectId={selectedProjectId}
         onCreateItem={(input) => {
           const itemId = createItem(input);
 
           if (itemId) {
+            if (input.primaryAgentId) {
+              assignPrimaryAgent(
+                itemId,
+                input.primaryAgentName
+                  ? {
+                      agentId: input.primaryAgentId,
+                      agentName: input.primaryAgentName,
+                    }
+                  : {
+                      agentId: input.primaryAgentId,
+                    },
+              );
+            }
+
             const state = useAppStore.getState();
             const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
             const project = state.projects.find((candidate) => candidate.id === input.projectId) ?? null;

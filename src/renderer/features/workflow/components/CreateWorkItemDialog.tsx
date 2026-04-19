@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from 'react';
 
+import type { TemplateScopedAgent } from '@/shared/workflow/work-item-templates';
+import {
+  createWorkItemTemplatePrefill,
+  resolveWorkItemTemplateDefaultAgent,
+  type WorkItemTemplate,
+} from '@/shared/workflow/work-item-templates';
+import {
+  loadCustomWorkItemTemplates,
+  mergeWorkItemTemplates,
+} from '@/renderer/features/settings/model/work-item-templates';
 import type {
   WorkflowItemStatus,
   WorkflowProject,
@@ -16,13 +26,30 @@ import {
 
 const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'];
 
+const STORE_NAME = 'settings';
+
+function createSettingsStore() {
+  return {
+    get: async <T,>(key: string): Promise<T | null> => {
+      const value = await window.duneDesktop?.storageGet?.(STORE_NAME, key);
+      return (value as T | null | undefined) ?? null;
+    },
+  };
+}
+
+const settingsStore = createSettingsStore();
+
 /** Create work item dialog props. */
 interface CreateWorkItemDialogProps {
+  agents: TemplateScopedAgent[];
   initialProjectId: string | null;
   onCreateItem: (input: {
     brief: string;
+    primaryAgentId?: string | null;
+    primaryAgentName?: string | null;
     projectId: string;
     status: WorkflowItemStatus;
+    taskTitles?: string[];
     title: string;
   }) => void;
   onOpenChange: (open: boolean) => void;
@@ -32,16 +59,22 @@ interface CreateWorkItemDialogProps {
 
 /** Renders the create work item dialog UI. */
 export function CreateWorkItemDialog({
+  agents,
   initialProjectId,
   onCreateItem,
   onOpenChange,
   open,
   projects,
 }: CreateWorkItemDialogProps) {
+  const [availableTemplates, setAvailableTemplates] = useState<WorkItemTemplate[]>(
+    mergeWorkItemTemplates([]),
+  );
   const [title, setTitle] = useState('');
   const [brief, setBrief] = useState('');
   const [projectId, setProjectId] = useState(initialProjectId ?? projects[0]?.id ?? '');
   const [status, setStatus] = useState<WorkflowItemStatus>('inbox');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateFeedback, setTemplateFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -49,10 +82,36 @@ export function CreateWorkItemDialog({
       setBrief('');
       setStatus('inbox');
       setProjectId(initialProjectId ?? projects[0]?.id ?? '');
+      setSelectedTemplateId('');
+      setTemplateFeedback(null);
       return;
     }
 
     setProjectId(initialProjectId ?? projects[0]?.id ?? '');
+
+    let cancelled = false;
+
+    loadCustomWorkItemTemplates(settingsStore)
+      .then((customTemplates) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAvailableTemplates(mergeWorkItemTemplates(customTemplates));
+        setTemplateFeedback(null);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAvailableTemplates(mergeWorkItemTemplates([]));
+        setTemplateFeedback(`Failed to load templates. ${String(error)}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [initialProjectId, open, projects]);
 
   useEffect(() => {
@@ -60,6 +119,13 @@ export function CreateWorkItemDialog({
       setProjectId(projects[0].id);
     }
   }, [projectId, projects]);
+
+  const selectedTemplate = availableTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+  const defaultAgent = projectId
+    ? resolveWorkItemTemplateDefaultAgent(selectedTemplate, projectId, agents)
+    : null;
+  const isTemplateDefaultAgentUnavailable =
+    Boolean(selectedTemplate?.defaultAgentId) && !defaultAgent;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -71,6 +137,51 @@ export function CreateWorkItemDialog({
         </DialogDescription>
 
         <div className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <label
+              className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+              htmlFor="create-work-item-template"
+            >
+              Use template
+            </label>
+            <select
+              className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+              id="create-work-item-template"
+              onChange={(event) => {
+                const nextTemplateId = event.target.value;
+                const nextTemplate = availableTemplates.find((template) => template.id === nextTemplateId);
+
+                setSelectedTemplateId(nextTemplateId);
+
+                if (!nextTemplate) {
+                  return;
+                }
+
+                const prefill = createWorkItemTemplatePrefill(nextTemplate);
+                setTitle(prefill.title);
+                setBrief(prefill.brief);
+              }}
+              value={selectedTemplateId}
+            >
+              <option value="">No template</option>
+              {availableTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            {templateFeedback ? (
+              <p className="text-sm text-rose-200">{templateFeedback}</p>
+            ) : selectedTemplate ? (
+              <p className="text-sm text-app-muted">
+                Creates {selectedTemplate.defaultTasks.length} checklist item{selectedTemplate.defaultTasks.length === 1 ? '' : 's'}
+                {defaultAgent ? ` and assigns ${defaultAgent.name}.` : isTemplateDefaultAgentUnavailable
+                  ? ' and skips the saved default agent because it does not match this project.'
+                  : '.'}
+              </p>
+            ) : null}
+          </div>
+
           <div className="space-y-2">
             <label
               className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
@@ -124,7 +235,7 @@ export function CreateWorkItemDialog({
               >
                 {itemStatuses.map((itemStatus) => (
                   <option key={itemStatus} value={itemStatus}>
-                    {itemStatus[0]!.toUpperCase() + itemStatus.slice(1)}
+                    {itemStatus.charAt(0).toUpperCase() + itemStatus.slice(1)}
                   </option>
                 ))}
               </select>
@@ -161,8 +272,15 @@ export function CreateWorkItemDialog({
 
               onCreateItem({
                 brief,
+                ...(defaultAgent
+                  ? {
+                      primaryAgentId: defaultAgent.id,
+                      primaryAgentName: defaultAgent.name,
+                    }
+                  : {}),
                 projectId,
                 status,
+                ...(selectedTemplate ? { taskTitles: [...selectedTemplate.defaultTasks] } : {}),
                 title,
               });
             }}

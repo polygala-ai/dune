@@ -19,9 +19,18 @@ const DEFAULT_TASK_TITLES = [
   'Execute — Implement the plan. Only start after the above steps are done.',
 ] as const;
 
-/** Creates default tasks. */
-export function createDefaultTasks(now: number): DefaultTask[] {
-  return DEFAULT_TASK_TITLES.map((title) => ({
+/** Normalizes task titles. */
+export function normalizeWorkflowTaskTitles(taskTitles: string[]) {
+  return [...new Set(
+    taskTitles
+      .map((taskTitle) => taskTitle.trim())
+      .filter(Boolean),
+  )];
+}
+
+/** Creates workflow tasks from titles. */
+export function createWorkflowTasks(taskTitles: string[], now: number): DefaultTask[] {
+  return normalizeWorkflowTaskTitles(taskTitles).map((title) => ({
     createdAt: now,
     id: createId('task'),
     notes: '',
@@ -29,4 +38,9 @@ export function createDefaultTasks(now: number): DefaultTask[] {
     title,
     updatedAt: now,
   }));
+}
+
+/** Creates default tasks. */
+export function createDefaultTasks(now: number): DefaultTask[] {
+  return createWorkflowTasks([...DEFAULT_TASK_TITLES], now);
 }

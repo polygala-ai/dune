@@ -26,9 +26,13 @@ describe('workflow slice', () => {
     expect(nextProjectId).toMatch(/^[A-Za-z0-9_-]{8}$/);
     expect(useAppStore.getState().selectedProjectId).toBe(nextProjectId);
 
+    if (!nextProjectId) {
+      throw new Error('Expected the new project ID to be set.');
+    }
+
     const nextItemId = useAppStore.getState().createItem({
       brief: 'Review the first-run board language.',
-      projectId: nextProjectId!,
+      projectId: nextProjectId,
       status: 'inbox',
       title: 'Tighten the launch copy',
     });
@@ -38,14 +42,36 @@ describe('workflow slice', () => {
     expect(
       useAppStore.getState().projects.find((project) => project.id === nextProjectId)?.color,
     ).toBeTruthy();
-    expect(
-      useAppStore.getState().items.find((item) => item.id === nextItemId),
-    ).toMatchObject({
-      artifactFolderName: expect.stringMatching(/^tighten-the-launch-copy-/),
-      projectId: nextProjectId,
+    const nextItem = useAppStore.getState().items.find((item) => item.id === nextItemId);
+    expect(nextItem?.artifactFolderName).toMatch(/^tighten-the-launch-copy-/);
+    expect(nextItem?.projectId).toBe(nextProjectId);
+    expect(nextItem?.status).toBe('inbox');
+    expect(nextItem?.title).toBe('Tighten the launch copy');
+  });
+
+  it('creates work items with explicit template checklist titles', () => {
+    const state = useAppStore.getState();
+    const projectId = state.selectedProjectId;
+
+    if (!projectId) {
+      throw new Error('Expected a seeded project.');
+    }
+
+    const nextItemId = state.createItem({
+      brief: 'Use a focused checklist from the selected template.',
+      projectId,
       status: 'inbox',
-      title: 'Tighten the launch copy',
+      taskTitles: ['Define scope', 'Gather sources', 'Write summary'],
+      title: 'Research the onboarding flow',
     });
+
+    const nextItem = useAppStore.getState().items.find((item) => item.id === nextItemId);
+
+    expect(nextItem?.tasks.map((task) => task.title)).toEqual([
+      'Define scope',
+      'Gather sources',
+      'Write summary',
+    ]);
   });
 
   it('seeds the initial project with an 8-character nanoid', () => {
@@ -69,7 +95,11 @@ describe('workflow slice', () => {
 
     expect(taskId).toBeTruthy();
 
-    useAppStore.getState().updateTask(itemId, taskId!, {
+    if (!taskId) {
+      throw new Error('Expected a task ID after adding a task.');
+    }
+
+    useAppStore.getState().updateTask(itemId, taskId, {
       status: 'doing',
     });
     useAppStore.getState().assignPrimaryAgent(itemId, {

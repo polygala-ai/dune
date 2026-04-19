@@ -26,6 +26,8 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  exportWorkItemTemplates: (suggestedName, content) =>
+    ipcRenderer.invoke(ipcChannels.exportWorkItemTemplates, suggestedName, content),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
@@ -33,6 +35,7 @@ const bridge: DesktopBridge = {
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
+  importWorkItemTemplates: () => ipcRenderer.invoke(ipcChannels.importWorkItemTemplates),
   listProjectArtifactEntries: (rootPath, artifactFolderName) =>
     ipcRenderer.invoke(ipcChannels.listProjectArtifactEntries, rootPath, artifactFolderName),
   openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),

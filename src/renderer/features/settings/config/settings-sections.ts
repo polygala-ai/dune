@@ -8,6 +8,7 @@ import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSe
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
+import { TemplatesSettings } from '@/renderer/features/settings/components/TemplatesSettings';
 
 import type {
   SettingsRoute,
@@ -59,6 +60,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Artifacts',
     description: 'Agent templates and prompts',
     Component: ArtifactsSettings,
+  },
+  {
+    id: 'templates',
+    title: 'Templates',
+    description: 'Reusable work item blueprints',
+    Component: TemplatesSettings,
   },
   {
     id: 'shortcuts',

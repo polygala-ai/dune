@@ -120,6 +120,7 @@ export interface WorkflowActions {
       note?: string;
       projectId: string;
       status: WorkflowItemStatus;
+      taskTitles?: string[];
       title: string;
     },
   ) => string | null;
