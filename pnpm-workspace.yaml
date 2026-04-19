@@ -1,5 +1,6 @@
 packages:
   - "."
+  - "packages/*"
 
 onlyBuiltDependencies:
   - "@boxlite-ai/agentlite"

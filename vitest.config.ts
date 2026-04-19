@@ -18,12 +18,18 @@ export default defineConfig({
     setupFiles: ['src/renderer/app/testing/setup.ts'],
     testTimeout: 15_000,
     exclude: ['tests/e2e/**'],
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'build/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'build/**/*.test.ts',
+      'packages/**/*.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
       exclude: [
         'build/**/*.test.ts',
+        'packages/**/dist/**',
         'src/electron/main.ts',
         'src/electron/preload.ts',
         'tests/**',
