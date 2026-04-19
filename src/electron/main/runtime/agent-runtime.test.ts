@@ -16,6 +16,14 @@ import type {
 } from '@boxlite-ai/agentlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const { detectCodingEnginesMock } = vi.hoisted(() => ({
+  detectCodingEnginesMock: vi.fn(async () => []),
+}));
+
+vi.mock('./coding-engine-detect', () => ({
+  detectCodingEngines: detectCodingEnginesMock,
+}));
+
 import {
   AgentRuntime,
   resolveAgentLiteRuntimeRoot,
@@ -453,6 +461,8 @@ describe('AgentRuntime', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    detectCodingEnginesMock.mockReset();
+    detectCodingEnginesMock.mockResolvedValue([]);
 
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { force: true, recursive: true });

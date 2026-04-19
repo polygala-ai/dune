@@ -192,6 +192,7 @@ describe('agent runtime', () => {
       selectAgent: vi.fn(async () => undefined),
       sendAgentMessage: vi.fn(async () => undefined),
       startTelegramSetupSession: vi.fn(async () => 'telegram-session-1'),
+      updateAgentChannel: vi.fn(async () => undefined),
       subscribe: vi.fn(() => () => undefined),
     });
 
