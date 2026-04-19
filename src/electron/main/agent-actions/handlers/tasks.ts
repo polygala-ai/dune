@@ -6,6 +6,7 @@ import { optionalString, requireString } from './helpers';
 import {
   createWorkflowEvent,
   findItem,
+  prependWorkflowEvents,
   readWorkflowSnapshot,
   touchProject,
   writeWorkflowSnapshot,
@@ -22,6 +23,7 @@ export const taskTools: RegisteredTool[] = [
       inputSchema: objectSchema(
         {
           itemId: stringSchema,
+          note: optionalStringSchema,
           title: stringSchema,
         },
         ['itemId', 'title'],
@@ -31,6 +33,7 @@ export const taskTools: RegisteredTool[] = [
     handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const note = optionalString(args.note);
       const title = requireString(args.title, 'title');
       const now = Date.now();
       const taskId = createId('task');
@@ -46,7 +49,10 @@ export const taskTools: RegisteredTool[] = [
         updatedAt: now,
       });
       item.updatedAt = now;
-      item.workflowEvents.unshift(createWorkflowEvent('task', `Task "${title}" was added.`, now, agentContext.agentName));
+      prependWorkflowEvents(item, [
+        ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+        createWorkflowEvent('task', `Task "${title}" was added.`, now, agentContext.agentName),
+      ]);
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
@@ -59,6 +65,7 @@ export const taskTools: RegisteredTool[] = [
       inputSchema: objectSchema(
         {
           itemId: stringSchema,
+          note: optionalStringSchema,
           notes: optionalStringSchema,
           status: optionalStringSchema,
           taskId: stringSchema,
@@ -71,6 +78,7 @@ export const taskTools: RegisteredTool[] = [
     handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const note = optionalString(args.note);
       const task = item.tasks.find((candidate) => candidate.id === requireString(args.taskId, 'taskId')) ?? null;
 
       assertAgentCanMutateTasks(agentContext.agentId, item);
@@ -99,7 +107,10 @@ export const taskTools: RegisteredTool[] = [
 
       task.updatedAt = Date.now();
       item.updatedAt = task.updatedAt;
-      item.workflowEvents.unshift(createWorkflowEvent('task', 'Checklist updated.', task.updatedAt, agentContext.agentName));
+      prependWorkflowEvents(item, [
+        ...(note ? [createWorkflowEvent('note', note, task.updatedAt, agentContext.agentName)] : []),
+        createWorkflowEvent('task', 'Checklist updated.', task.updatedAt, agentContext.agentName),
+      ]);
       touchProject(snapshot, item.projectId, task.updatedAt);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);

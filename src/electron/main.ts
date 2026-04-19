@@ -217,20 +217,21 @@ async function nudgeIdleMainAgents(
         const now = Date.now();
         const activeCount = projectItems.filter((i) => i.status === 'active').length;
         const reviewCount = projectItems.filter((i) => i.status === 'review').length;
+        const acceptanceCount = projectItems.filter((i) => i.status === 'acceptance').length;
         const doneCount = projectItems.filter((i) => i.status === 'done').length;
 
         const items = (fullSnapshot.items ?? []) as Array<Record<string, unknown>>;
         items.push({
           artifactFolderName: '',
           brief: [
-            `Current board: ${activeCount} active, ${reviewCount} in review, ${doneCount} done, 0 in inbox.`,
+            `Current board: ${activeCount} active, ${reviewCount} in review, ${acceptanceCount} in acceptance, ${doneCount} done, 0 in inbox.`,
             '',
             'Your job:',
-            '1. Review items in review — approve good ones, reject with feedback if not ready.',
+            '1. Review items in review — reject with feedback if not ready, and leave approved work there for a human to move into acceptance.',
             '2. Check active items — follow up on anything stalled.',
             '3. Identify gaps — what new work is needed based on project goals?',
             '4. Create new work items in inbox for anything missing.',
-            '5. Move this item to done when finished.',
+            '5. Move this item to review when finished. Human acceptance and done happen after that.',
           ].join('\n'),
           createdAt: now,
           id: `item-auto-${now}`,
@@ -240,10 +241,10 @@ async function nudgeIdleMainAgents(
           sortOrder: 0,
           status: 'ready',
           tasks: [
-            { createdAt: now, id: `task-${now}-1`, notes: '', status: 'todo', title: 'Review items in review lane — approve or reject with feedback', updatedAt: now },
+            { createdAt: now, id: `task-${now}-1`, notes: '', status: 'todo', title: 'Review items in review lane — reject when needed and leave approved work for human acceptance', updatedAt: now },
             { createdAt: now, id: `task-${now}-2`, notes: '', status: 'todo', title: 'Check active items for blockers or stalled progress', updatedAt: now },
             { createdAt: now, id: `task-${now}-3`, notes: '', status: 'todo', title: 'Create new work items for what the project needs next', updatedAt: now },
-            { createdAt: now, id: `task-${now}-4`, notes: '', status: 'todo', title: 'Move this item to done', updatedAt: now },
+            { createdAt: now, id: `task-${now}-4`, notes: '', status: 'todo', title: 'Move this item to review when the pass is complete', updatedAt: now },
           ],
           title: NUDGE_TITLE_PREFIX,
           updatedAt: now,
@@ -549,7 +550,7 @@ void app.whenReady().then(async () => {
 
     const nextItemIds = new Set<string>();
 
-    // Handle assignment changes and moves-to-done on items that still exist.
+    // Handle assignment changes and moves into human-owned lanes on items that still exist.
     for (const item of nextItems) {
       if (!isPlainObject(item) || typeof item.id !== 'string') {
         continue;
@@ -564,9 +565,9 @@ void app.whenReady().then(async () => {
       const nextStatus = typeof item.status === 'string' ? item.status : null;
 
       const agentChanged = prevAgentId !== nextAgentId;
-      const movedToDone = nextStatus === 'done' && (!prev || prev.status !== 'done');
+      const isHumanOwnedLane = nextStatus === 'acceptance' || nextStatus === 'done';
 
-      if (!agentChanged && !movedToDone) {
+      if (!agentChanged && !isHumanOwnedLane) {
         // scheduledTaskId is owned by the main process; the renderer only echoes
         // a stale copy. Always restore the authoritative value from the previous
         // stored snapshot so unrelated edits don't wipe it.
@@ -578,7 +579,7 @@ void app.whenReady().then(async () => {
         await runtimeController.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
       }
 
-      if (movedToDone || !nextAgentId) {
+      if (isHumanOwnedLane || !nextAgentId) {
         item.scheduledTaskId = null;
         continue;
       }
@@ -605,7 +606,8 @@ void app.whenReady().then(async () => {
   }
 
   /**
-   * Periodic sweep: for every item assigned to an agent and not yet done,
+   * Periodic sweep: for every item assigned to an agent and still in an
+   * agent-owned lane,
    * ensure the agentlite registry still has a task for it. If the stored
    * scheduledTaskId is null or no longer known to agentlite (e.g. after a
    * restart that lost the registry), schedule a fresh task.
@@ -630,6 +632,7 @@ void app.whenReady().then(async () => {
       if (
         typeof item.id !== 'string' ||
         typeof item.primaryAgentId !== 'string' ||
+        item.status === 'acceptance' ||
         item.status === 'done' ||
         item.status === 'inbox'
       ) {

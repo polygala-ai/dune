@@ -11,7 +11,7 @@ import type { AppStorage } from '@/electron/main/storage/app-storage';
 import { ToolHandlerError } from './types';
 
 /** Workflow item statuses constant. */
-export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'done'] as const;
+export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;
 /** Workflow item status. */
 export type WorkflowItemStatus = (typeof workflowItemStatuses)[number];
 
@@ -74,6 +74,16 @@ export interface WorkflowEvent {
   description: string;
   id: string;
   kind: string;
+}
+
+/** Prepends workflow events while preserving the input order. */
+export function prependWorkflowEvents(
+  item: Pick<WorkflowItem, 'workflowEvents'>,
+  events: WorkflowEvent[],
+): void {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    item.workflowEvents.unshift(events[index]!);
+  }
 }
 
 /** Workflow project shape. */

@@ -239,6 +239,37 @@ describe('AppShell', () => {
     });
   });
 
+  it('preserves persisted acceptance items during workflow hydration', async () => {
+    const snapshot = createSeedWorkflowSnapshot(1_700_000_000_000);
+    const acceptanceItemId = snapshot.items[0]!.id;
+
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      storageGet: vi.fn(async () => ({
+        ...snapshot,
+        items: snapshot.items.map((item, index) =>
+          index === 0
+            ? { ...item, status: 'acceptance' }
+            : item,
+        ),
+      })),
+      storageSet: vi.fn(async () => undefined),
+    };
+
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workflow-board')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(
+        useAppStore.getState().items.find((item) => item.id === acceptanceItemId)?.status,
+      ).toBe('acceptance');
+    });
+  });
+
   it('launches on the project board and opens settings and the command palette through shortcuts', async () => {
     const user = userEvent.setup();
 

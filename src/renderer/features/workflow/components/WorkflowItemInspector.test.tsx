@@ -44,6 +44,25 @@ const item: WorkflowItem & {
 };
 
 describe('WorkflowItemInspector', () => {
+  it('includes the acceptance status in the work item status selector', () => {
+    render(
+      <WorkflowItemInspector
+        item={item}
+        onAddTask={vi.fn()}
+        onAssignPrimaryAgent={vi.fn()}
+        onCreateAgent={vi.fn()}
+        onOpenAgent={vi.fn()}
+        onUpdateItem={vi.fn()}
+        onUpdateItemStatus={vi.fn()}
+        onUpdateTask={vi.fn()}
+        project={project}
+        projectAgents={[]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: 'Acceptance' })).toBeInTheDocument();
+  });
+
   it('shows artifact folder entries instead of the old outputs editor', async () => {
     const user = userEvent.setup();
     const listProjectArtifactEntries = vi.fn(async () => ([

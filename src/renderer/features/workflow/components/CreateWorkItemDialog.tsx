@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/renderer/shared/ui/dialog';
 
-const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'done'];
+const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'];
 
 /** Create work item dialog props. */
 interface CreateWorkItemDialogProps {

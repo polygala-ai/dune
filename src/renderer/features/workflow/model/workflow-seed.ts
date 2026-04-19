@@ -25,6 +25,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
   const readyItemId = createId('item');
   const activeItemId = createId('item');
   const reviewItemId = createId('item');
+  const acceptanceItemId = createId('item');
   const doneItemId = createId('item');
 
   const items: WorkflowSnapshot['items'] = [
@@ -209,6 +210,58 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
             description: 'A blocked dependency surfaced during review.',
             id: createId('event'),
             kind: 'task',
+          },
+        ],
+      },
+      {
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
+        artifactFolderName: createArtifactFolderName('Human sign-off on launch copy', acceptanceItemId),
+        brief:
+          'This draft passed review and now needs a human decision before it can be marked done.',
+        createdAt: now - 1000 * 60 * 610,
+        id: acceptanceItemId,
+        primaryAgentId: null,
+        projectId,
+        scheduledTaskId: null,
+        sortOrder: 0,
+        status: 'acceptance',
+        tasks: [
+          {
+            createdAt: now - 1000 * 60 * 600,
+            id: createId('task'),
+            notes: '',
+            status: 'done',
+            title: 'Finish the final copy pass',
+            updatedAt: now - 1000 * 60 * 560,
+          },
+          {
+            createdAt: now - 1000 * 60 * 595,
+            id: createId('task'),
+            notes: '',
+            status: 'review',
+            title: 'Get human sign-off on the revised launch copy',
+            updatedAt: now - 1000 * 60 * 120,
+          },
+        ],
+        title: 'Human sign-off on launch copy',
+        updatedAt: now - 1000 * 60 * 120,
+        workProducts: [
+          {
+            body:
+              'The revised launch copy is complete and waiting on a human approval decision before release.',
+            createdAt: now - 1000 * 60 * 125,
+            id: createId('work-product'),
+            title: 'Approved draft',
+          },
+        ],
+        workflowEvents: [
+          {
+            createdAt: now - 1000 * 60 * 120,
+            description: 'Item moved into acceptance for human sign-off.',
+            id: createId('event'),
+            kind: 'item',
           },
         ],
       },

@@ -6,6 +6,7 @@ export const workflowItemStatuses = [
   'ready',
   'active',
   'review',
+  'acceptance',
   'done',
 ] as const;
 

@@ -20,7 +20,12 @@ const baseItem = (
   isAgentWorking: false,
   primaryAgentId: null,
   primaryAgentName: null,
-  specialStateLabel: status === 'review' ? 'Review' : null,
+  specialStateLabel:
+    status === 'review'
+      ? 'Review'
+      : status === 'acceptance'
+        ? 'Acceptance'
+        : null,
   status,
   statusLabel: status,
   title,
@@ -37,6 +42,7 @@ describe('WorkflowBoard', () => {
           baseItem('ready-1', 'Ready item', 'ready'),
           baseItem('active-1', 'Active item', 'active'),
           baseItem('review-1', 'Review item', 'review'),
+          baseItem('acceptance-1', 'Acceptance item', 'acceptance'),
           baseItem('done-1', 'Done item', 'done'),
         ]}
         onMoveItem={vi.fn()}
@@ -46,7 +52,14 @@ describe('WorkflowBoard', () => {
     );
 
     expect(screen.getByTestId('workflow-column-inbox')).toHaveClass('min-w-[220px]', 'flex-[1_1_0]');
+    expect(screen.getByTestId('workflow-column-acceptance')).toHaveClass('min-w-[220px]', 'flex-[1_1_0]');
     expect(screen.getByTestId('workflow-column-done')).toHaveClass('min-w-[220px]', 'flex-[1_1_0]');
+    expect(screen.getByTestId('workflow-column-review').nextElementSibling).toBe(
+      screen.getByTestId('workflow-column-acceptance'),
+    );
+    expect(screen.getByTestId('workflow-column-acceptance').nextElementSibling).toBe(
+      screen.getByTestId('workflow-column-done'),
+    );
   });
 
   it('keeps tall columns independently scrollable without clipping lower cards', () => {

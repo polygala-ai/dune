@@ -107,16 +107,17 @@ export interface WorkflowState extends WorkflowSnapshot {
 
 /** Workflow actions shape. */
 export interface WorkflowActions {
-  addTask: (itemId: string, title: string) => string | null;
-  addWorkProduct: (itemId: string, input: { body: string; title: string }) => string | null;
+  addTask: (itemId: string, title: string, note?: string) => string | null;
+  addWorkProduct: (itemId: string, input: { body: string; note?: string; title: string }) => string | null;
   assignPrimaryAgent: (
     itemId: string,
-    input: { agentId: string | null; agentName?: string | null },
+    input: { agentId: string | null; agentName?: string | null; note?: string | null },
   ) => void;
   clearAgentAssignments: (agentId: string) => void;
   createItem: (
     input: {
       brief: string;
+      note?: string;
       projectId: string;
       status: WorkflowItemStatus;
       title: string;
@@ -131,7 +132,7 @@ export interface WorkflowActions {
   ) => string | null;
   deleteProject: (projectId: string) => void;
   hydrateWorkflow: (snapshot: WorkflowSnapshot) => void;
-  moveItem: (itemId: string, status: WorkflowItemStatus, index: number) => void;
+  moveItem: (itemId: string, status: WorkflowItemStatus, index: number, note?: string) => void;
   openProjectSettings: () => void;
   closeProjectSettings: () => void;
   selectItem: (itemId: string | null) => void;
@@ -144,12 +145,12 @@ export interface WorkflowActions {
   ) => void;
   updateItem: (
     itemId: string,
-    input: { brief?: string; title?: string },
+    input: { brief?: string; note?: string; title?: string },
   ) => void;
   updateTask: (
     itemId: string,
     taskId: string,
-    input: { notes?: string; status?: WorkflowTaskStatus; title?: string },
+    input: { note?: string; notes?: string; status?: WorkflowTaskStatus; title?: string },
   ) => void;
   setItemActivity: (itemId: string, activity: WorkflowItemActivity) => void;
 }

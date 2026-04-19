@@ -2,15 +2,16 @@
 
 import { createId } from '@/shared/id';
 
-import { requireString } from './helpers';
+import { optionalString, requireString } from './helpers';
 import {
   createWorkflowEvent,
   findItem,
+  prependWorkflowEvents,
   readWorkflowSnapshot,
   touchProject,
   writeWorkflowSnapshot,
 } from './snapshot';
-import { objectSchema, stringSchema } from './schemas';
+import { objectSchema, optionalStringSchema, stringSchema } from './schemas';
 import { assertAgentCanAddWorkProduct } from './validators';
 import type { RegisteredTool } from './types';
 
@@ -23,6 +24,7 @@ export const workProductTools: RegisteredTool[] = [
         {
           body: stringSchema,
           itemId: stringSchema,
+          note: optionalStringSchema,
           title: stringSchema,
         },
         ['itemId', 'title', 'body'],
@@ -34,6 +36,7 @@ export const workProductTools: RegisteredTool[] = [
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const title = requireString(args.title, 'title');
       const body = requireString(args.body, 'body');
+      const note = optionalString(args.note);
       const now = Date.now();
       const workProductId = createId('work-product');
 
@@ -46,7 +49,10 @@ export const workProductTools: RegisteredTool[] = [
         title,
       });
       item.updatedAt = now;
-      item.workflowEvents.unshift(createWorkflowEvent('note', `Added output "${title}".`, now, agentContext.agentName));
+      prependWorkflowEvents(item, [
+        ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+        createWorkflowEvent('note', `Added output "${title}".`, now, agentContext.agentName),
+      ]);
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);

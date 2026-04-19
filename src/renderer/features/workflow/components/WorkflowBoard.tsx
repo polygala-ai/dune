@@ -36,6 +36,7 @@ const workflowColumns: WorkflowItemStatus[] = [
   'ready',
   'active',
   'review',
+  'acceptance',
   'done',
 ];
 

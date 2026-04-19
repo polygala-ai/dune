@@ -52,11 +52,18 @@ export function assertAgentCanMoveItem(
   item: WorkflowItem,
   nextStatus: WorkflowItemStatus,
 ) {
-  // Only humans can move items to done (final approval gate).
-  if (nextStatus === 'done') {
+  if (item.status === 'acceptance' || item.status === 'done') {
     throw new ToolHandlerError(
       'validation-error',
-      'Only humans can move work items into done.',
+      'Agents cannot move work items out of acceptance or done.',
+    );
+  }
+
+  // Only humans can move items into the human-owned lanes.
+  if (nextStatus === 'acceptance' || nextStatus === 'done') {
+    throw new ToolHandlerError(
+      'validation-error',
+      'Only humans can move work items into acceptance or done.',
     );
   }
 
@@ -65,13 +72,6 @@ export function assertAgentCanMoveItem(
     throw new ToolHandlerError(
       'validation-error',
       'Review items can only be moved back to active (rejection) by agents.',
-    );
-  }
-
-  if (item.status === 'done') {
-    throw new ToolHandlerError(
-      'validation-error',
-      'Agents cannot move work items out of done.',
     );
   }
 

@@ -48,19 +48,22 @@ List work items in a project.
 
 ### `workflow_items_create`
 Create a work item. New items default to the `inbox` lane.
-- **Payload**: `{ title (required), brief?, projectId?, status? }` — `status` is `"inbox"` or `"ready"`.
+- **Payload**: `{ title (required), brief?, note?, projectId?, status? }` — `status` is `"inbox"` or `"ready"`.
+- **note**: optional workflow-history note recorded alongside the creation.
 
 ### `workflow_items_update`
 Update fields on an item — title, brief, or the primary agent assignment.
-- **Payload**: `{ itemId (required), title?, brief?, primaryAgentId? }`
+- **Payload**: `{ itemId (required), title?, brief?, note?, primaryAgentId? }`
 - **title / brief**: editable only while the item is in `inbox`.
+- **note**: optional workflow-history note recorded alongside the update.
 - **primaryAgentId**: agent ID to assign, or `null` to unassign. Changeable at any status except `done`. Use this for initial assignment, handoff mid-work, and reassignment to a reviewer when moving to `review`.
 
 ### `workflow_items_move`
 Move an item between lanes. This is how work progresses.
-- **Payload**: `{ itemId (required), status (required), index? }`
-- **status**: one of `"inbox" | "ready" | "active" | "review" | "done"`. Agents **must not** set `"done"` — that lane is human-only.
+- **Payload**: `{ itemId (required), status (required), index?, note? }`
+- **status**: one of `"inbox" | "ready" | "active" | "review" | "acceptance" | "done"`. Agents **must not** set `"acceptance"` or `"done"` — those lanes are human-only.
 - **index**: position within the destination lane. Default: end.
+- **note**: optional workflow-history note recorded alongside the move.
 
 ### `workflow_items_add_feedback`
 Attach feedback to an item — rejection reason, approval note, or general comment. Feedback becomes part of the item's workflow history.
@@ -72,12 +75,14 @@ Attach feedback to an item — rejection reason, approval note, or general comme
 
 ### `workflow_tasks_add`
 Add a task.
-- **Payload**: `{ itemId (required), title (required) }`
+- **Payload**: `{ itemId (required), title (required), note? }`
+- **note**: optional workflow-history note recorded alongside the task addition.
 
 ### `workflow_tasks_update`
 Update a task's title, notes, or status.
-- **Payload**: `{ itemId (required), taskId (required), title?, notes?, status? }`
+- **Payload**: `{ itemId (required), taskId (required), title?, notes?, status?, note? }`
 - **status**: one of `"todo" | "doing" | "blocked" | "review" | "done"`.
+- **note**: optional workflow-history note recorded alongside the task update.
 
 ---
 
@@ -85,7 +90,8 @@ Update a task's title, notes, or status.
 
 ### `workflow_work_products_add`
 Attach a work product. Work products are the durable output trail — prefer them over chat messages for anything you want to survive.
-- **Payload**: `{ itemId (required), title (required), body (required) }`
+- **Payload**: `{ itemId (required), title (required), body (required), note? }`
+- **note**: optional workflow-history note recorded alongside the output.
 
 ---
 
@@ -114,4 +120,3 @@ Delete an agent. Clears any assignments it held.
 ### `runtime_get_snapshot`
 Get a sanitized snapshot of the live Dune runtime — all agents, coding engines, and runtime info for the current project. Read-only. Use when you need a bird's-eye view; prefer the targeted `workflow_*` actions for narrower queries.
 - **Payload**: `{}`
-

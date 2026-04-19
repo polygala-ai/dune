@@ -18,6 +18,7 @@ import {
   createWorkflowEvent,
   findItem,
   isWorkflowItemStatus,
+  prependWorkflowEvents,
   readWorkflowSnapshot,
   reindexProjectStatusGroup,
   touchProject,
@@ -66,6 +67,7 @@ export const itemTools: RegisteredTool[] = [
       inputSchema: objectSchema(
         {
           brief: optionalStringSchema,
+          note: optionalStringSchema,
           projectId: optionalStringSchema,
           status: optionalStringSchema,
           title: stringSchema,
@@ -79,6 +81,7 @@ export const itemTools: RegisteredTool[] = [
       const projectId = resolveProjectId(args.projectId, agentContext.projectId);
       const title = requireString(args.title, 'title');
       const brief = optionalString(args.brief) ?? '';
+      const note = optionalString(args.note);
       const status = optionalString(args.status) ?? 'inbox';
       const now = Date.now();
       const itemId = createId('item');
@@ -105,7 +108,12 @@ export const itemTools: RegisteredTool[] = [
         title,
         updatedAt: now,
         workProducts: [],
-        workflowEvents: [createWorkflowEvent('item', `Work item "${title}" was created.`, now, agentContext.agentName)],
+        workflowEvents: [
+          ...(note
+            ? [createWorkflowEvent('note', note, now, agentContext.agentName)]
+            : []),
+          createWorkflowEvent('item', `Work item "${title}" was created.`, now, agentContext.agentName),
+        ],
       } satisfies WorkflowItem;
 
       snapshot.items.push(item);
@@ -126,6 +134,7 @@ export const itemTools: RegisteredTool[] = [
         {
           brief: optionalStringSchema,
           itemId: stringSchema,
+          note: optionalStringSchema,
           primaryAgentId: { type: ['string', 'null'] },
           title: optionalStringSchema,
         },
@@ -136,6 +145,7 @@ export const itemTools: RegisteredTool[] = [
     handler: async ({ agentContext, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const note = optionalString(args.note);
       const title = optionalString(args.title);
       const now = Date.now();
 
@@ -157,9 +167,10 @@ export const itemTools: RegisteredTool[] = [
           item.brief = optionalString(args.brief) ?? '';
         }
 
-        item.workflowEvents.unshift(
+        prependWorkflowEvents(item, [
+          ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
           createWorkflowEvent('item', 'Work item details were updated.', now, agentContext.agentName),
-        );
+        ]);
       }
 
       if (touchesAssignment) {
@@ -169,9 +180,10 @@ export const itemTools: RegisteredTool[] = [
 
         if (nextAgentId === null) {
           item.primaryAgentId = null;
-          item.workflowEvents.unshift(
+          prependWorkflowEvents(item, [
+            ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
             createWorkflowEvent('assignment', 'Primary agent cleared.', now, agentContext.agentName),
-          );
+          ]);
         } else if (typeof nextAgentId === 'string') {
           const agent = getRuntimeController().getSnapshot().agents.find((candidate) => candidate.id === nextAgentId);
 
@@ -180,9 +192,10 @@ export const itemTools: RegisteredTool[] = [
           }
 
           item.primaryAgentId = nextAgentId;
-          item.workflowEvents.unshift(
+          prependWorkflowEvents(item, [
+            ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
             createWorkflowEvent('assignment', `Primary agent set to "${agent.name}".`, now, agentContext.agentName),
-          );
+          ]);
         } else {
           throw new ToolHandlerError('validation-error', 'primaryAgentId must be a string or null.');
         }
@@ -206,6 +219,7 @@ export const itemTools: RegisteredTool[] = [
         {
           index: { type: 'number' },
           itemId: stringSchema,
+          note: optionalStringSchema,
           status: workflowItemStatusSchema,
         },
         ['itemId', 'status'],
@@ -215,6 +229,7 @@ export const itemTools: RegisteredTool[] = [
     handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const note = optionalString(args.note);
       const status = requireString(args.status, 'status');
 
       if (!isWorkflowItemStatus(status)) {
@@ -243,9 +258,10 @@ export const itemTools: RegisteredTool[] = [
       item.status = status;
       item.updatedAt = now;
       item.sortOrder = index;
-      item.workflowEvents.unshift(
+      prependWorkflowEvents(item, [
+        ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
         createWorkflowEvent('item', `Work item moved to ${status}.`, now, agentContext.agentName),
-      );
+      ]);
 
       // When an item is sent back to active (rejection), prepend fresh checklist
       if (status === 'active' && previousStatus === 'review') {

@@ -27,7 +27,7 @@ import {
   type ProjectArtifactEntry,
 } from '@/shared/workflow/project-artifacts';
 
-const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'done'];
+const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'];
 const taskStatuses: WorkflowTaskStatus[] = ['todo', 'doing', 'blocked', 'review', 'done'];
 
 /** Workflow item inspector props. */

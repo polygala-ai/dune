@@ -84,6 +84,75 @@ describe('workflow slice', () => {
     expect(nextItem?.workflowEvents[0]?.description).toMatch(/primary agent/i);
   });
 
+  it('records optional notes alongside local workflow mutations', () => {
+    const state = useAppStore.getState();
+    const itemId = state.items[0]?.id;
+
+    if (!itemId) {
+      throw new Error('Expected seeded workflow to include at least one work item.');
+    }
+
+    state.updateItem(itemId, {
+      brief: 'Updated brief',
+      note: 'Clarified the scope before handoff.',
+    });
+
+    let item = useAppStore.getState().items.find((candidate) => candidate.id === itemId);
+    expect(item?.workflowEvents[0]?.description).toBe('Clarified the scope before handoff.');
+    expect(item?.workflowEvents[1]?.description).toBe('Work item details were updated.');
+
+    state.moveItem(itemId, 'review', 0, 'Ready for review after the revision.');
+
+    item = useAppStore.getState().items.find((candidate) => candidate.id === itemId);
+    expect(item?.workflowEvents[0]?.description).toBe('Ready for review after the revision.');
+    expect(item?.workflowEvents[1]?.description).toBe('Work item moved to Review.');
+  });
+
+  it('blocks review to done for humans while allowing review to acceptance and review to active', () => {
+    const state = useAppStore.getState();
+    const projectId = state.selectedProjectId;
+
+    if (!projectId) {
+      throw new Error('Expected a seeded project.');
+    }
+
+    const acceptanceItemId = state.createItem({
+      brief: 'Needs human sign-off after review.',
+      projectId,
+      status: 'review',
+      title: 'Acceptance candidate',
+    });
+    const rejectionItemId = state.createItem({
+      brief: 'Needs another implementation pass.',
+      projectId,
+      status: 'review',
+      title: 'Rejected candidate',
+    });
+
+    if (!acceptanceItemId || !rejectionItemId) {
+      throw new Error('Expected review items to be created.');
+    }
+
+    state.moveItem(acceptanceItemId, 'done', 0);
+
+    const blockedItem = useAppStore.getState().items.find((item) => item.id === acceptanceItemId);
+    expect(blockedItem?.status).toBe('review');
+
+    state.moveItem(acceptanceItemId, 'acceptance', 0);
+
+    const acceptedItem = useAppStore.getState().items.find((item) => item.id === acceptanceItemId);
+    expect(acceptedItem?.status).toBe('acceptance');
+
+    const rejectionItemBefore = useAppStore.getState().items.find((item) => item.id === rejectionItemId);
+    const previousTaskCount = rejectionItemBefore?.tasks.length ?? 0;
+
+    state.moveItem(rejectionItemId, 'active', 0);
+
+    const rejectionItemAfter = useAppStore.getState().items.find((item) => item.id === rejectionItemId);
+    expect(rejectionItemAfter?.status).toBe('active');
+    expect(rejectionItemAfter?.tasks.length).toBeGreaterThan(previousTaskCount);
+  });
+
   it('keeps primary-agent ownership exclusive across work items', async () => {
     const state = useAppStore.getState();
     const projectId = state.selectedProjectId;

@@ -134,6 +134,7 @@ export function registerDuneActions(
   reg('workflow.items.create', {
     title: z.string().describe('Work item title'),
     brief: z.string().optional().describe('Work item brief/description'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this creation.'),
     projectId: z.string().optional().describe('Project ID. Omit for current project.'),
     status: z.enum(['inbox', 'ready']).optional().describe('Initial status (default: inbox)'),
   });
@@ -141,12 +142,15 @@ export function registerDuneActions(
     itemId: z.string().describe('Work item ID'),
     title: z.string().optional().describe('New title'),
     brief: z.string().optional().describe('New brief'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this update.'),
     primaryAgentId: z.string().nullable().optional()
       .describe('Agent ID to assign, or null to unassign. Cannot change while item is done.'),
   });
   reg('workflow.items.move', {
     itemId: z.string().describe('Work item ID'),
-    status: z.enum(['inbox', 'ready', 'active', 'review', 'done']).describe('Destination lane'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this move.'),
+    status: z.enum(['inbox', 'ready', 'active', 'review', 'acceptance', 'done'])
+      .describe('Destination lane. Agents may not move items into acceptance or done.'),
     index: z.number().optional().describe('Position within the lane (default: end)'),
   });
   reg('workflow.items.add_feedback', {
@@ -157,10 +161,12 @@ export function registerDuneActions(
   // ---- Tasks --------------------------------------------------------------
   reg('workflow.tasks.add', {
     itemId: z.string().describe('Work item ID'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this task addition.'),
     title: z.string().describe('Task title'),
   });
   reg('workflow.tasks.update', {
     itemId: z.string().describe('Work item ID'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this task update.'),
     taskId: z.string().describe('Task ID'),
     title: z.string().optional().describe('New title'),
     notes: z.string().optional().describe('Task notes'),
@@ -170,6 +176,7 @@ export function registerDuneActions(
   // ---- Work products ------------------------------------------------------
   reg('workflow.work_products.add', {
     itemId: z.string().describe('Work item ID'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this output.'),
     title: z.string().describe('Work product title'),
     body: z.string().describe('Work product content'),
   });

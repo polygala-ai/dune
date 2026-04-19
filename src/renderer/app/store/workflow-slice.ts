@@ -45,6 +45,12 @@ function createItemEvent(
   };
 }
 
+/** Normalizes optional note input. */
+function normalizeNote(note: string | null | undefined) {
+  const normalized = note?.trim();
+  return normalized ? normalized : null;
+}
+
 /** Sorts items by project status. */
 function sortItemsByProjectStatus(items: WorkflowItem[]) {
   const nextItems = items.map((item) => ({
@@ -129,6 +135,18 @@ function appendItemEvent(
   };
 }
 
+/** Appends item events in the provided order. */
+function appendItemEvents(
+  item: WorkflowItem,
+  events: Array<{ description: string; kind: WorkflowEventKind }>,
+  updatedAt: number,
+) {
+  return events.reduceRight(
+    (nextItem, event) => appendItemEvent(nextItem, event.kind, event.description, updatedAt),
+    item,
+  );
+}
+
 /** Wraps selection. */
 function withSelection(
   state: Pick<
@@ -193,6 +211,8 @@ function describeItemStatus(status: WorkflowItemStatus) {
       return 'Active';
     case 'review':
       return 'Review';
+    case 'acceptance':
+      return 'Acceptance';
     case 'done':
       return 'Done';
   }
@@ -229,8 +249,9 @@ export function createWorkflowSlice(
 ): AppStoreSlice<WorkflowSlice> {
   return (set) => {
     const actions: WorkflowActions = {
-      addTask: (itemId, title) => {
+      addTask: (itemId, title, note) => {
         const trimmedTitle = title.trim();
+        const normalizedNote = normalizeNote(note);
 
         if (!trimmedTitle) {
           return null;
@@ -251,7 +272,7 @@ export function createWorkflowSlice(
               return item;
             }
 
-            return appendItemEvent(
+            return appendItemEvents(
               {
                 ...item,
                 tasks: [
@@ -266,8 +287,10 @@ export function createWorkflowSlice(
                   },
                 ],
               },
-              'task',
-              `Added checklist item “${trimmedTitle}”.`,
+              [
+                ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                { description: `Added checklist item “${trimmedTitle}”.`, kind: 'task' as const },
+              ],
               updatedAt,
             );
           });
@@ -289,6 +312,7 @@ export function createWorkflowSlice(
       addWorkProduct: (itemId, input) => {
         const title = input.title.trim();
         const body = input.body.trim();
+        const normalizedNote = normalizeNote(input.note);
 
         if (!title || !body) {
           return null;
@@ -311,7 +335,7 @@ export function createWorkflowSlice(
                   return item;
                 }
 
-                return appendItemEvent(
+                return appendItemEvents(
                   {
                     ...item,
                     workProducts: [
@@ -324,8 +348,10 @@ export function createWorkflowSlice(
                       ...item.workProducts,
                     ],
                   },
-                  'note',
-                  `Added output “${title}”.`,
+                  [
+                    ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                    { description: `Added output “${title}”.`, kind: 'note' as const },
+                  ],
                   updatedAt,
                 );
               }),
@@ -343,6 +369,7 @@ export function createWorkflowSlice(
       assignPrimaryAgent: (itemId, input) => {
         const updatedAt = Date.now();
         const clearedDescription = 'Primary agent cleared.';
+        const normalizedNote = normalizeNote(input.note);
 
         set((state) => {
           const targetItem = state.items.find((item) => item.id === itemId);
@@ -360,13 +387,15 @@ export function createWorkflowSlice(
             ...withSelection({
               items: state.items.map((item) => {
                 if (item.id === itemId) {
-                  return appendItemEvent(
+                  return appendItemEvents(
                     {
                       ...item,
                       primaryAgentId: input.agentId,
                     },
-                    'assignment',
-                    nextDescription,
+                    [
+                      ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                      { description: nextDescription, kind: 'assignment' as const },
+                    ],
                     updatedAt,
                   );
                 }
@@ -441,6 +470,7 @@ export function createWorkflowSlice(
       createItem: (input) => {
         const title = input.title.trim();
         const brief = input.brief.trim();
+        const normalizedNote = normalizeNote(input.note);
 
         if (!title) {
           return null;
@@ -472,6 +502,9 @@ export function createWorkflowSlice(
             updatedAt,
             workProducts: [],
             workflowEvents: [
+              ...(normalizedNote
+                ? [createItemEvent('note', normalizedNote, updatedAt)]
+                : []),
               createItemEvent('item', `Work item “${title}” was created.`, updatedAt),
             ],
           };
@@ -586,7 +619,7 @@ export function createWorkflowSlice(
           selectedProjectView: nextSnapshot.selectedProjectView,
         });
       },
-      moveItem: (itemId, status, index) => {
+      moveItem: (itemId, status, index, note) => {
         set((state) => {
           const item = state.items.find((currentItem) => currentItem.id === itemId);
 
@@ -594,6 +627,11 @@ export function createWorkflowSlice(
             return state;
           }
 
+          if (item.status === 'review' && status === 'done') {
+            return state;
+          }
+
+          const normalizedNote = normalizeNote(note);
           const updatedAt = Date.now();
           const destination = getProjectItems(
             state.items.filter((currentItem) => currentItem.id !== itemId && currentItem.status === status),
@@ -602,7 +640,7 @@ export function createWorkflowSlice(
           const insertionIndex = Math.max(0, Math.min(index, destination.length));
           const before = destination.slice(0, insertionIndex);
           const after = destination.slice(insertionIndex);
-          const movedItem = appendItemEvent(
+          const movedItem = appendItemEvents(
             {
               ...item,
               status,
@@ -611,8 +649,10 @@ export function createWorkflowSlice(
                 ? { tasks: [...createDefaultTasks(updatedAt), ...item.tasks] }
                 : {}),
             },
-            'item',
-            `Work item moved to ${describeItemStatus(status)}.`,
+            [
+              ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+              { description: `Work item moved to ${describeItemStatus(status)}.`, kind: 'item' as const },
+            ],
             updatedAt,
           );
           const nextItems = state.items.filter(
@@ -743,6 +783,7 @@ export function createWorkflowSlice(
           }
 
           const updatedAt = Date.now();
+          const normalizedNote = normalizeNote(input.note);
 
           return {
             ...withSelection({
@@ -764,10 +805,12 @@ export function createWorkflowSlice(
                   return item;
                 }
 
-                return appendItemEvent(
+                return appendItemEvents(
                   nextItem,
-                  'item',
-                  'Work item details were updated.',
+                  [
+                    ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                    { description: 'Work item details were updated.', kind: 'item' as const },
+                  ],
                   updatedAt,
                 );
               }),
@@ -789,6 +832,7 @@ export function createWorkflowSlice(
           }
 
           const updatedAt = Date.now();
+          const normalizedNote = normalizeNote(input.note);
 
           return {
             ...withSelection({
@@ -813,13 +857,15 @@ export function createWorkflowSlice(
                   };
                 });
 
-                return appendItemEvent(
+                return appendItemEvents(
                   {
                     ...item,
                     tasks: nextTasks,
                   },
-                  'task',
-                  'Checklist updated.',
+                  [
+                    ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                    { description: 'Checklist updated.', kind: 'task' as const },
+                  ],
                   updatedAt,
                 );
               }),

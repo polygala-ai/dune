@@ -16,6 +16,7 @@ import type {
 
 /** Defines workflow item status labels. */
 export const workflowItemStatusLabels: Record<WorkflowItemStatus, string> = {
+  acceptance: 'Acceptance',
   active: 'Active',
   done: 'Done',
   inbox: 'Inbox',
@@ -140,6 +141,8 @@ export function presentWorkflowItemSummary(
     ? 'Blocked'
     : item.status === 'review'
       ? 'Review'
+      : item.status === 'acceptance'
+        ? 'Acceptance'
       : null;
 
   return {
