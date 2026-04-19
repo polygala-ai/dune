@@ -322,9 +322,17 @@ function requireNetworkProxyManager() {
 
 /** Sanitizes a conversation export filename. */
 function sanitizeConversationExportFileName(name: string) {
-  const sanitized = name
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]+/g, '-')
+  const sanitized = [...name.trim()]
+    .map((character) => {
+      const codePoint = character.charCodeAt(0);
+
+      if (codePoint < 32 || /[<>:"/\\|?*]/.test(character)) {
+        return '-';
+      }
+
+      return character;
+    })
+    .join('')
     .replace(/\s+/g, ' ');
 
   return sanitized || 'conversation';
