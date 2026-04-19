@@ -24,6 +24,7 @@ import type {
   AgentTranscriptPage,
   AgentRuntimeInfo,
   AgentStatus,
+  CodingEngineId,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
@@ -52,6 +53,11 @@ import {
   toAgentChatJid,
   toAgentPathId,
 } from '@/shared/agents/agent-id';
+import type { CodingEngineSettings } from '@/shared/settings/coding-engine';
+import {
+  DEFAULT_CODING_ENGINE_SETTINGS,
+  resolveCodingEngineSelection,
+} from '@/shared/settings/coding-engine';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import {
   extractWorkspaceAttachmentPaths,
@@ -435,6 +441,7 @@ export interface AgentRuntimeOptions {
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
+  resolveCodingEngineSettings?: () => Promise<CodingEngineSettings>;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
@@ -456,8 +463,14 @@ import {
  */
 function createCodingEngineAcpConfig(
   env: Record<string, string>,
+  settings: CodingEngineSettings,
+  availableEngineIds: CodingEngineId[],
 ): DuneAcpOptions | undefined {
-  const peers = autoAcpPeers();
+  const selectedEngineId = resolveCodingEngineSelection(settings, availableEngineIds);
+  if (!selectedEngineId) return undefined;
+
+  const peers = autoAcpPeers()
+    .filter((peer) => peer.name === selectedEngineId);
   if (peers.length === 0) return undefined;
 
   // Merge credential env into each discovered peer.
@@ -520,6 +533,8 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly detectCodingEngines: () => Promise<CodingEngineStatus[]>;
 
+  private readonly resolveCodingEngineSettings: () => Promise<CodingEngineSettings>;
+
   private readonly telegram: TelegramBridge;
 
   private readonly actionServices: ActionHostServices | undefined;
@@ -555,6 +570,9 @@ export class AgentRuntime implements AgentRuntimeContract {
       options.resolveModelCredentials ??
       (() => Promise.resolve({} satisfies Record<string, string>));
     this.detectCodingEngines = options.detectCodingEngines ?? detectCodingEngines;
+    this.resolveCodingEngineSettings =
+      options.resolveCodingEngineSettings ??
+      (() => Promise.resolve({ ...DEFAULT_CODING_ENGINE_SETTINGS }));
     this.createTelegramChannelFactory =
       options.createTelegramChannelFactory ??
       (async (token: string) => {
@@ -2391,8 +2409,14 @@ export class AgentRuntime implements AgentRuntimeContract {
       const ownerProjectId = record.agent.projectId;
       const duneMountHostDir = mounts.find((m) => m.containerPath === 'dune')?.hostPath ?? '';
       const duneMountContainerDir = '/workspace/extra/dune/';
+      const codingEngineSettings = await this.resolveCodingEngineSettings();
+      const availableEngineIds = this.snapshot.codingEngines
+        .filter((engine) => engine.available)
+        .map((engine) => engine.id);
       const acp = createCodingEngineAcpConfig(
         this.startupModelCredentials,
+        codingEngineSettings,
+        availableEngineIds,
       );
 
       const duneAgent = new DuneAgent({

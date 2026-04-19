@@ -6,6 +6,7 @@ import type { App } from 'electron';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
+import { loadCodingEngineSettings } from '@/shared/settings/coding-engine';
 
 interface RuntimeBootstrapOptions {
   agentLiteHomeDir?: string;
@@ -68,6 +69,7 @@ export function createRuntimeBootstrap(options: RuntimeBootstrapOptions) {
         ...(options.agentLiteHomeDir ? { homeDir: options.agentLiteHomeDir } : {}),
         onAgentIdle: options.onAgentIdle,
         onItemActivityChanged: options.onItemActivityChanged,
+        resolveCodingEngineSettings: () => loadCodingEngineSettings(options.settingsStore),
         resolveModelCredentials: () => resolveDefaultModelCredentials({
           secretsStore: options.secretsStore,
           settingsStore: options.settingsStore,
