@@ -13,11 +13,17 @@ import type {
 } from '@/renderer/features/agents/types';
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
+import type {
+  NotificationRecord,
+  NotificationSettings,
+  NotificationSettingsPatch,
+} from '@/electron/main/notifications/types';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
   applyNetworkSettings?: () => Promise<void>;
   cancelTelegramSetupSession?: (sessionId: string) => Promise<void>;
+  clearNotificationHistory?: () => Promise<NotificationRecord[]>;
   copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
   createAgent?: (input: CreateAgentInput) => Promise<string>;
@@ -29,6 +35,8 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  getNotificationHistory?: () => Promise<NotificationRecord[]>;
+  getNotificationSettings?: () => Promise<NotificationSettings>;
   getProjectActivityPage?: (
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },
@@ -66,6 +74,7 @@ export interface DesktopBridge {
   subscribeItemActivity?: (
     listener: (payload: { itemId: string; isWorking: boolean }) => void,
   ) => () => void;
+  updateNotificationSettings?: (patch: NotificationSettingsPatch) => Promise<NotificationSettings>;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
 }

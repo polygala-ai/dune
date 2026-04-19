@@ -21,6 +21,7 @@ import {
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
+  getTelegramBridge?: () => ReturnType<AgentRuntime['getTelegramBridge']>;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -88,6 +89,11 @@ export class DesktopRuntimeController {
   /** Returns snapshot. */
   getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
+  }
+
+  /** Returns the live Telegram bridge when the real runtime is active. */
+  getTelegramBridge() {
+    return this.activeRuntime.getTelegramBridge?.() ?? null;
   }
 
   /** Subscribes to desktop runtime updates. */

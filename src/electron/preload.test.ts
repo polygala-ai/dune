@@ -70,6 +70,7 @@ describe('preload bridge', () => {
     await desktopBridge?.getRuntimeSnapshot?.();
     await desktopBridge?.applyNetworkSettings?.();
     await desktopBridge?.cancelTelegramSetupSession?.('telegram-session-1');
+    await desktopBridge?.clearNotificationHistory?.();
     await desktopBridge?.createAgent?.({
       channelId: 'dune-chat',
       name: 'Navigator',
@@ -80,6 +81,8 @@ describe('preload bridge', () => {
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
+    await desktopBridge?.getNotificationHistory?.();
+    await desktopBridge?.getNotificationSettings?.();
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
@@ -100,6 +103,10 @@ describe('preload bridge', () => {
       agentId: 'agent-1',
       channelId: 'dune-chat',
     });
+    await desktopBridge?.updateNotificationSettings?.({
+      channels: { telegram: true },
+      telegramNotifyChatId: 'tg:12345',
+    });
 
     const listener = vi.fn();
     const unsubscribe = desktopBridge?.subscribe?.(listener);
@@ -110,6 +117,7 @@ describe('preload bridge', () => {
       ipcChannels.cancelTelegramSetupSession,
       'telegram-session-1',
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.clearNotificationHistory);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.createAgent, {
       channelId: 'dune-chat',
       name: 'Navigator',
@@ -133,6 +141,8 @@ describe('preload bridge', () => {
       'agent-1',
       { beforeMessageId: 'message-1', limit: 20 },
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationHistory);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationSettings);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getProjectActivityPage,
       'project-1',
@@ -176,6 +186,13 @@ describe('preload bridge', () => {
       {
         agentId: 'agent-1',
         channelId: 'dune-chat',
+      },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.updateNotificationSettings,
+      {
+        channels: { telegram: true },
+        telegramNotifyChatId: 'tg:12345',
       },
     );
     expect(on).toHaveBeenCalledWith(
@@ -223,12 +240,15 @@ describe('preload bridge', () => {
     const expectedMethods = [
       'applyNetworkSettings',
       'cancelTelegramSetupSession',
+      'clearNotificationHistory',
       'createAgent',
       'copyText',
       'deleteLocalData',
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
       'getAgentTranscriptPage',
+      'getNotificationHistory',
+      'getNotificationSettings',
       'getProjectActivityPage',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
@@ -250,6 +270,7 @@ describe('preload bridge', () => {
       'storageKeys',
       'storageSet',
       'subscribe',
+      'updateNotificationSettings',
     ];
 
     for (const method of expectedMethods) {
