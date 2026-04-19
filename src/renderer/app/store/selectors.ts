@@ -173,18 +173,25 @@ export function useWorkflowSession() {
     selectedProject?.id ?? selectedProjectId,
   );
   const agentsById = new Map(agents.map((agent) => [agent.id, agent] as const));
-  const filteredItems = projectItems.filter((item) => {
+  const projectItemsWithSummaries = projectItems.map((item) => ({
+    item,
+    summary: presentWorkflowItemSummary(item, projectItems, agentsById, itemActivity),
+  }));
+  const filteredItemSummaries = projectItemsWithSummaries.filter(({ item, summary }) => {
     switch (selectedProjectFilter) {
       case 'assigned':
         return Boolean(item.primaryAgentId);
       case 'blocked':
-        return item.tasks.some((task) => task.status === 'blocked');
+        return summary.hasBlockedTasks || summary.isBlockedByDependencies;
       case 'review':
         return item.status === 'review';
       default:
         return true;
     }
-  });
+  }).map(({ summary }) => summary);
+  const summariesById = new Map(
+    projectItemsWithSummaries.map(({ summary }) => [summary.id, summary] as const),
+  );
   const projectItemsByAgent = new Map(
     projectItems
       .flatMap((item) =>
@@ -207,16 +214,14 @@ export function useWorkflowSession() {
       createdAtLabel: presentWorkflowEventTimestamp(entry.createdAt),
     })),
     activitySummary,
-    filteredItemSummaries: filteredItems.map((item) =>
-      presentWorkflowItemSummary(item, agentsById, itemActivity),
-    ),
+    filteredItemSummaries,
     isWorkflowHydrated,
     items: projectItems,
     metrics: {
       activeCount: projectItems.filter((item) => item.status === 'active').length,
       agentCount: projectAgents.length,
-      blockedCount: projectItems.filter((item) =>
-        item.tasks.some((task) => task.status === 'blocked'),
+      blockedCount: projectItemsWithSummaries.filter(({ summary }) =>
+        summary.hasBlockedTasks || summary.isBlockedByDependencies,
       ).length,
       reviewCount: projectItems.filter((item) => item.status === 'review').length,
     },
@@ -236,9 +241,9 @@ export function useWorkflowSession() {
     projects,
     recentItems: sortedProjectItemsByUpdated.slice(0, 4).map((item) => ({
       id: item.id,
-      specialStateLabel: presentWorkflowItemSummary(item, agentsById, itemActivity).specialStateLabel,
+      specialStateLabel: summariesById.get(item.id)?.specialStateLabel ?? null,
       title: item.title,
-      updatedLabel: presentWorkflowItemSummary(item, agentsById, itemActivity).updatedLabel,
+      updatedLabel: summariesById.get(item.id)?.updatedLabel ?? '',
     })),
     selectedItem: selectedItem
       ? {

@@ -5,6 +5,11 @@ import {
   formatMessageTimestamp,
 } from '@/renderer/features/agents/model/time';
 import type { Agent } from '@/renderer/features/agents/types';
+import {
+  getUnresolvedDependencyIds,
+  isItemBlocked,
+  normalizeDependencyIds,
+} from '@/shared/workflow/dependency-utils';
 import type {
   WorkflowItem,
   WorkflowItemStatus,
@@ -123,13 +128,17 @@ export function getWorkflowSnapshotState(snapshot: WorkflowSnapshot): WorkflowSn
 /** Presents workflow item summary. */
 export function presentWorkflowItemSummary(
   item: WorkflowItem,
+  allItems: WorkflowItem[],
   agentsById: Map<string, Agent>,
   itemActivity: Record<string, { isWorking: boolean }> = {},
   now: number = Date.now(),
 ): WorkflowItemSummary {
+  const dependencyIds = normalizeDependencyIds(item.dependsOn) ?? [];
+  const unresolvedDependencyIds = getUnresolvedDependencyIds(item, allItems);
   const totalTaskCount = item.tasks.length;
   const completedTaskCount = item.tasks.filter((task) => task.status === 'done').length;
   const hasBlockedTasks = item.tasks.some((task) => task.status === 'blocked');
+  const isBlockedByDependencies = isItemBlocked(item, allItems);
   const primaryAgent = item.primaryAgentId
     ? agentsById.get(item.primaryAgentId) ?? null
     : null;
@@ -137,7 +146,7 @@ export function presentWorkflowItemSummary(
   const currentTask = isAgentWorking
     ? item.tasks.find((task) => task.status === 'doing') ?? null
     : null;
-  const specialStateLabel = hasBlockedTasks
+  const specialStateLabel = hasBlockedTasks || isBlockedByDependencies
     ? 'Blocked'
     : item.status === 'review'
       ? 'Review'
@@ -149,9 +158,11 @@ export function presentWorkflowItemSummary(
     brief: item.brief,
     completedTaskCount,
     currentTaskTitle: currentTask?.title ?? null,
+    dependsOnCount: dependencyIds.length,
     hasBlockedTasks,
     id: item.id,
     isAgentWorking,
+    isBlockedByDependencies,
     primaryAgentId: item.primaryAgentId,
     primaryAgentName: primaryAgent?.name ?? null,
     specialStateLabel,
@@ -159,6 +170,7 @@ export function presentWorkflowItemSummary(
     statusLabel: formatWorkflowItemStatus(item.status),
     title: item.title,
     totalTaskCount,
+    unresolvedDependencyCount: unresolvedDependencyIds.length,
     updatedLabel: formatAgentTimestamp(item.updatedAt, now),
   };
 }

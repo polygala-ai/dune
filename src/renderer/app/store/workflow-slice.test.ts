@@ -153,6 +153,45 @@ describe('workflow slice', () => {
     expect(rejectionItemAfter?.tasks.length).toBeGreaterThan(previousTaskCount);
   });
 
+  it('prevents blocked items from moving into active and rejects circular dependencies locally', () => {
+    const state = useAppStore.getState();
+    const projectId = state.selectedProjectId;
+
+    if (!projectId) {
+      throw new Error('Expected a seeded project.');
+    }
+
+    const dependencyId = state.createItem({
+      brief: 'Finish this prerequisite first.',
+      projectId,
+      status: 'ready',
+      title: 'Dependency item',
+    });
+    const blockedItemId = state.createItem({
+      brief: 'This work must wait.',
+      projectId,
+      status: 'ready',
+      title: 'Blocked item',
+    });
+
+    if (!dependencyId || !blockedItemId) {
+      throw new Error('Expected ready items to be created.');
+    }
+
+    expect(state.addDependency(blockedItemId, dependencyId).ok).toBe(true);
+
+    useAppStore.getState().moveItem(blockedItemId, 'active', 0);
+
+    const blockedItem = useAppStore.getState().items.find((item) => item.id === blockedItemId);
+    expect(blockedItem?.status).toBe('ready');
+
+    const cycleResult = useAppStore.getState().addDependency(dependencyId, blockedItemId);
+    expect(cycleResult).toEqual({
+      error: 'Cannot create a circular dependency.',
+      ok: false,
+    });
+  });
+
   it('keeps primary-agent ownership exclusive across work items', async () => {
     const state = useAppStore.getState();
     const projectId = state.selectedProjectId;

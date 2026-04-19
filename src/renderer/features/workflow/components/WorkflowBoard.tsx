@@ -30,6 +30,11 @@ import type {
   WorkflowItemSummary,
 } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/renderer/shared/ui/tooltip';
 
 const workflowColumns: WorkflowItemStatus[] = [
   'inbox',
@@ -72,7 +77,11 @@ function ItemCard({
     <article
       className={cn(
         'rounded-[22px] border border-app-border bg-app-panel px-4 py-4 text-left shadow-[var(--app-shadow)] transition-colors',
-        active ? 'border-app-accent/50 bg-app-panel-strong' : 'hover:bg-app-card',
+        item.isBlockedByDependencies && item.status !== 'active'
+          ? 'border-amber-500/35 bg-stone-500/5'
+          : active
+            ? 'border-app-accent/50 bg-app-panel-strong'
+            : 'hover:bg-app-card',
       )}
     >
       <div className="flex items-start gap-3">
@@ -124,9 +133,24 @@ function ItemCard({
 
       {item.specialStateLabel ? (
         <div className="mt-3">
-          <span className="pill-key border-transparent bg-app-card">
-            {item.specialStateLabel}
-          </span>
+          {item.isBlockedByDependencies ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="pill-key cursor-help border-amber-500/30 bg-amber-500/10 text-amber-200">
+                  Blocked
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {item.unresolvedDependencyCount === 1
+                  ? 'This item cannot move to Active until its dependency reaches done or acceptance.'
+                  : `This item cannot move to Active until ${item.unresolvedDependencyCount} dependencies reach done or acceptance.`}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="pill-key border-transparent bg-app-card">
+              {item.specialStateLabel}
+            </span>
+          )}
         </div>
       ) : null}
     </article>
@@ -290,6 +314,11 @@ export function WorkflowBoard({
       (overId.startsWith('column:')
         ? (overId.replace('column:', '') as WorkflowItemStatus)
         : draggedItem.status);
+
+    if (nextStatus === 'active' && draggedItem.status !== 'active' && draggedItem.isBlockedByDependencies) {
+      return;
+    }
+
     const statusItems = getColumnItems(items, nextStatus);
     let nextIndex = statusItems.length;
 

@@ -4,6 +4,10 @@ import { createId } from '@/shared/id';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
+import {
+  hasCircularDependency,
+  normalizeDependencyIds,
+} from '@/shared/workflow/dependency-utils';
 import { ensureProjectArtifactFolder } from '@/electron/main/workflow/project-artifacts';
 
 import {
@@ -214,6 +218,113 @@ export const itemTools: RegisteredTool[] = [
   },
   {
     definition: {
+      description: 'Add a dependency to a Dune work item.',
+      inputSchema: objectSchema(
+        {
+          dependsOnId: stringSchema,
+          itemId: stringSchema,
+        },
+        ['itemId', 'dependsOnId'],
+      ),
+      name: 'workflow.items.add_dependency',
+    },
+    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+      const snapshot = await readWorkflowSnapshot(workflowStore);
+      const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const dependency = findItem(snapshot, requireString(args.dependsOnId, 'dependsOnId'));
+
+      if (item.projectId !== dependency.projectId) {
+        throw new ToolHandlerError(
+          'validation-error',
+          'Dependencies must point to items in the same project.',
+        );
+      }
+
+      if (item.id === dependency.id) {
+        throw new ToolHandlerError(
+          'validation-error',
+          'A work item cannot depend on itself.',
+        );
+      }
+
+      const currentDependencyIds = normalizeDependencyIds(item.dependsOn) ?? [];
+
+      if (currentDependencyIds.includes(dependency.id)) {
+        return { item: presentItem(snapshot, item) };
+      }
+
+      const nextDependencyIds = [...currentDependencyIds, dependency.id];
+
+      if (hasCircularDependency(item.id, nextDependencyIds, snapshot.items)) {
+        throw new ToolHandlerError(
+          'validation-error',
+          'Cannot create a circular dependency.',
+        );
+      }
+
+      const now = Date.now();
+      item.dependsOn = nextDependencyIds;
+      item.updatedAt = now;
+      prependWorkflowEvents(item, [
+        createWorkflowEvent('item', `Added dependency on "${dependency.title}".`, now, agentContext.agentName),
+      ]);
+      touchProject(snapshot, item.projectId, now);
+
+      await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      return { item: presentItem(snapshot, item) };
+    },
+  },
+  {
+    definition: {
+      description: 'Remove a dependency from a Dune work item.',
+      inputSchema: objectSchema(
+        {
+          dependsOnId: stringSchema,
+          itemId: stringSchema,
+        },
+        ['itemId', 'dependsOnId'],
+      ),
+      name: 'workflow.items.remove_dependency',
+    },
+    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+      const snapshot = await readWorkflowSnapshot(workflowStore);
+      const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const dependencyId = requireString(args.dependsOnId, 'dependsOnId');
+      const currentDependencyIds = normalizeDependencyIds(item.dependsOn) ?? [];
+
+      if (!currentDependencyIds.includes(dependencyId)) {
+        return { item: presentItem(snapshot, item) };
+      }
+
+      const dependency = snapshot.items.find((candidate) => candidate.id === dependencyId) ?? null;
+      const now = Date.now();
+      const nextDependencyIds = currentDependencyIds.filter((currentId) => currentId !== dependencyId);
+
+      if (nextDependencyIds.length > 0) {
+        item.dependsOn = nextDependencyIds;
+      } else {
+        delete item.dependsOn;
+      }
+
+      item.updatedAt = now;
+      prependWorkflowEvents(item, [
+        createWorkflowEvent(
+          'item',
+          dependency
+            ? `Removed dependency on "${dependency.title}".`
+            : `Removed dependency on "${dependencyId}".`,
+          now,
+          agentContext.agentName,
+        ),
+      ]);
+      touchProject(snapshot, item.projectId, now);
+
+      await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      return { item: presentItem(snapshot, item) };
+    },
+  },
+  {
+    definition: {
       description: 'Move a Dune work item to a new status.',
       inputSchema: objectSchema(
         {
@@ -253,7 +364,7 @@ export const itemTools: RegisteredTool[] = [
       const index = Math.max(0, Math.min(rawIndex, destinationItems.length));
       const previousStatus = item.status;
 
-      assertAgentCanMoveItem(agentContext.agentId, item, status);
+      assertAgentCanMoveItem(agentContext.agentId, item, status, snapshot.items);
 
       item.status = status;
       item.updatedAt = now;

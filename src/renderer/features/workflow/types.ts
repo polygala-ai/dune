@@ -22,6 +22,7 @@ export const workflowTaskStatuses = [
 /** Workflow project views constant. */
 export const workflowProjectViews = [
   'board',
+  'graph',
   'agents',
   'activity',
 ] as const;
@@ -125,6 +126,7 @@ export interface WorkflowItem {
   artifactFolderName: string;
   brief: string;
   createdAt: number;
+  dependsOn?: string[] | undefined;
   id: string;
   primaryAgentId: string | null;
   projectId: string;
@@ -153,9 +155,11 @@ export interface WorkflowItemSummary {
   brief: string;
   completedTaskCount: number;
   currentTaskTitle: string | null;
+  dependsOnCount: number;
   hasBlockedTasks: boolean;
   id: string;
   isAgentWorking: boolean;
+  isBlockedByDependencies: boolean;
   primaryAgentId: string | null;
   primaryAgentName: string | null;
   specialStateLabel: string | null;
@@ -163,5 +167,6 @@ export interface WorkflowItemSummary {
   statusLabel: string;
   title: string;
   totalTaskCount: number;
+  unresolvedDependencyCount: number;
   updatedLabel: string;
 }

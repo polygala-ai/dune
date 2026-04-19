@@ -21,25 +21,34 @@ import type {
   WorkflowProject,
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
+import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import {
   resolveItemArtifactPath,
   type ProjectArtifactEntry,
 } from '@/shared/workflow/project-artifacts';
+import {
+  getUnresolvedDependencyIds,
+  isItemBlocked,
+  normalizeDependencyIds,
+} from '@/shared/workflow/dependency-utils';
 
 const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'];
 const taskStatuses: WorkflowTaskStatus[] = ['todo', 'doing', 'blocked', 'review', 'done'];
 
 /** Workflow item inspector props. */
 interface WorkflowItemInspectorProps {
+  allItems: WorkflowItem[];
   item: (Omit<WorkflowItem, 'workflowEvents'> & {
     primaryAgentName: string | null;
     workflowEvents: Array<{ createdAt: number; createdAtLabel: string; description: string; id: string; kind: string }>;
   }) | null;
+  onAddDependency: (itemId: string, dependsOnId: string, note?: string) => { error?: string; ok: boolean };
   onAddTask: (itemId: string, title: string) => void;
   onAssignPrimaryAgent: (itemId: string, input: { agentId: string | null; agentName?: string | null }) => void;
   onCreateAgent: (itemId: string) => void;
   onOpenAgent: (agentId: string) => void;
+  onRemoveDependency: (itemId: string, dependsOnId: string, note?: string) => { error?: string; ok: boolean };
   onUpdateItem: (itemId: string, input: { brief?: string; title?: string }) => void;
   onUpdateItemStatus: (itemId: string, status: WorkflowItemStatus) => void;
   onUpdateTask: (
@@ -111,11 +120,14 @@ function formatArtifactSize(size: number | null) {
 
 /** Renders the workflow item inspector UI. */
 export function WorkflowItemInspector({
+  allItems,
   item,
+  onAddDependency,
   onAddTask,
   onAssignPrimaryAgent,
   onCreateAgent,
   onOpenAgent,
+  onRemoveDependency,
   onUpdateItem,
   onUpdateItemStatus,
   onUpdateTask,
@@ -124,6 +136,8 @@ export function WorkflowItemInspector({
 }: WorkflowItemInspectorProps) {
   const [titleValue, setTitleValue] = useState('');
   const [briefValue, setBriefValue] = useState('');
+  const [dependencyDraftId, setDependencyDraftId] = useState('');
+  const [dependencyError, setDependencyError] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [artifactEntries, setArtifactEntries] = useState<ProjectArtifactEntry[]>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
@@ -133,6 +147,8 @@ export function WorkflowItemInspector({
   useEffect(() => {
     setTitleValue(item?.title ?? '');
     setBriefValue(item?.brief ?? '');
+    setDependencyDraftId('');
+    setDependencyError(null);
     setNewTaskTitle('');
   }, [item?.id]);
 
@@ -223,6 +239,16 @@ export function WorkflowItemInspector({
 
   const primaryAgentId = item.primaryAgentId;
   const artifactCount = artifactEntries.length;
+  const dependencyIds = normalizeDependencyIds(item.dependsOn) ?? [];
+  const dependencyItems = dependencyIds.map((dependencyId) => ({
+    dependencyId,
+    item: allItems.find((candidate) => candidate.id === dependencyId) ?? null,
+  }));
+  const dependencyCandidates = allItems.filter((candidate) =>
+    candidate.id !== item.id && !dependencyIds.includes(candidate.id),
+  );
+  const unresolvedDependencyIds = getUnresolvedDependencyIds(item, allItems);
+  const isDependencyBlocked = isItemBlocked(item, allItems);
 
   return (
     <div
@@ -246,6 +272,11 @@ export function WorkflowItemInspector({
                 <span className="pill-key border-transparent bg-app-card">
                   {formatWorkflowItemStatus(item.status)}
                 </span>
+                {isDependencyBlocked ? (
+                  <span className="pill-key border-transparent bg-amber-500/10 text-amber-200">
+                    Blocked
+                  </span>
+                ) : null}
               </div>
 
               <select
@@ -260,12 +291,25 @@ export function WorkflowItemInspector({
                 value={item.status}
               >
                 {itemStatuses.map((status) => (
-                  <option key={status} value={status}>
+                  <option
+                    disabled={status === 'active' && item.status !== 'active' && isDependencyBlocked}
+                    key={status}
+                    value={status}
+                  >
                     {formatWorkflowItemStatus(status)}
                   </option>
                 ))}
               </select>
             </div>
+
+            {isDependencyBlocked ? (
+              <p className="mt-4 rounded-[18px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                This item is blocked by {unresolvedDependencyIds.length} unresolved
+                {' '}
+                {unresolvedDependencyIds.length === 1 ? 'dependency' : 'dependencies'}.
+                It cannot move to Active until every dependency reaches Done or Acceptance.
+              </p>
+            ) : null}
 
             <div className="mt-5">
               <div className="surface-eyebrow">Work item</div>
@@ -363,6 +407,121 @@ export function WorkflowItemInspector({
               </div>
             </div>
           </section>
+
+          <InspectorSection
+            badge={dependencyIds.length === 0 ? 'None' : `${dependencyIds.length} linked`}
+            description="Sequence work explicitly so upstream items finish before execution starts."
+            eyebrow="Dependencies"
+          >
+            <div className="space-y-3">
+              {dependencyItems.length === 0 ? (
+                <div className="rounded-[18px] border border-dashed border-app-border bg-app-panel/35 px-4 py-4 text-sm leading-6 text-app-muted">
+                  No dependencies yet. Add prerequisite items here to keep this work from starting too early.
+                </div>
+              ) : (
+                dependencyItems.map(({ dependencyId, item: dependencyItem }) => {
+                  const dependencyResolved = dependencyItem
+                    ? dependencyItem.status === 'done' || dependencyItem.status === 'acceptance'
+                    : false;
+
+                  return (
+                    <div
+                      className="flex flex-col gap-3 rounded-[18px] border border-app-border bg-app-panel/55 p-3.5 sm:flex-row sm:items-center sm:justify-between"
+                      key={dependencyId}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-app-text">
+                          {dependencyItem?.title ?? `Missing item (${dependencyId})`}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">
+                          <span className="pill-key border-transparent bg-app-card">
+                            {dependencyItem ? formatWorkflowItemStatus(dependencyItem.status) : 'Missing'}
+                          </span>
+                          <span className={cn(
+                            'pill-key border-transparent',
+                            dependencyResolved
+                              ? 'bg-emerald-500/10 text-emerald-200'
+                              : 'bg-amber-500/10 text-amber-200',
+                          )}
+                          >
+                            {dependencyResolved ? 'Resolved' : 'Unresolved'}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const result = onRemoveDependency(item.id, dependencyId);
+
+                          if (!result.ok) {
+                            setDependencyError(result.error ?? 'Unable to remove dependency.');
+                            return;
+                          }
+
+                          setDependencyError(null);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <select
+                aria-label="Add dependency"
+                className="focus-ring-app h-10 min-w-0 rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+                onChange={(event) => {
+                  setDependencyDraftId(event.target.value);
+                  setDependencyError(null);
+                }}
+                value={dependencyDraftId}
+              >
+                <option value="">Select a prerequisite item</option>
+                {dependencyCandidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.title}
+                  </option>
+                ))}
+              </select>
+              <Button
+                disabled={!dependencyDraftId}
+                onClick={() => {
+                  if (!dependencyDraftId) {
+                    return;
+                  }
+
+                  const result = onAddDependency(item.id, dependencyDraftId);
+
+                  if (!result.ok) {
+                    setDependencyError(result.error ?? 'Unable to add dependency.');
+                    return;
+                  }
+
+                  setDependencyDraftId('');
+                  setDependencyError(null);
+                }}
+                type="button"
+                variant="outline"
+              >
+                Add dependency
+              </Button>
+            </div>
+
+            {dependencyError ? (
+              <p className="mt-3 text-sm leading-6 text-rose-300">
+                {dependencyError}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-app-muted">
+                Done and Acceptance dependencies unblock the item automatically and notify the assignee when the last blocker resolves.
+              </p>
+            )}
+          </InspectorSection>
 
           <InspectorSection
             badge={item.tasks.length === 0 ? 'Empty' : `${item.tasks.length} steps`}

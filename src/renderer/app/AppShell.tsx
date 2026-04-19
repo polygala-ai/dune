@@ -263,7 +263,7 @@ export default function AppShell() {
     route === 'workflow' &&
     selectedProjectScreen === 'main' &&
     !!selectedProject &&
-    (selectedProjectView === 'board' || selectedProjectView === 'agents');
+    (selectedProjectView === 'board' || selectedProjectView === 'graph' || selectedProjectView === 'agents');
   const isProjectAgentsInitializing =
     selectedProjectView === 'agents' &&
     runtimeInfo.status === 'starting' &&

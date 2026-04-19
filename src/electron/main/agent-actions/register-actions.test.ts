@@ -33,6 +33,8 @@ describe('registerDuneActions', () => {
     const actionNames = action.mock.calls.map(([name]) => name as string);
 
     expect(actionNames).toContain('workflow_projects_list');
+    expect(actionNames).toContain('workflow_items_add_dependency');
+    expect(actionNames).toContain('workflow_items_remove_dependency');
     expect(actionNames).not.toContain('coding_engine_claude_code');
     expect(actionNames).not.toContain('coding_engine_codex');
     expect(actionNames).not.toContain('coding_engine_poll');

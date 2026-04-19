@@ -4,7 +4,7 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
@@ -13,6 +13,7 @@ import { useWorkflowSession } from '@/renderer/app/store/selectors';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { CreateProjectDialog } from '@/renderer/features/workflow/components/CreateProjectDialog';
 import { CreateWorkItemDialog } from '@/renderer/features/workflow/components/CreateWorkItemDialog';
+import { DependencyGraphView } from '@/renderer/features/workflow/components/DependencyGraphView';
 import { WorkflowBoard } from '@/renderer/features/workflow/components/WorkflowBoard';
 import { WorkflowItemInspector } from '@/renderer/features/workflow/components/WorkflowItemInspector';
 import { WorkflowProjectActivity } from '@/renderer/features/workflow/components/WorkflowProjectActivity';
@@ -35,6 +36,7 @@ import type { WorkflowProjectActivityEntry } from '@/renderer/features/workflow/
 const projectHeaderTabs = [
   { label: 'Activity', value: 'activity' },
   { label: 'Board', value: 'board' },
+  { label: 'Graph', value: 'graph' },
   { label: 'Agents', value: 'agents' },
 ] as const;
 
@@ -76,6 +78,7 @@ export function WorkflowWorkspace({
   >>>({});
   const [loadingActivityProjectId, setLoadingActivityProjectId] = useState<string | null>(null);
   const {
+    addDependency,
     addTask,
     assignPrimaryAgent,
     clearAgentAssignments,
@@ -84,12 +87,14 @@ export function WorkflowWorkspace({
     createProject,
     deleteProject,
     moveItem,
+    removeDependency,
     selectItem,
     updateProject,
     updateItem,
     updateTask,
   } = useAppStore(
     useShallow((state) => ({
+      addDependency: state.addDependency,
       addTask: state.addTask,
       assignPrimaryAgent: state.assignPrimaryAgent,
       clearAgentAssignments: state.clearAgentAssignments,
@@ -98,6 +103,7 @@ export function WorkflowWorkspace({
       createProject: state.createProject,
       deleteProject: state.deleteProject,
       moveItem: state.moveItem,
+      removeDependency: state.removeDependency,
       selectItem: state.selectItem,
       updateProject: state.updateProject,
       updateItem: state.updateItem,
@@ -109,6 +115,7 @@ export function WorkflowWorkspace({
     activitySummary,
     filteredItemSummaries,
     isWorkflowHydrated,
+    items,
     projectAgents,
     projects,
     selectedItem,
@@ -118,6 +125,7 @@ export function WorkflowWorkspace({
     selectedProjectView,
   } = useWorkflowSession();
   const isBoardView = selectedProjectView === 'board';
+  const isGraphView = selectedProjectView === 'graph';
   const isAgentsView = selectedProjectView === 'agents';
   const isProjectAgentsInitializing =
     isAgentsView &&
@@ -276,6 +284,32 @@ export function WorkflowWorkspace({
     />
   ) : null;
 
+  const inspectorProps = {
+    allItems: items,
+    item: selectedItem,
+    onAddDependency: addDependency,
+    onAddTask: (itemId: string, title: string) => {
+      addTask(itemId, title);
+    },
+    onAssignPrimaryAgent: (itemId: string, input: { agentId: string | null; agentName?: string | null }) => {
+      void handleAssignPrimaryAgent(itemId, input);
+    },
+    onCreateAgent: (itemId: string) => {
+      void handleCreateAgentForItem(itemId);
+    },
+    onOpenAgent: (agentId: string) => commands.openAgent(agentId),
+    onRemoveDependency: removeDependency,
+    onUpdateItem: updateItem,
+    onUpdateItemStatus: (itemId: string, status: Parameters<typeof moveItem>[1]) =>
+      moveItem(itemId, status, Number.MAX_SAFE_INTEGER),
+    onUpdateTask: updateTask,
+    project: selectedProject,
+    projectAgents: projectAgents.map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+    })),
+  } satisfies ComponentProps<typeof WorkflowItemInspector>;
+
   const boardView = (
     <>
       {isCompactShell ? (
@@ -306,29 +340,7 @@ export function WorkflowWorkspace({
             {isSettingsScreen ? (
               projectSettingsInspector
             ) : (
-              <WorkflowItemInspector
-                item={selectedItem}
-                onAddTask={(itemId, title) => {
-                  addTask(itemId, title);
-                }}
-                onAssignPrimaryAgent={(itemId, input) => {
-                  void handleAssignPrimaryAgent(itemId, input);
-                }}
-                onCreateAgent={(itemId) => {
-                  void handleCreateAgentForItem(itemId);
-                }}
-                onOpenAgent={(agentId) => commands.setPopoverAgentId(agentId)}
-                onUpdateItem={updateItem}
-                onUpdateItemStatus={(itemId, status) =>
-                  moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
-                }
-                onUpdateTask={updateTask}
-                project={selectedProject}
-                projectAgents={projectAgents.map((agent) => ({
-                  id: agent.id,
-                  name: agent.name,
-                }))}
-              />
+              <WorkflowItemInspector {...inspectorProps} />
             )}
           </div>
         </div>
@@ -336,30 +348,36 @@ export function WorkflowWorkspace({
     </>
   );
 
+  const graphView = (
+    <>
+      {isCompactShell ? (
+        <div className="flex h-full min-h-0 flex-col">
+          <DependencyGraphView
+            items={items}
+            onSelectItem={selectItem}
+            selectedItemId={selectedItem?.id ?? null}
+          />
+        </div>
+      ) : (
+        <div className="grid h-full min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="min-h-0 overflow-hidden">
+            <DependencyGraphView
+              items={items}
+              onSelectItem={selectItem}
+              selectedItemId={selectedItem?.id ?? null}
+            />
+          </div>
+
+          <div className="min-h-0">
+            {isSettingsScreen ? projectSettingsInspector : <WorkflowItemInspector {...inspectorProps} />}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   const compactInspector = (
-    <WorkflowItemInspector
-      item={selectedItem}
-      onAddTask={(itemId, title) => {
-        addTask(itemId, title);
-      }}
-      onAssignPrimaryAgent={(itemId, input) => {
-        void handleAssignPrimaryAgent(itemId, input);
-      }}
-      onCreateAgent={(itemId) => {
-        void handleCreateAgentForItem(itemId);
-      }}
-      onOpenAgent={(agentId) => commands.setPopoverAgentId(agentId)}
-      onUpdateItem={updateItem}
-      onUpdateItemStatus={(itemId, status) =>
-        moveItem(itemId, status, Number.MAX_SAFE_INTEGER)
-      }
-      onUpdateTask={updateTask}
-      project={selectedProject}
-      projectAgents={projectAgents.map((agent) => ({
-        id: agent.id,
-        name: agent.name,
-      }))}
-    />
+    <WorkflowItemInspector {...inspectorProps} />
   );
 
   const emptyState = (
@@ -421,6 +439,11 @@ export function WorkflowWorkspace({
                               return;
                             }
 
+                            if (tab.value === 'graph') {
+                              commands.openDependencyGraph();
+                              return;
+                            }
+
                             if (tab.value === 'agents') {
                               commands.openAgents();
                               return;
@@ -439,7 +462,7 @@ export function WorkflowWorkspace({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {isBoardView && !showTitlebarProjectCreateAction ? (
+                  {(isBoardView || isGraphView) && !showTitlebarProjectCreateAction ? (
                     <Button
                       onClick={() => onCreateWorkItemOpenChange(true)}
                       type="button"
@@ -465,22 +488,24 @@ export function WorkflowWorkspace({
 
               <div
                 className={
-                  selectedProjectView === 'board'
+                  selectedProjectView === 'board' || selectedProjectView === 'graph'
                     ? 'mt-5 min-h-0 flex-1 overflow-hidden'
                     : 'mt-5 min-h-0 flex-1 overflow-y-auto pr-1'
                 }
                 data-testid={
-                  selectedProjectView === 'board'
+                  selectedProjectView === 'board' || selectedProjectView === 'graph'
                     ? 'workflow-project-board-slot'
                     : 'workflow-project-page-scroll'
                 }
               >
                 {selectedProjectView === 'board' ? (
                   boardView
+                ) : selectedProjectView === 'graph' ? (
+                  graphView
                 ) : selectedProjectView === 'agents' ? (
                   <WorkflowProjectAgents
                     agents={projectAgents}
-                    onOpenAgent={commands.setPopoverAgentId}
+                    onOpenAgent={commands.openAgent}
                     onOpenItem={(itemId) => {
                       commands.openItem(itemId);
                     }}
@@ -512,7 +537,7 @@ export function WorkflowWorkspace({
           isCompactShell &&
           !isSettingsScreen &&
           selectedProjectScreen === 'main' &&
-          selectedProjectView === 'board' &&
+          (selectedProjectView === 'board' || selectedProjectView === 'graph') &&
           !!selectedItem
         }
       >
