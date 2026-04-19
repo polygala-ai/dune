@@ -1,0 +1,18 @@
+{
+  "name": "@polygala/dune-cli",
+  "version": "1.0.0",
+  "description": "Command-line interface for Dune work items, agents, and feedback.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "dune": "dist/dune.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ../../build/build-dune-cli.mjs",
+    "prepack": "pnpm run build"
+  }
+}
