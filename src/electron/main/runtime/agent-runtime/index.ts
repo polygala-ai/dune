@@ -424,6 +424,7 @@ export interface AgentRuntimeOptions {
   detectCodingEngines?: () => Promise<CodingEngineStatus[]>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
+  onAgentError?: (agentId: string, error: Error) => void;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
@@ -487,6 +488,8 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly homeDir: string;
 
+  private readonly onAgentError: AgentRuntimeOptions['onAgentError'];
+
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
   private readonly onItemActivityChanged: AgentRuntimeOptions['onItemActivityChanged'];
@@ -530,6 +533,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.agentStore = options.agentStore;
     this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
+    this.onAgentError = options.onAgentError;
     this.onAgentIdle = options.onAgentIdle;
     this.onItemActivityChanged = options.onItemActivityChanged;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
@@ -2502,6 +2506,10 @@ export class AgentRuntime implements AgentRuntimeContract {
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         void this.updateItemActivityForTask(event.taskId, false);
+        this.onAgentError?.(
+          agentId,
+          new Error(event.error || `Agent task "${event.taskId}" failed.`),
+        );
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);

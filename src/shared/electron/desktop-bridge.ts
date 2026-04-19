@@ -1,5 +1,10 @@
 // Shared Electron desktop bridge contract.
 
+import type {
+  NotificationRecord,
+  NotificationSettings,
+  NotificationSettingsUpdate,
+} from '@/electron/main/notifications/types';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
   AgentDefinition,
@@ -17,6 +22,7 @@ import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
   applyNetworkSettings?: () => Promise<void>;
+  clearNotificationHistory?: () => Promise<void>;
   cancelTelegramSetupSession?: (sessionId: string) => Promise<void>;
   copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
@@ -37,6 +43,8 @@ export interface DesktopBridge {
     agentId: string,
     options?: { beforeMessageId?: string | null; limit?: number },
   ) => Promise<AgentTranscriptPage>;
+  getNotificationHistory?: () => Promise<NotificationRecord[]>;
+  getNotificationSettings?: () => Promise<NotificationSettings>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
   listProjectArtifactEntries?: (
@@ -68,4 +76,7 @@ export interface DesktopBridge {
   ) => () => void;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
+  updateNotificationSettings?: (
+    partial: NotificationSettingsUpdate,
+  ) => Promise<NotificationSettings>;
 }

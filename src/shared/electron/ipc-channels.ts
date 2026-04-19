@@ -3,6 +3,7 @@
 /** Shared IPC channel names. */
 export const ipcChannels = {
   applyNetworkSettings: 'dune:runtime:apply-network-settings',
+  clearNotificationHistory: 'dune:notifications:clear-history',
   cancelTelegramSetupSession: 'dune:runtime:cancel-telegram-setup-session',
   copyText: 'dune:runtime:copy-text',
   createAgent: 'dune:runtime:create-agent',
@@ -11,6 +12,8 @@ export const ipcChannels = {
   ensureProjectArtifactFolder: 'dune:runtime:ensure-project-artifact-folder',
   ensureProjectMainAgent: 'dune:runtime:ensure-project-main-agent',
   getAgentTranscriptPage: 'dune:runtime:get-agent-transcript-page',
+  getNotificationHistory: 'dune:notifications:get-history',
+  getNotificationSettings: 'dune:notifications:get-settings',
   getProjectActivityPage: 'dune:workflow:get-project-activity-page',
   getRuntimeSnapshot: 'dune:runtime:get-snapshot',
   getTelegramSetupSession: 'dune:runtime:get-telegram-setup-session',
@@ -35,4 +38,5 @@ export const ipcChannels = {
   storageGet: 'dune:storage:get',
   storageKeys: 'dune:storage:keys',
   storageSet: 'dune:storage:set',
+  updateNotificationSettings: 'dune:notifications:update-settings',
 } as const;

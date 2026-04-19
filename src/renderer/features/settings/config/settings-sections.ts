@@ -7,6 +7,7 @@ import { ArtifactsSettings } from '@/renderer/features/settings/components/Artif
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
+import { NotificationsSettingsPanel } from '@/renderer/features/settings/notifications/NotificationsSettingsPanel';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
 
 import type {
@@ -53,6 +54,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Network',
     description: 'Proxy and transport path',
     Component: NetworkSettings,
+  },
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    description: 'Alerts and delivery',
+    Component: NotificationsSettingsPanel,
   },
   {
     id: 'artifacts',
