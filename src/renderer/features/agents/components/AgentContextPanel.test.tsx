@@ -2,8 +2,16 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
+import { resetAppStore } from '@/renderer/app/store/use-app-store';
 import { AgentContextPanel } from '@/renderer/features/agents/components/AgentContextPanel';
 import { createEmptyAgentCustomizationDraft } from '@/renderer/features/agents/model/agent-customization';
 import type { PresentedAgent } from '@/renderer/features/agents/types';
@@ -78,6 +86,14 @@ function createAgent(
 }
 
 describe('AgentContextPanel', () => {
+  beforeEach(() => {
+    resetAppStore();
+  });
+
+  afterEach(() => {
+    resetAppStore();
+  });
+
   it('surfaces agent identity while preserving connection details and filtered cards', () => {
     render(
       <AgentContextPanel
@@ -190,7 +206,7 @@ describe('AgentContextPanel', () => {
 
   it('lets the inspector switch a Telegram agent back to Dune chat', async () => {
     const user = userEvent.setup();
-    const onUpdateChannel = vi.fn(async () => undefined);
+    const onUpdateChannel = vi.fn(() => Promise.resolve(undefined));
 
     render(
       <AgentContextPanel
@@ -248,7 +264,7 @@ describe('AgentContextPanel', () => {
         agent={createAgent()}
         onClose={vi.fn()}
         onOpenTelegramSetup={onOpenTelegramSetup}
-        onUpdateChannel={vi.fn(async () => undefined)}
+        onUpdateChannel={vi.fn(() => Promise.resolve(undefined))}
       />,
     );
 
@@ -265,7 +281,7 @@ describe('AgentContextPanel', () => {
 
   it('saves a paired Telegram channel from the inspector', async () => {
     const user = userEvent.setup();
-    const onUpdateChannel = vi.fn(async () => undefined);
+    const onUpdateChannel = vi.fn(() => Promise.resolve(undefined));
 
     render(
       <AgentContextPanel
@@ -302,5 +318,24 @@ describe('AgentContextPanel', () => {
       channelId: 'telegram',
       telegramSetupSessionId: 'telegram-session-1',
     });
+  });
+
+  it('switches between overview and timeline tabs', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AgentContextPanel
+        agent={createAgent()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Connection')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /Timeline/i }));
+
+    expect(screen.getByTestId('agent-timeline')).toBeInTheDocument();
+    expect(screen.queryByText('Connection')).not.toBeInTheDocument();
+    expect(screen.getByText('No timeline events are recorded yet for this agent.')).toBeInTheDocument();
   });
 });

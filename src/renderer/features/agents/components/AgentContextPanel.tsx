@@ -17,6 +17,7 @@ import {
   type AgentCustomizationDraft,
   hasAgentCustomization,
 } from '@/renderer/features/agents/model/agent-customization';
+import { AgentTimeline } from '@/renderer/features/agents/components/AgentTimeline';
 import {
   createAgentChannelOptions,
   formatChannelStatus,
@@ -207,6 +208,7 @@ export function AgentContextPanel({
   const [isUpdatingChannel, setUpdatingChannel] = useState(false);
   const [isDeleteAgentOpen, setDeleteAgentOpen] = useState(false);
   const [isDeletingAgent, setDeletingAgent] = useState(false);
+  const [view, setView] = useState<'overview' | 'timeline'>('overview');
   const channelStatusLabel = formatChannelStatus(agent.channel.status);
   const visibleContextCards = agent.contextCards
     .filter((card) => !isSuppressedContextCard(card))
@@ -315,256 +317,287 @@ export function AgentContextPanel({
               </Button>
             ) : null}
           </div>
-          <div className="mt-6">
-            <InspectorCard>
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                <span>{getAgentArchetypeLabel(agent.definition.archetype)}</span>
-                <span className="h-1 w-1 rounded-full bg-app-border-strong" />
-                <span>{agent.statusLabel}</span>
-              </div>
-              <InspectorInset>
-                <InspectorRow label="Agent name" value={agent.name} />
-                <Separator className="my-3" />
-                <InspectorRow
-                  label="Agent ID"
-                  value={agent.id}
-                  valueClassName="break-all font-mono text-[12px] leading-6"
-                />
-              </InspectorInset>
-            </InspectorCard>
+          <div className="mt-4 flex rounded-[18px] border border-app-border bg-app-card/60 p-1" role="tablist">
+            {[
+              { label: 'Overview', value: 'overview' as const },
+              { label: 'Timeline', value: 'timeline' as const },
+            ].map((option) => (
+              <button
+                aria-selected={view === option.value}
+                className={cn(
+                  'focus-ring-app flex-1 rounded-[14px] px-3 py-2 text-sm font-medium transition-colors',
+                  view === option.value
+                    ? 'bg-app-accent text-white'
+                    : 'text-app-muted hover:bg-app-card hover:text-app-text',
+                )}
+                key={option.value}
+                onClick={() => setView(option.value)}
+                role="tab"
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="mt-6 flex min-h-0 flex-1 flex-col">
-          <ScrollArea className="min-h-0 flex-1" contentWidth="fill">
-            <div className="space-y-4 px-2">
-              <section>
+          {view === 'overview' ? (
+            <>
+              <div className="px-2">
                 <InspectorCard>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                    Connection
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                    <span>{getAgentArchetypeLabel(agent.definition.archetype)}</span>
+                    <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+                    <span>{agent.statusLabel}</span>
                   </div>
                   <InspectorInset>
-                    <InspectorRow label="Channel" value={agent.channel.label} />
-                    {agent.channel.target ? (
-                      <>
-                        <Separator className="my-3" />
-                        <InspectorRow label="Attached chat" value={agent.channel.target.name} />
-                      </>
-                    ) : null}
+                    <InspectorRow label="Agent name" value={agent.name} />
                     <Separator className="my-3" />
-                    <InspectorRow label="Status" value={channelStatusLabel} />
+                    <InspectorRow
+                      label="Agent ID"
+                      value={agent.id}
+                      valueClassName="break-all font-mono text-[12px] leading-6"
+                    />
+                  </InspectorInset>
+                </InspectorCard>
+              </div>
 
-                    {onUpdateChannel ? (
-                      <>
-                        <Separator className="my-3" />
-                        <div className="space-y-2">
-                          <label
-                            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
-                            htmlFor={`agent-channel-select-${agent.id}`}
-                          >
-                            Change channel
-                          </label>
-                          <select
-                            className="focus-ring-app h-11 w-full rounded-[14px] border border-app-border bg-app-panel px-3 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
-                            disabled={isUpdatingChannel}
-                            id={`agent-channel-select-${agent.id}`}
-                            onChange={(event) => {
-                              const nextChannelId = event.target.value as typeof channelDraftId;
-                              setChannelDraftId(nextChannelId);
-                              setChannelError(null);
-                              if (
-                                nextChannelId === 'telegram'
-                                && !matchedTelegramChat
-                              ) {
-                                onOpenTelegramSetup?.();
-                              }
-                            }}
-                            value={channelDraftId}
-                          >
-                            {createAgentChannelOptions.map((channel) => (
-                              <option
-                                disabled={!isChannelSelectable(channel.id)}
-                                key={channel.id}
-                                value={channel.id}
-                              >
-                                {`${channel.label} · ${getChannelBadgeLabel(channel.id)}`}
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-xs leading-5 text-app-muted">
-                            {hasPendingChannelChange
-                              ? channelDraftId === 'telegram'
-                                ? matchedTelegramChat
-                                  ? `Telegram is paired with ${matchedTelegramChat.name}. Save it from the popup.`
-                                  : `Open ${selectedChannel.label} setup in a popup to finish pairing and save there.`
-                                : `Save to move this agent back into ${selectedChannel.label}.`
-                              : agent.channel.id === 'telegram'
-                                ? 'Use the popup to re-pair or update this Telegram binding.'
-                                : 'Channel changes apply to the live agent workspace.'}
-                          </p>
-                          {isTelegramDraftSelected && matchedTelegramChat ? (
-                            <p className="text-xs leading-5 text-app-text">
-                              Matched chat ready: {matchedTelegramChat.name}
-                            </p>
-                          ) : null}
-                          {channelError ? (
-                            <p className="text-xs leading-5 text-red-600">
-                              {channelError}
-                            </p>
-                          ) : null}
+              <div className="mt-6 min-h-0 flex-1">
+                <ScrollArea className="min-h-0 flex-1" contentWidth="fill">
+                  <div className="space-y-4 px-2">
+                    <section>
+                      <InspectorCard>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                          Connection
                         </div>
-                      </>
+                        <InspectorInset>
+                          <InspectorRow label="Channel" value={agent.channel.label} />
+                          {agent.channel.target ? (
+                            <>
+                              <Separator className="my-3" />
+                              <InspectorRow label="Attached chat" value={agent.channel.target.name} />
+                            </>
+                          ) : null}
+                          <Separator className="my-3" />
+                          <InspectorRow label="Status" value={channelStatusLabel} />
+
+                          {onUpdateChannel ? (
+                            <>
+                              <Separator className="my-3" />
+                              <div className="space-y-2">
+                                <label
+                                  className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                                  htmlFor={`agent-channel-select-${agent.id}`}
+                                >
+                                  Change channel
+                                </label>
+                                <select
+                                  className="focus-ring-app h-11 w-full rounded-[14px] border border-app-border bg-app-panel px-3 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+                                  disabled={isUpdatingChannel}
+                                  id={`agent-channel-select-${agent.id}`}
+                                  onChange={(event) => {
+                                    const nextChannelId = event.target.value as typeof channelDraftId;
+                                    setChannelDraftId(nextChannelId);
+                                    setChannelError(null);
+                                    if (
+                                      nextChannelId === 'telegram'
+                                      && !matchedTelegramChat
+                                    ) {
+                                      onOpenTelegramSetup?.();
+                                    }
+                                  }}
+                                  value={channelDraftId}
+                                >
+                                  {createAgentChannelOptions.map((channel) => (
+                                    <option
+                                      disabled={!isChannelSelectable(channel.id)}
+                                      key={channel.id}
+                                      value={channel.id}
+                                    >
+                                      {`${channel.label} · ${getChannelBadgeLabel(channel.id)}`}
+                                    </option>
+                                  ))}
+                                </select>
+                                <p className="text-xs leading-5 text-app-muted">
+                                  {hasPendingChannelChange
+                                    ? channelDraftId === 'telegram'
+                                      ? matchedTelegramChat
+                                        ? `Telegram is paired with ${matchedTelegramChat.name}. Save it from the popup.`
+                                        : `Open ${selectedChannel.label} setup in a popup to finish pairing and save there.`
+                                      : `Save to move this agent back into ${selectedChannel.label}.`
+                                    : agent.channel.id === 'telegram'
+                                      ? 'Use the popup to re-pair or update this Telegram binding.'
+                                      : 'Channel changes apply to the live agent workspace.'}
+                                </p>
+                                {isTelegramDraftSelected && matchedTelegramChat ? (
+                                  <p className="text-xs leading-5 text-app-text">
+                                    Matched chat ready: {matchedTelegramChat.name}
+                                  </p>
+                                ) : null}
+                                {channelError ? (
+                                  <p className="text-xs leading-5 text-red-600">
+                                    {channelError}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </>
+                          ) : null}
+                        </InspectorInset>
+
+                        {onOpenTelegramSetup && (isTelegramDraftSelected || agent.channel.id === 'telegram') ? (
+                          <Button
+                            className="mt-3 w-full"
+                            onClick={onOpenTelegramSetup}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            {isTelegramDraftSelected
+                              ? matchedTelegramChat
+                                ? 'Review Telegram setup'
+                                : 'Open Telegram setup'
+                              : 'Manage Telegram setup'}
+                          </Button>
+                        ) : null}
+
+                        {onUpdateChannel && hasPendingChannelChange ? (
+                          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                            <Button
+                              disabled={isUpdatingChannel}
+                              onClick={() => {
+                                setChannelDraftId(agent.channel.id);
+                                setChannelError(null);
+                              }}
+                              size="sm"
+                              type="button"
+                              variant="quiet"
+                            >
+                              Reset
+                            </Button>
+                            <Button
+                              disabled={!canSaveChannel}
+                              onClick={() => {
+                                void handleSaveChannel();
+                              }}
+                              size="sm"
+                              type="button"
+                            >
+                              {isUpdatingChannel
+                                ? 'Saving…'
+                                : channelDraftId === 'telegram'
+                                  ? 'Save Telegram channel'
+                                  : 'Save channel'}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </InspectorCard>
+                    </section>
+
+                    <section>
+                      <InspectorCard>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                          Customization
+                        </div>
+
+                        <InspectorInset className="space-y-4">
+                          <div className="space-y-1.5">
+                            <p className="text-sm font-medium text-app-text">
+                              {hasCustomization ? 'Session draft active' : 'Inherited defaults'}
+                            </p>
+                            <p className="text-xs leading-5 text-app-muted">
+                              {hasCustomization
+                                ? 'Saved locally in renderer memory for this session.'
+                                : 'No local draft is attached to this agent yet.'}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            <CustomizationMetricRow
+                              label="Instructions"
+                              value={instructionsLabel}
+                            />
+                            <CustomizationMetricRow
+                              label="Skills"
+                              value={skillCount > 0 ? String(skillCount) : 'None'}
+                            />
+                            <CustomizationMetricRow
+                              label="MCP"
+                              value={mcpCount > 0 ? String(mcpCount) : 'None'}
+                            />
+                          </div>
+                        </InspectorInset>
+
+                        {onEditCustomization ? (
+                          <Button
+                            className="mt-3 w-full"
+                            onClick={onEditCustomization}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            Edit customization
+                          </Button>
+                        ) : null}
+                      </InspectorCard>
+                    </section>
+
+                    {codingEngines.length > 0 ? (
+                      <section>
+                        <InspectorCard>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                            Coding Engines
+                          </div>
+
+                          <InspectorInset className="space-y-2.5">
+                            {codingEngines.map((engine) => (
+                              <CustomizationMetricRow
+                                key={engine.id}
+                                label={engine.label}
+                                value={engine.available ? (engine.version ?? 'found') : 'Not found'}
+                              />
+                            ))}
+                          </InspectorInset>
+                        </InspectorCard>
+                      </section>
                     ) : null}
-                  </InspectorInset>
 
-                  {onOpenTelegramSetup && (isTelegramDraftSelected || agent.channel.id === 'telegram') ? (
-                    <Button
-                      className="mt-3 w-full"
-                      onClick={onOpenTelegramSetup}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {isTelegramDraftSelected
-                        ? matchedTelegramChat
-                          ? 'Review Telegram setup'
-                          : 'Open Telegram setup'
-                        : 'Manage Telegram setup'}
-                    </Button>
-                  ) : null}
+                    {visibleContextCards.map((card) => (
+                      <InspectorSection eyebrow={card.eyebrow} key={card.id}>
+                        <div className="rounded-[20px] border border-app-border bg-app-card/60 p-4">
+                          <h4 className="text-[13px] font-medium text-app-text">{card.title}</h4>
+                          <p className="mt-2 text-sm leading-6 text-app-muted">{card.body}</p>
+                        </div>
+                      </InspectorSection>
+                    ))}
 
-                  {onUpdateChannel && hasPendingChannelChange ? (
-                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                      <Button
-                        disabled={isUpdatingChannel}
-                        onClick={() => {
-                          setChannelDraftId(agent.channel.id);
-                          setChannelError(null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="quiet"
-                      >
-                        Reset
-                      </Button>
-                      <Button
-                        disabled={!canSaveChannel}
-                        onClick={() => {
-                          void handleSaveChannel();
-                        }}
-                        size="sm"
-                        type="button"
-                      >
-                        {isUpdatingChannel
-                          ? 'Saving…'
-                          : channelDraftId === 'telegram'
-                            ? 'Save Telegram channel'
-                            : 'Save channel'}
-                      </Button>
-                    </div>
-                  ) : null}
-                </InspectorCard>
-              </section>
-
-              <section>
-                <InspectorCard>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                    Customization
+                    {canDeleteAgent ? (
+                      <InspectorSection eyebrow="Danger zone">
+                        <div className="rounded-[20px] border border-app-border bg-app-panel-strong/80 p-4">
+                          <p className="text-sm font-medium text-app-text">Delete this agent</p>
+                          <p className="mt-2 text-sm leading-6 text-app-muted">
+                            Remove this agent workspace and clear any work item assignments that point
+                            to it.
+                          </p>
+                          <Button
+                            className="mt-4 border-red-300/60 text-red-700 hover:border-red-400 hover:bg-red-50"
+                            onClick={() => setDeleteAgentOpen(true)}
+                            type="button"
+                            variant="outline"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete agent
+                          </Button>
+                        </div>
+                      </InspectorSection>
+                    ) : null}
                   </div>
-
-                  <InspectorInset className="space-y-4">
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-medium text-app-text">
-                        {hasCustomization ? 'Session draft active' : 'Inherited defaults'}
-                      </p>
-                      <p className="text-xs leading-5 text-app-muted">
-                        {hasCustomization
-                          ? 'Saved locally in renderer memory for this session.'
-                          : 'No local draft is attached to this agent yet.'}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      <CustomizationMetricRow
-                        label="Instructions"
-                        value={instructionsLabel}
-                      />
-                      <CustomizationMetricRow
-                        label="Skills"
-                        value={skillCount > 0 ? String(skillCount) : 'None'}
-                      />
-                      <CustomizationMetricRow
-                        label="MCP"
-                        value={mcpCount > 0 ? String(mcpCount) : 'None'}
-                      />
-                    </div>
-                  </InspectorInset>
-
-                  {onEditCustomization ? (
-                    <Button
-                      className="mt-3 w-full"
-                      onClick={onEditCustomization}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Edit customization
-                    </Button>
-                  ) : null}
-                </InspectorCard>
-              </section>
-
-              {codingEngines.length > 0 ? (
-                <section>
-                  <InspectorCard>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                      Coding Engines
-                    </div>
-
-                    <InspectorInset className="space-y-2.5">
-                      {codingEngines.map((engine) => (
-                        <CustomizationMetricRow
-                          key={engine.id}
-                          label={engine.label}
-                          value={engine.available ? (engine.version ?? 'found') : 'Not found'}
-                        />
-                      ))}
-                    </InspectorInset>
-                  </InspectorCard>
-                </section>
-              ) : null}
-
-              {visibleContextCards.map((card) => (
-                <InspectorSection eyebrow={card.eyebrow} key={card.id}>
-                  <div className="rounded-[20px] border border-app-border bg-app-card/60 p-4">
-                    <h4 className="text-[13px] font-medium text-app-text">{card.title}</h4>
-                    <p className="mt-2 text-sm leading-6 text-app-muted">{card.body}</p>
-                  </div>
-                </InspectorSection>
-              ))}
-
-              {canDeleteAgent ? (
-                <InspectorSection eyebrow="Danger zone">
-                  <div className="rounded-[20px] border border-app-border bg-app-panel-strong/80 p-4">
-                    <p className="text-sm font-medium text-app-text">Delete this agent</p>
-                    <p className="mt-2 text-sm leading-6 text-app-muted">
-                      Remove this agent workspace and clear any work item assignments that point
-                      to it.
-                    </p>
-                    <Button
-                      className="mt-4 border-red-300/60 text-red-700 hover:border-red-400 hover:bg-red-50"
-                      onClick={() => setDeleteAgentOpen(true)}
-                      type="button"
-                      variant="outline"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete agent
-                    </Button>
-                  </div>
-                </InspectorSection>
-              ) : null}
-            </div>
-          </ScrollArea>
+                </ScrollArea>
+              </div>
+            </>
+          ) : (
+            <AgentTimeline agent={agent} />
+          )}
         </div>
       </aside>
 
