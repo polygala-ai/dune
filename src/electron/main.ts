@@ -62,6 +62,8 @@ import {
   prepareProjectRootPath,
 } from '@/electron/main/workflow/project-artifacts';
 import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';
+import { AgentActivityWatcher } from '@/electron/main/runtime/agent-activity-watcher';
+import { createGroupFolder } from '@/electron/main/runtime/agent-runtime/utils';
 import {
   buildRollingWorkflowItemActivitySummary,
   clampWorkflowProjectActivityPageLimit,
@@ -87,6 +89,7 @@ let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let taskSweepIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let powerBlockerId: number | null = null;
 let telegramReconnectPromise: Promise<void> | null = null;
+let agentActivityWatcher: AgentActivityWatcher | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 const TASK_SWEEP_INTERVAL_MS = 120_000;
 
@@ -294,6 +297,7 @@ const quitCoordinator = createQuitCoordinator({
     }
     stopPowerBlocker();
     await runtimeController?.shutdown();
+    agentActivityWatcher?.stop();
   },
 });
 
@@ -385,6 +389,20 @@ function createInitialRuntimeSnapshot() {
   };
 }
 
+function resolveAgentActivityDataDirs(
+  snapshot: AgentServiceSnapshot,
+  runtimeRoot: string,
+) {
+  return snapshot.agents.map((agent) =>
+    path.join(
+      runtimeRoot,
+      'agents',
+      createGroupFolder(agent.name, agent.id),
+      'data',
+    ),
+  );
+}
+
 function cloneStoredWorkflowEvent(event: StoredWorkflowEvent): StoredWorkflowEvent {
   return {
     ...(event.actor ? { actor: event.actor } : {}),
@@ -442,6 +460,13 @@ void app.whenReady().then(async () => {
   const duneHomeDir = agentLiteHomeDir ?? os.homedir();
   const agentLiteRuntimeRoot = resolveAgentLiteRuntimeRoot(agentLiteHomeDir);
   const userDataDir = app.getPath('userData');
+  agentActivityWatcher = new AgentActivityWatcher({
+    onUpdate: (statuses) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send(ipcChannels.agentActivityUpdated, statuses);
+      }
+    },
+  });
   const stores = {
     agents: new JsonFileStorage(userDataDir, 'agents'),
     secrets: new EncryptedFileStorage(userDataDir, 'secrets'),
@@ -822,6 +847,9 @@ void app.whenReady().then(async () => {
 
       runtimeController.subscribe((snapshot) => {
         syncTelegramPowerBlocker(snapshot);
+        agentActivityWatcher?.start(
+          resolveAgentActivityDataDirs(snapshot, agentLiteRuntimeRoot),
+        );
         for (const window of BrowserWindow.getAllWindows()) {
           window.webContents.send(ipcChannels.runtimeSnapshotUpdated, snapshot);
         }
@@ -869,6 +897,10 @@ void app.whenReady().then(async () => {
       getRuntimeController: () => runtimeController,
     });
   });
+  ipcMain.handle(ipcChannels.getAgentActivity, async () => {
+    await ensureRuntime();
+    return agentActivityWatcher?.getStatuses() ?? [];
+  });
   ipcMain.handle(
     ipcChannels.getAgentTranscriptPage,
     async (_event, agentId: string, options?: { beforeMessageId?: string | null; limit?: number }) => {
@@ -915,6 +947,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle(ipcChannels.deleteLocalData, async () => {
     await runtimeController?.shutdown();
+    agentActivityWatcher?.stop();
     await Promise.allSettled([
       session.defaultSession.clearCache(),
       session.defaultSession.clearStorageData(),

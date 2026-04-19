@@ -69,6 +69,7 @@ beforeEach(() => {
     ensureProjectArtifactFolder: vi.fn(() => Promise.resolve('/tmp/project/item-123')),
     ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    getAgentActivity: vi.fn(() => Promise.resolve([])),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       codingEngines: [],
@@ -95,6 +96,7 @@ beforeEach(() => {
     storageGet: vi.fn(() => Promise.resolve(null)),
     storageKeys: vi.fn(() => Promise.resolve([])),
     storageSet: vi.fn(() => Promise.resolve(undefined)),
+    subscribeAgentActivity: vi.fn(() => () => undefined),
   };
   document.documentElement.dataset.theme = 'light';
 });

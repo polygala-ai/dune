@@ -79,6 +79,7 @@ describe('preload bridge', () => {
     await desktopBridge?.deleteLocalData?.();
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
+    await desktopBridge?.getAgentActivity?.();
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
@@ -103,6 +104,8 @@ describe('preload bridge', () => {
 
     const listener = vi.fn();
     const unsubscribe = desktopBridge?.subscribe?.(listener);
+    const activityListener = vi.fn();
+    const unsubscribeActivity = desktopBridge?.subscribeAgentActivity?.(activityListener);
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
@@ -128,6 +131,7 @@ describe('preload bridge', () => {
       '/tmp/project-1',
       'homepage-copy-abcd1234',
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getAgentActivity);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getAgentTranscriptPage,
       'agent-1',
@@ -182,11 +186,20 @@ describe('preload bridge', () => {
       ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
     );
+    expect(on).toHaveBeenCalledWith(
+      ipcChannels.agentActivityUpdated,
+      expect.any(Function),
+    );
 
     unsubscribe?.();
+    unsubscribeActivity?.();
 
     expect(removeListener).toHaveBeenCalledWith(
       ipcChannels.runtimeSnapshotUpdated,
+      expect.any(Function),
+    );
+    expect(removeListener).toHaveBeenCalledWith(
+      ipcChannels.agentActivityUpdated,
       expect.any(Function),
     );
   });
@@ -228,6 +241,7 @@ describe('preload bridge', () => {
       'deleteLocalData',
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
+      'getAgentActivity',
       'getAgentTranscriptPage',
       'getProjectActivityPage',
       'getRuntimeSnapshot',
@@ -249,6 +263,7 @@ describe('preload bridge', () => {
       'storageGet',
       'storageKeys',
       'storageSet',
+      'subscribeAgentActivity',
       'subscribe',
     ];
 

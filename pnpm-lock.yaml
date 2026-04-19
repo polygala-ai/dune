@@ -6,15 +6,15 @@ settings:
 
 overrides:
   better-sqlite3: ^12.8.0
-  '@boxlite-ai/agentlite': github:boxlite-ai/agentlite#ee83e63
+  '@boxlite-ai/agentlite': github:boxlite-ai/agentlite#54e4a4edf8e852fa96d72736ca834fed15616be7
 
 importers:
 
   .:
     dependencies:
       '@boxlite-ai/agentlite':
-        specifier: github:boxlite-ai/agentlite#ee83e63
-        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/ee83e63(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
+        specifier: github:boxlite-ai/agentlite#54e4a4edf8e852fa96d72736ca834fed15616be7
+        version: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/54e4a4edf8e852fa96d72736ca834fed15616be7(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -319,8 +319,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/ee83e63':
-    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/ee83e63}
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/54e4a4edf8e852fa96d72736ca834fed15616be7':
+    resolution: {tarball: https://codeload.github.com/boxlite-ai/agentlite/tar.gz/54e4a4edf8e852fa96d72736ca834fed15616be7}
     version: 1.2.25
     engines: {node: '>=20'}
     hasBin: true
@@ -5123,7 +5123,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/ee83e63(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
+  '@boxlite-ai/agentlite@https://codeload.github.com/boxlite-ai/agentlite/tar.gz/54e4a4edf8e852fa96d72736ca834fed15616be7(@onecli-sh/sdk@0.2.0)(encoding@0.1.13)(playwright-core@1.58.2)':
     dependencies:
       '@agentclientprotocol/sdk': 0.19.0(zod@4.3.6)
       '@boxlite-ai/boxlite': 0.4.3(playwright-core@1.58.2)
