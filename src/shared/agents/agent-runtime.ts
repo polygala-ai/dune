@@ -2,11 +2,14 @@
 
 import type {
   Agent,
+  AgentTranscriptPage,
   AgentDefinition,
   AgentRuntimeInfo,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
+  RunIsolatedResearchInput,
+  RunIsolatedResearchResult,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
   UpdateAgentChannelInput,
@@ -43,10 +46,18 @@ export interface AgentService {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  getTranscriptPage: (
+    agentId: string,
+    options?: { beforeMessageId?: string | null; limit?: number },
+  ) => Promise<AgentTranscriptPage>;
   getTelegramSetupSession: (sessionId: string) => Promise<TelegramSetupSession | null>;
   getSnapshot: () => AgentServiceSnapshot;
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;
+  runIsolatedResearch: (
+    agentId: string,
+    input: RunIsolatedResearchInput,
+  ) => Promise<RunIsolatedResearchResult>;
   sendMessage: (agentId: string, text: string) => Promise<void>;
   scheduleItemAssignment: (agentId: string, itemId: string) => Promise<string | null>;
   cancelItemAssignment: (agentId: string, taskId: string) => Promise<void>;

@@ -47,6 +47,10 @@ import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
 import { isPlainObject } from '@/shared/is-record';
+import type {
+  WorkflowEvent as StoredWorkflowEvent,
+  WorkflowSnapshot as StoredWorkflowSnapshot,
+} from '@/electron/main/agent-actions/handlers/snapshot';
 import {
   assertEmptyProjectRootDirectory,
   ensureProjectArtifactFolder,
@@ -54,6 +58,17 @@ import {
   prepareProjectRootPath,
 } from '@/electron/main/workflow/project-artifacts';
 import { createMainWindowOptions } from '@/electron/main/window/create-main-window-options';
+import {
+  buildRollingWorkflowItemActivitySummary,
+  clampWorkflowProjectActivityPageLimit,
+  compareWorkflowProjectActivityEntries,
+  createPersistedWorkflowItemActivityArchive,
+  createWorkflowItemActivityArchiveKey,
+  createWorkflowItemActivitySummary,
+  createWorkflowProjectActivityEntry,
+  getWorkflowItemActivityArchiveItemId,
+  MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
+} from '@/shared/workflow/activity';
 
 if (started) {
   app.quit();
@@ -364,6 +379,44 @@ function createInitialRuntimeSnapshot() {
   };
 }
 
+function cloneStoredWorkflowEvent(event: StoredWorkflowEvent): StoredWorkflowEvent {
+  return {
+    ...(event.actor ? { actor: event.actor } : {}),
+    createdAt: event.createdAt,
+    description: event.description,
+    id: event.id,
+    kind: event.kind,
+  };
+}
+
+function dedupeWorkflowEventsChronologically(
+  events: StoredWorkflowEvent[],
+): StoredWorkflowEvent[] {
+  const seen = new Set<string>();
+  const deduped: StoredWorkflowEvent[] = [];
+
+  for (const event of events) {
+    if (seen.has(event.id)) {
+      continue;
+    }
+
+    seen.add(event.id);
+    deduped.push(cloneStoredWorkflowEvent(event));
+  }
+
+  return deduped.sort((left, right) => {
+    if (left.createdAt !== right.createdAt) {
+      return left.createdAt - right.createdAt;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function isWorkflowSnapshotLike(value: unknown): value is StoredWorkflowSnapshot {
+  return isPlainObject(value) && Array.isArray(value.items) && Array.isArray(value.projects);
+}
+
 void app.whenReady().then(async () => {
   const agentLiteHomeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
   const duneHomeDir = agentLiteHomeDir ?? os.homedir();
@@ -375,6 +428,104 @@ void app.whenReady().then(async () => {
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
+
+  async function compactWorkflowActivity(snapshot: StoredWorkflowSnapshot): Promise<void> {
+    const activeItemIds = new Set(snapshot.items.map((item) => item.id));
+    const workflowKeys = await stores.workflow.keys();
+    const staleArchiveKeys = workflowKeys.filter((key) => {
+      const itemId = getWorkflowItemActivityArchiveItemId(key);
+      return itemId !== null && !activeItemIds.has(itemId);
+    });
+
+    await Promise.all(staleArchiveKeys.map((key) => stores.workflow.delete(key)));
+
+    for (const item of snapshot.items) {
+      const archiveKey = createWorkflowItemActivityArchiveKey(item.id);
+      const existingArchive = createPersistedWorkflowItemActivityArchive(
+        await stores.workflow.get(archiveKey) ?? {},
+      );
+      const liveEvents = Array.isArray(item.workflowEvents)
+        ? item.workflowEvents.map((event) => cloneStoredWorkflowEvent(event))
+        : [];
+      const liveWindow = liveEvents.slice(0, MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS);
+      const overflow = liveEvents.slice(MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS).reverse();
+      const archivedEvents = dedupeWorkflowEventsChronologically([
+        ...existingArchive.events,
+        ...overflow,
+      ]);
+      const rollingSummary = buildRollingWorkflowItemActivitySummary(item.title, archivedEvents);
+      const totalEventCount = archivedEvents.length + liveWindow.length;
+
+      item.activity = createWorkflowItemActivitySummary({
+        archivedEventCount: archivedEvents.length,
+        hasOlderEvents: archivedEvents.length > 0,
+        rollingSummary,
+        totalEventCount,
+      });
+      item.workflowEvents = liveWindow;
+
+      if (archivedEvents.length === 0) {
+        if (existingArchive.events.length > 0 || existingArchive.rollingSummary) {
+          await stores.workflow.delete(archiveKey);
+        }
+        continue;
+      }
+
+      await stores.workflow.set(archiveKey, {
+        events: archivedEvents,
+        lastCompactedAt: Date.now(),
+        rollingSummary,
+      });
+    }
+  }
+
+  async function getProjectActivityPage(
+    projectId: string,
+    options?: { beforeEntryId?: string | null; limit?: number },
+  ) {
+    const snapshot = await stores.workflow.get<StoredWorkflowSnapshot>('snapshot');
+
+    if (!snapshot || !Array.isArray(snapshot.items)) {
+      return {
+        entries: [],
+        hasOlderEntries: false,
+        projectId,
+        totalEntryCount: 0,
+      };
+    }
+
+    const entries = new Map<string, ReturnType<typeof createWorkflowProjectActivityEntry>>();
+    const projectItems = snapshot.items.filter((item) => item.projectId === projectId);
+
+    for (const item of projectItems) {
+      for (const event of item.workflowEvents) {
+        entries.set(event.id, createWorkflowProjectActivityEntry(item, event));
+      }
+
+      const archive = createPersistedWorkflowItemActivityArchive(
+        await stores.workflow.get(createWorkflowItemActivityArchiveKey(item.id)) ?? {},
+      );
+
+      for (const event of archive.events) {
+        entries.set(event.id, createWorkflowProjectActivityEntry(item, event));
+      }
+    }
+
+    const sortedEntries = [...entries.values()].sort(compareWorkflowProjectActivityEntries);
+    const limit = clampWorkflowProjectActivityPageLimit(options?.limit);
+    const beforeEntryIndex = options?.beforeEntryId
+      ? sortedEntries.findIndex((entry) => entry.id === options.beforeEntryId)
+      : -1;
+    const startIndex = beforeEntryIndex >= 0 ? beforeEntryIndex + 1 : 0;
+    const pageEntries = sortedEntries.slice(startIndex, startIndex + limit);
+
+    return {
+      entries: pageEntries,
+      hasOlderEntries: startIndex + pageEntries.length < sortedEntries.length,
+      projectId,
+      totalEntryCount: sortedEntries.length,
+    };
+  }
   /**
    * Diffs old vs new workflow snapshot for per-item assignment changes, and
    * calls scheduleItemAssignment / cancelItemAssignment on the runtime.
@@ -524,6 +675,9 @@ void app.whenReady().then(async () => {
 
       const previous = await stores.workflow.get('snapshot');
       await reconcileAssignments(previous, value);
+      if (isWorkflowSnapshotLike(value)) {
+        await compactWorkflowActivity(value);
+      }
       await stores.workflow.set(key, value);
     },
   } satisfies AppStorage;
@@ -671,6 +825,18 @@ void app.whenReady().then(async () => {
       getRuntimeController: () => runtimeController,
     });
   });
+  ipcMain.handle(
+    ipcChannels.getAgentTranscriptPage,
+    async (_event, agentId: string, options?: { beforeMessageId?: string | null; limit?: number }) => {
+      await ensureRuntime();
+      return requireRuntimeController().getTranscriptPage(agentId, options);
+    },
+  );
+  ipcMain.handle(
+    ipcChannels.getProjectActivityPage,
+    async (_event, projectId: string, options?: { beforeEntryId?: string | null; limit?: number }) =>
+      getProjectActivityPage(projectId, options),
+  );
   ipcMain.handle(ipcChannels.applyNetworkSettings, async () => {
     await applyPersistedNetworkSettings();
     await ensureRuntime();
@@ -806,6 +972,13 @@ void app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.restartApp, () => {
     quitCoordinator.restart();
   });
+  ipcMain.handle(
+    ipcChannels.runIsolatedResearch,
+    async (_event, agentId: string, input) => {
+      await ensureRuntime();
+      return requireRuntimeController().runIsolatedResearch(agentId, input);
+    },
+  );
 
   ipcMain.handle(ipcChannels.storageGet, async (_event, store: string, key: string) =>
     resolveStore(store).get(key),

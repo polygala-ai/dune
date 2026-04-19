@@ -19,6 +19,7 @@ import { WorkflowProjectActivity } from '@/renderer/features/workflow/components
 import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/components/WorkflowProjectActionsMenu';
 import { WorkflowProjectAgents } from '@/renderer/features/workflow/components/WorkflowProjectAgents';
 import { WorkflowProjectSettings } from '@/renderer/features/workflow/components/WorkflowProjectSettings';
+import { presentWorkflowEventTimestamp } from '@/renderer/features/workflow/model/workflow-presenters';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
 } from '@/renderer/shared/ui/dialog';
 import { Button } from '@/renderer/shared/ui/button';
 import type { AgentRuntimeInfo } from '@/renderer/features/agents/types';
+import type { WorkflowProjectActivityEntry } from '@/renderer/features/workflow/types';
 
 const projectHeaderTabs = [
   { label: 'Activity', value: 'activity' },
@@ -69,6 +71,10 @@ export function WorkflowWorkspace({
 }: WorkflowWorkspaceProps) {
   const commands = useAppCommands();
   const [isDeleteProjectOpen, setDeleteProjectOpen] = useState(false);
+  const [cachedActivityEntriesByProjectId, setCachedActivityEntriesByProjectId] = useState<Record<string, Array<
+    WorkflowProjectActivityEntry & { createdAtLabel: string }
+  >>>({});
+  const [loadingActivityProjectId, setLoadingActivityProjectId] = useState<string | null>(null);
   const {
     addTask,
     assignPrimaryAgent,
@@ -100,6 +106,7 @@ export function WorkflowWorkspace({
   );
   const {
     activityEntries,
+    activitySummary,
     filteredItemSummaries,
     isWorkflowHydrated,
     projectAgents,
@@ -117,6 +124,18 @@ export function WorkflowWorkspace({
     runtimeInfo.status === 'starting' &&
     projectAgents.length === 0;
   const isSettingsScreen = selectedProjectScreen === 'settings';
+  const cachedActivityEntries = selectedProjectId
+    ? cachedActivityEntriesByProjectId[selectedProjectId] ?? []
+    : [];
+  const mergedActivityEntries = [...new Map(
+    [...activityEntries, ...cachedActivityEntries]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .map((entry) => [entry.id, entry] as const),
+  ).values()];
+  const mergedActivitySummary = {
+    ...activitySummary,
+    hasOlderEntries: mergedActivityEntries.length < activitySummary.totalEntryCount,
+  };
 
   if (!isWorkflowHydrated) {
     return (
@@ -183,6 +202,43 @@ export function WorkflowWorkspace({
     await Promise.all(projectAgents.map((agent) => agentRuntime.service.deleteAgent(agent.id)));
     deleteProject(selectedProject.id);
     setDeleteProjectOpen(false);
+  };
+
+  const handleLoadOlderProjectActivity = async () => {
+    if (!selectedProjectId || !window.duneDesktop?.getProjectActivityPage) {
+      return;
+    }
+
+    setLoadingActivityProjectId(selectedProjectId);
+
+    try {
+      const beforeEntryId = mergedActivityEntries.at(-1)?.id ?? null;
+      const page = await window.duneDesktop.getProjectActivityPage(selectedProjectId, {
+        beforeEntryId,
+      });
+
+      setCachedActivityEntriesByProjectId((state) => {
+        const existingEntries = state[selectedProjectId] ?? [];
+        const nextEntries = [...new Map(
+          [
+            ...existingEntries,
+            ...page.entries.map((entry) => ({
+              ...entry,
+              createdAtLabel: presentWorkflowEventTimestamp(entry.createdAt),
+            })),
+          ].map((entry) => [entry.id, entry] as const),
+        ).values()].sort((left, right) => right.createdAt - left.createdAt);
+
+        return {
+          ...state,
+          [selectedProjectId]: nextEntries,
+        };
+      });
+    } finally {
+      setLoadingActivityProjectId((current) =>
+        current === selectedProjectId ? null : current,
+      );
+    }
   };
 
   const projectSettingsInspector = selectedProject ? (
@@ -432,10 +488,13 @@ export function WorkflowWorkspace({
                   />
                 ) : (
                   <WorkflowProjectActivity
-                    entries={activityEntries}
+                    entries={mergedActivityEntries}
+                    isLoadingOlderEntries={loadingActivityProjectId === selectedProjectId}
+                    onLoadOlderEntries={handleLoadOlderProjectActivity}
                     onOpenItem={(itemId) => {
                       commands.openItem(itemId);
                     }}
+                    summary={mergedActivitySummary}
                   />
                 )}
               </div>

@@ -32,6 +32,12 @@ function createPresentedAgent(): PresentedAgent {
     status: 'draft',
     statusLabel: 'Draft',
     telegram: null,
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: 0,
+    },
     updatedAt: Date.now(),
     updatedLabel: 'Now',
     workspace: 'Prototype agent',

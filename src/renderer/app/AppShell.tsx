@@ -70,6 +70,7 @@ export default function AppShell() {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const [isCreateWorkItemOpen, setCreateWorkItemOpen] = useState(false);
   const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
+  const [loadingTranscriptAgentId, setLoadingTranscriptAgentId] = useState<string | null>(null);
   const { composerRef, focusComposer } = useComposerFocus();
   const { isMac } = useDesktopPlatform();
   const commands = useAppCommands();
@@ -105,10 +106,12 @@ export default function AppShell() {
   } = useSettingsState();
   const {
     agents,
+    appendTranscriptPage,
     clearAgentAssignments,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
+      appendTranscriptPage: state.appendTranscriptPage,
       clearAgentAssignments: state.clearAgentAssignments,
     })),
   );
@@ -178,6 +181,29 @@ export default function AppShell() {
     }
 
     await agentRuntime.service.deleteAgent(activeAgent.id);
+  };
+  /** Loads one older transcript page for the active agent. */
+  const handleLoadOlderMessages = async () => {
+    if (!activeAgent || !activeAgent.transcript.hasOlderMessages) {
+      return;
+    }
+
+    const beforeMessageId = activeAgent.messages[0]?.id ?? null;
+    setLoadingTranscriptAgentId(activeAgent.id);
+
+    try {
+      const page = await agentRuntime.service.getTranscriptPage(activeAgent.id, {
+        beforeMessageId,
+        limit: 80,
+      });
+      appendTranscriptPage(page);
+    } catch (error) {
+      console.error(`Failed to load older transcript messages for "${activeAgent.name}".`, error);
+    } finally {
+      setLoadingTranscriptAgentId((currentAgentId) =>
+        currentAgentId === activeAgent.id ? null : currentAgentId,
+      );
+    }
   };
   const sidebarProps = {
     isCommandOpen,
@@ -477,12 +503,14 @@ export default function AppShell() {
                 isSidebarOpen={controller.isSidebarDrawerOpen}
                 onCreateAgent={controller.handleOpenCreateAgent}
                 onDraftChange={commands.setDraft}
+                onLoadOlderMessages={handleLoadOlderMessages}
                 onSubmit={handleSubmit}
                 onToggleInspector={controller.handleToggleContextPanel}
                 onToggleSidebar={controller.handleToggleSidebar}
                 runtimeInfo={runtimeInfo}
                 showCompactInspectorToggle={!showNativeTitlebarInspectorToggle}
                 showCompactSidebarToggle={showCompactSidebarToggle}
+                isLoadingOlderMessages={loadingTranscriptAgentId === activeAgent?.id}
                 transcriptRef={transcriptRef}
               />
             ) : route === 'workflow' ? (

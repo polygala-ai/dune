@@ -26,6 +26,7 @@ import {
   createArtifactFolderName,
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -48,6 +49,7 @@ function createItemEvent(
 function sortItemsByProjectStatus(items: WorkflowItem[]) {
   const nextItems = items.map((item) => ({
     ...item,
+    activity: { ...item.activity },
     tasks: item.tasks.map((task) => ({ ...task })),
     workProducts: item.workProducts.map((product) => ({ ...product })),
     workflowEvents: item.workflowEvents.map((event) => ({ ...event })),
@@ -106,11 +108,22 @@ function appendItemEvent(
   description: string,
   updatedAt: number,
 ) {
+  const nextEvent = createItemEvent(kind, description, updatedAt);
+
   return {
     ...item,
+    activity: createWorkflowItemActivitySummary({
+      archivedEventCount: item.activity.archivedEventCount,
+      hasOlderEvents: item.activity.hasOlderEvents,
+      rollingSummary: item.activity.rollingSummary,
+      totalEventCount: Math.max(
+        item.activity.totalEventCount + 1,
+        item.activity.archivedEventCount + item.workflowEvents.length + 1,
+      ),
+    }),
     updatedAt,
     workflowEvents: [
-      createItemEvent(kind, description, updatedAt),
+      nextEvent,
       ...item.workflowEvents,
     ],
   };
@@ -439,6 +452,9 @@ export function createWorkflowSlice(
 
         set((state) => {
           const nextItem: WorkflowItem = {
+            activity: createWorkflowItemActivitySummary({
+              totalEventCount: 1,
+            }),
             artifactFolderName,
             brief,
             createdAt: updatedAt,

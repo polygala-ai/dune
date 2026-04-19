@@ -12,8 +12,11 @@ import type {
   AgentDefinition,
   AgentExternalTarget,
   AgentMessage,
+  AgentTranscriptPage,
   AgentRuntimeInfo,
   CreateAgentInput,
+  RunIsolatedResearchInput,
+  RunIsolatedResearchResult,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
   UpdateAgentChannelInput,
@@ -106,6 +109,25 @@ function createDraftAgent(
     workspace: 'Prototype agent',
     contextCards: [],
     messages: [],
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: 0,
+    },
+  };
+}
+
+/** Synchronizes the lightweight transcript summary for mock agents. */
+function syncAgentTranscript(agent: Agent): Agent {
+  return {
+    ...agent,
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: agent.messages.length,
+    },
   };
 }
 
@@ -192,6 +214,7 @@ function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnapshot {
       })),
       projectId: agent.projectId ?? null,
       definition: cloneAgentDefinition(agent.definition),
+      transcript: { ...agent.transcript },
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
     })),
     externalChannels: cloneExternalChannelsState(snapshot.externalChannels),
@@ -262,6 +285,33 @@ class MockAgentService implements AgentService {
     return Promise.resolve(session ? cloneTelegramSetupSession(session) : null);
   }
 
+  /** Returns a transcript page from the in-memory transcript. */
+  getTranscriptPage(
+    agentId: string,
+    options?: { beforeMessageId?: string | null; limit?: number },
+  ): Promise<AgentTranscriptPage> {
+    const agent = this.snapshot.agents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const beforeMessageId = options?.beforeMessageId?.trim() ?? '';
+    const limit = Math.max(1, Math.trunc(options?.limit ?? 80));
+    const anchorIndex = beforeMessageId
+      ? agent.messages.findIndex((message) => message.id === beforeMessageId)
+      : -1;
+    const endExclusive = anchorIndex >= 0 ? anchorIndex : agent.messages.length;
+    const start = Math.max(0, endExclusive - limit);
+
+    return Promise.resolve({
+      agentId,
+      hasOlderMessages: start > 0,
+      messages: agent.messages.slice(start, endExclusive),
+      totalMessageCount: agent.messages.length,
+    });
+  }
+
   /** Lists agents. */
   listAgents() {
     return this.getSnapshot().agents;
@@ -288,6 +338,35 @@ class MockAgentService implements AgentService {
       selectedAgentId: agentId,
     };
     this.emit();
+  }
+
+  /** Runs isolated research in-process for mock/testing flows. */
+  runIsolatedResearch(agentId: string, input: RunIsolatedResearchInput): Promise<RunIsolatedResearchResult> {
+    const agent = this.snapshot.agents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const results = input.targets.map((target) => ({
+      result: [
+        `Agent: ${agent.name}`,
+        `Shared prompt: ${input.sharedPrompt.trim()}`,
+        `Target: ${target.title.trim()}`,
+        target.brief.trim(),
+      ].join('\n\n'),
+      targetId: target.id?.trim() ?? null,
+      title: target.title.trim(),
+    }));
+
+    return Promise.resolve({
+      mergedResult: [
+        input.reducerPrompt.trim(),
+        '',
+        ...results.map((result) => `## ${result.title}\n\n${result.result}`),
+      ].join('\n'),
+      results,
+    });
   }
 
   /** Creates agent. */
@@ -379,12 +458,12 @@ class MockAgentService implements AgentService {
         ...this.snapshot,
         agents: this.snapshot.agents.map((agent) =>
           agent.id === existingAgent.id
-            ? {
+            ? syncAgentTranscript({
                 ...agent,
                 name: expectedName,
                 preview: agent.preview,
                 updatedAt: Date.now(),
-              }
+              })
             : agent,
         ),
       };
@@ -545,7 +624,11 @@ class MockAgentService implements AgentService {
       ...this.snapshot,
       agents: this.snapshot.agents.map((item) =>
         item.id === trimmedId
-          ? { ...item, definition: cloneAgentDefinition(definition), updatedAt: Date.now() }
+          ? syncAgentTranscript({
+              ...item,
+              definition: cloneAgentDefinition(definition),
+              updatedAt: Date.now(),
+            })
           : item,
       ),
     };
@@ -583,7 +666,7 @@ class MockAgentService implements AgentService {
       ...this.snapshot,
       agents: this.snapshot.agents.map((item) =>
         item.id === trimmedId
-          ? { ...item, messages: [...item.messages, message], updatedAt: now }
+          ? syncAgentTranscript({ ...item, messages: [...item.messages, message], updatedAt: now })
           : item,
       ),
     };
@@ -646,13 +729,13 @@ class MockAgentService implements AgentService {
       ...this.snapshot,
       agents: this.snapshot.agents.map((item) =>
         item.id === agentId
-          ? {
+          ? syncAgentTranscript({
               ...item,
               messages: [...item.messages, userMessage, assistantMessage],
               preview: summarizePreview(trimmedText),
               status: 'live',
               updatedAt: now,
-            }
+            })
           : item,
       ),
       isStreaming: true,
@@ -678,7 +761,7 @@ class MockAgentService implements AgentService {
         ...this.snapshot,
         agents: this.snapshot.agents.map((item) =>
           item.id === agentId
-            ? {
+            ? syncAgentTranscript({
                 ...item,
                 messages: item.messages.map((message) =>
                   message.id === assistantMessage.id
@@ -690,7 +773,7 @@ class MockAgentService implements AgentService {
                     : message,
                 ),
                 updatedAt: Date.now(),
-              }
+              })
             : item,
         ),
       };
@@ -707,7 +790,7 @@ class MockAgentService implements AgentService {
       ...this.snapshot,
       agents: this.snapshot.agents.map((item) =>
         item.id === agentId
-          ? {
+          ? syncAgentTranscript({
               ...item,
               messages: item.messages.map((message) =>
                 message.id === assistantMessage.id
@@ -717,11 +800,11 @@ class MockAgentService implements AgentService {
                       status: 'complete',
                     }
                   : message,
-              ),
+                ),
               preview: summarizePreview(streamedContent),
               status: 'ready',
               updatedAt: Date.now(),
-            }
+            })
           : item,
       ),
       isStreaming: this.streamingAgentIds.size > 0,

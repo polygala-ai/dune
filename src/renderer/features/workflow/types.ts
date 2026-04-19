@@ -84,8 +84,43 @@ export interface WorkflowEvent {
   kind: WorkflowEventKind;
 }
 
+/** Workflow item activity summary shape. */
+export interface WorkflowItemActivitySummary {
+  archivedEventCount: number;
+  hasOlderEvents: boolean;
+  rollingSummary: string | null;
+  totalEventCount: number;
+}
+
+/** Workflow project activity summary shape. */
+export interface WorkflowProjectActivitySummary {
+  archivedEntryCount: number;
+  hasOlderEntries: boolean;
+  rollingSummary: string | null;
+  totalEntryCount: number;
+}
+
+/** Workflow project activity entry shape. */
+export interface WorkflowProjectActivityEntry {
+  actor?: string;
+  createdAt: number;
+  description: string;
+  id: string;
+  itemId: string;
+  itemTitle: string;
+}
+
+/** Lazy workflow project activity page. */
+export interface WorkflowProjectActivityPage {
+  entries: WorkflowProjectActivityEntry[];
+  hasOlderEntries: boolean;
+  projectId: string;
+  totalEntryCount: number;
+}
+
 /** Workflow item shape. */
 export interface WorkflowItem {
+  activity: WorkflowItemActivitySummary;
   artifactFolderName: string;
   brief: string;
   createdAt: number;

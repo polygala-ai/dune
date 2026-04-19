@@ -198,6 +198,18 @@ export function registerDuneActions(
   });
   // ---- Runtime ------------------------------------------------------------
   reg('runtime.get_snapshot', {});
+  reg('runtime.run_isolated_research', {
+    maxConcurrency: z.number().optional().describe('Maximum number of isolated target runs to execute in parallel.'),
+    reducerPrompt: z.string().describe('Instructions for the final reducer that merges per-target outputs.'),
+    sharedPrompt: z.string().describe('Shared instructions applied to every isolated target run.'),
+    targets: z.array(
+      z.object({
+        brief: z.string().describe('Self-contained brief for this single research target.'),
+        id: z.string().optional().describe('Optional stable target identifier returned in the results.'),
+        title: z.string().describe('Human-readable target title.'),
+      }),
+    ).describe('Independent research targets. Each target runs in isolated context.'),
+  });
 
   // Coding engines now flow through AgentLite ACP peers (`acp_*` actions),
   // not Dune-owned `coding_engine_*` actions.

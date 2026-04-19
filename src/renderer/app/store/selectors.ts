@@ -8,6 +8,7 @@ import {
   presentAgentSummary,
   selectAgentById,
 } from '@/renderer/features/agents/model/agent-presenters';
+import type { Agent } from '@/renderer/features/agents/types';
 import {
   getProjectAgents,
   getProjectItems,
@@ -16,6 +17,50 @@ import {
   selectWorkflowItemById,
   selectWorkflowProjectById,
 } from '@/renderer/features/workflow/model/workflow-presenters';
+import {
+  compareWorkflowProjectActivityEntries,
+  createWorkflowProjectActivityEntry,
+  createWorkflowProjectActivitySummary,
+} from '@/shared/workflow/activity';
+import type { AgentTranscriptCacheEntry } from './types';
+
+function compareMessages(
+  left: Agent['messages'][number],
+  right: Agent['messages'][number],
+) {
+  if (left.createdAt !== right.createdAt) {
+    return left.createdAt - right.createdAt;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function mergeAgentTranscript(agent: Agent, cacheEntry?: AgentTranscriptCacheEntry): Agent {
+  if (!cacheEntry || cacheEntry.messages.length === 0) {
+    return agent;
+  }
+
+  const mergedMessages = new Map([
+    ...cacheEntry.messages.map((message) => [message.id, message] as const),
+    ...agent.messages.map((message) => [message.id, message] as const),
+  ]);
+  const messages = [...mergedMessages.values()].sort(compareMessages);
+  const totalMessageCount = Math.max(
+    agent.transcript.totalMessageCount,
+    cacheEntry.totalMessageCount,
+    messages.length,
+  );
+
+  return {
+    ...agent,
+    messages,
+    transcript: {
+      ...agent.transcript,
+      hasOlderMessages: messages.length < totalMessageCount,
+      totalMessageCount,
+    },
+  };
+}
 
 /** Agent session hook. */
 export function useAgentSession() {
@@ -23,6 +68,7 @@ export function useAgentSession() {
     agentCustomizations,
     agentDrafts,
     agents,
+    agentTranscriptCache,
     externalChannels,
     isStreaming,
     runtimeInfo,
@@ -33,6 +79,7 @@ export function useAgentSession() {
       agentCustomizations: state.agentCustomizations,
       agentDrafts: state.agentDrafts,
       agents: state.agents,
+      agentTranscriptCache: state.agentTranscriptCache,
       externalChannels: state.externalChannels,
       isStreaming: state.isStreaming,
       runtimeInfo: state.runtimeInfo,
@@ -41,10 +88,13 @@ export function useAgentSession() {
     })),
   );
 
-  const activeAgent = selectAgentById(
+  const selectedAgent = selectAgentById(
     agents,
     selectedAgentId,
   );
+  const activeAgent = selectedAgent
+    ? mergeAgentTranscript(selectedAgent, agentTranscriptCache[selectedAgent.id])
+    : null;
   const draft = selectedAgentId ? agentDrafts[selectedAgentId] ?? '' : '';
 
   return {
@@ -144,21 +194,19 @@ export function useWorkflowSession() {
       ),
   );
   const sortedProjectItemsByUpdated = [...projectItems].sort((left, right) => right.updatedAt - left.updatedAt);
+  const liveActivityEntries = projectItems
+    .flatMap((item) =>
+      item.workflowEvents.map((event) => createWorkflowProjectActivityEntry(item, event)),
+    )
+    .sort(compareWorkflowProjectActivityEntries);
+  const activitySummary = createWorkflowProjectActivitySummary(projectItems);
 
   return {
-    activityEntries: projectItems
-      .flatMap((item) =>
-        item.workflowEvents.map((event) => ({
-          actor: event.actor,
-          createdAt: event.createdAt,
-          createdAtLabel: presentWorkflowEventTimestamp(event.createdAt),
-          description: event.description,
-          id: event.id,
-          itemId: item.id,
-          itemTitle: item.title,
-        })),
-      )
-      .sort((left, right) => right.createdAt - left.createdAt),
+    activityEntries: liveActivityEntries.map((entry) => ({
+      ...entry,
+      createdAtLabel: presentWorkflowEventTimestamp(entry.createdAt),
+    })),
+    activitySummary,
     filteredItemSummaries: filteredItems.map((item) =>
       presentWorkflowItemSummary(item, agentsById, itemActivity),
     ),

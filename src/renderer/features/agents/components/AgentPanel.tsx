@@ -17,7 +17,9 @@ interface AgentPanelProps {
   agent: PresentedAgent;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   draft: string;
+  isLoadingOlderMessages: boolean;
   onDraftChange: (value: string) => void;
+  onLoadOlderMessages: () => Promise<void>;
   onSubmit: (value: string) => Promise<void>;
   transcriptRef: RefObject<HTMLDivElement | null>;
 }
@@ -196,7 +198,9 @@ export function AgentPanel({
   agent,
   composerRef,
   draft,
+  isLoadingOlderMessages,
   onDraftChange,
+  onLoadOlderMessages,
   onSubmit,
   transcriptRef,
 }: AgentPanelProps) {
@@ -222,6 +226,22 @@ export function AgentPanel({
         ref={transcriptRef}
       >
         <div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
+          {agent.transcript.hasOlderMessages ? (
+            <div className="message-reveal flex justify-center">
+              <Button
+                disabled={isLoadingOlderMessages}
+                onClick={() => {
+                  void onLoadOlderMessages();
+                }}
+                size="sm"
+                type="button"
+                variant="quiet"
+              >
+                {isLoadingOlderMessages ? 'Loading older messages…' : 'Load older messages'}
+              </Button>
+            </div>
+          ) : null}
+
           <div className="agent-panel-header mb-3 border-b border-app-border pb-4">
             <h2 className="truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
               {agent.name}

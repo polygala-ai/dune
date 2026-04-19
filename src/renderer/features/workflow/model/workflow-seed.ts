@@ -3,6 +3,7 @@
 import { createId, createProjectId } from '@/shared/id';
 import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 
 /** Creates empty workflow snapshot. */
 export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
@@ -26,12 +27,11 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
   const reviewItemId = createId('item');
   const doneItemId = createId('item');
 
-  return {
-    items: [
+  const items: WorkflowSnapshot['items'] = [
       {
-        acceptanceCriteria: [],
-        constraints: "",
-        references: [],
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName: createArtifactFolderName('Capture new research angles', inboxItemId),
         brief:
           'Capture incoming ideas before deciding whether they need an agent or a heavier execution pass.',
@@ -65,9 +65,9 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
-        acceptanceCriteria: [],
-        constraints: "",
-        references: [],
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName: createArtifactFolderName('Draft the launch brief', readyItemId),
         brief:
           'Shape the next brief so an agent can pick it up cleanly once the direction is approved.',
@@ -109,9 +109,9 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
-        acceptanceCriteria: [],
-        constraints: "",
-        references: [],
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName: createArtifactFolderName('Homepage copy rewrite', activeItemId),
         brief:
           'Rewrite the landing story so the positioning and CTA rhythm are easier to understand in one pass.',
@@ -169,9 +169,9 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
-        acceptanceCriteria: [],
-        constraints: "",
-        references: [],
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName: createArtifactFolderName('Review the proof points', reviewItemId),
         brief:
           'Resolve the unanswered questions and the blocked evidence before the piece can be signed off.',
@@ -213,9 +213,9 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         ],
       },
       {
-        acceptanceCriteria: [],
-        constraints: "",
-        references: [],
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName: createArtifactFolderName('Capture the launch position', doneItemId),
         brief:
           'Keep one completed item around so the board shows the end state without feeling empty on first launch.',
@@ -256,7 +256,10 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
           },
         ],
       },
-    ],
+    ];
+
+  return {
+    items,
     projects: [
       {
         color: '#A86D46',

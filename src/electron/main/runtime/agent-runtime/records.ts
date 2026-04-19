@@ -5,6 +5,7 @@ import type {
   AgentDefinition,
   AgentExternalTarget,
   AgentMessage,
+  AgentTranscriptSummary,
   CreateAgentInput,
   TelegramAgentRuntimeState,
 } from '@/renderer/features/agents/types';
@@ -25,11 +26,19 @@ import { createChannelBinding } from './channels';
 import { createGroupFolder } from './utils';
 
 /** Persisted agent record shape. */
+export interface PersistedTranscriptArchive {
+  lastCompactedAt: number | null;
+  messages: AgentMessage[];
+  rollingSummary: string | null;
+}
+
+/** Persisted agent record shape. */
 export interface PersistedAgentRecord {
   agent: Agent;
   groupFolder: string;
   projectName?: string | null;
   projectRootPath?: string | null;
+  transcriptArchive?: PersistedTranscriptArchive | null;
 }
 
 function asNonNegativeInteger(value: unknown): number | null {
@@ -76,6 +85,29 @@ function normalizeAgentMessageUsage(usage: unknown): AgentMessage['usage'] {
     outputTokens,
     sessionInputTotal,
     sessionOutputTotal,
+  };
+}
+
+/** Creates transcript summary. */
+export function createAgentTranscriptSummary(
+  input: Partial<AgentTranscriptSummary> = {},
+): AgentTranscriptSummary {
+  return {
+    archivedMessageCount: input.archivedMessageCount ?? 0,
+    hasOlderMessages: input.hasOlderMessages ?? false,
+    rollingSummary: input.rollingSummary ?? null,
+    totalMessageCount: input.totalMessageCount ?? 0,
+  };
+}
+
+/** Creates transcript archive. */
+export function createPersistedTranscriptArchive(
+  input: Partial<PersistedTranscriptArchive> = {},
+): PersistedTranscriptArchive {
+  return {
+    lastCompactedAt: input.lastCompactedAt ?? null,
+    messages: Array.isArray(input.messages) ? input.messages : [],
+    rollingSummary: input.rollingSummary ?? null,
   };
 }
 
@@ -168,6 +200,7 @@ export function createDraftAgent(
     telegram: channelId === 'telegram'
       ? telegramState ?? createDefaultTelegramAgentRuntimeState({ boundChat: externalTarget })
       : null,
+    transcript: createAgentTranscriptSummary(),
     updatedAt: now,
     workspace: 'AgentLite agent',
   };
@@ -209,6 +242,17 @@ export function normalizePersistedAgentRecord(
   const fallbackArchetype = legacyRole === 'project-main' ? 'project-main' : 'custom';
   const definition = normalizeAgentDefinition(record.agent.definition, fallbackArchetype);
 
+  const transcriptArchive = createPersistedTranscriptArchive(record.transcriptArchive ?? {});
+  const normalizedArchiveMessages = normalizePersistedMessages(transcriptArchive.messages, {
+    groupFolder,
+    runtimeRoot,
+  });
+  const normalizedLiveMessages = normalizePersistedMessages(record.agent.messages, {
+    groupFolder,
+    runtimeRoot,
+  });
+  const totalMessageCount = normalizedArchiveMessages.length + normalizedLiveMessages.length;
+
   return {
     agent: {
       ...record.agent,
@@ -224,18 +268,25 @@ export function normalizePersistedAgentRecord(
         : [],
       contextCards: record.agent.contextCards.map((card) => ({ ...card })),
       definition,
-      messages: normalizePersistedMessages(record.agent.messages, {
-        groupFolder,
-        runtimeRoot,
-      }),
+      messages: normalizedLiveMessages,
       projectId: typeof record.agent.projectId === 'string' ? record.agent.projectId : null,
       status: record.agent.status === 'live' ? 'ready' : record.agent.status,
       telegram: cloneTelegramAgentRuntimeState(record.agent.telegram),
+      transcript: createAgentTranscriptSummary({
+        archivedMessageCount: normalizedArchiveMessages.length,
+        hasOlderMessages: totalMessageCount > normalizedLiveMessages.length,
+        rollingSummary: transcriptArchive.rollingSummary,
+        totalMessageCount,
+      }),
     },
     groupFolder,
     projectName: typeof record.projectName === 'string' && record.projectName.trim()
       ? record.projectName.trim()
       : null,
     projectRootPath: normalizeProjectRootPath(record.projectRootPath),
+    transcriptArchive: {
+      ...transcriptArchive,
+      messages: normalizedArchiveMessages,
+    },
   };
 }

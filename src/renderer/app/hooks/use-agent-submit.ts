@@ -26,6 +26,10 @@ export function useAgentSubmit({ focusComposer }: UseAgentSubmitOptions) {
       return;
     }
 
+    if (selectedAgent?.status === 'live') {
+      return;
+    }
+
     try {
       await agentRuntime.service.sendMessage(selectedAgentId, value);
       setDraft(selectedAgentId, '');

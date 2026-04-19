@@ -19,6 +19,7 @@ import {
   createArtifactFolderName,
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { isPlainObject } from '@/shared/is-record';
 
 const STORE_NAME = 'workflow';
@@ -90,6 +91,8 @@ function normalizeEvent(value: unknown): WorkflowEvent | null {
 
   const kind = value.kind === 'assignment'
     ? 'assignment'
+    : value.kind === 'feedback'
+      ? 'feedback'
     : value.kind === 'task'
       ? 'task'
       : value.kind === 'note'
@@ -97,6 +100,9 @@ function normalizeEvent(value: unknown): WorkflowEvent | null {
         : 'item';
 
   return {
+    ...(typeof value.actor === 'string' && value.actor.trim()
+      ? { actor: value.actor }
+      : {}),
     createdAt: value.createdAt,
     description: value.description,
     id: value.id,
@@ -174,8 +180,34 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
       const normalized = normalizeEvent(event);
       return normalized ? [normalized] : [];
     });
+    const activity = isPlainObject(item.activity)
+      ? createWorkflowItemActivitySummary({
+          ...(
+            typeof item.activity.archivedEventCount === 'number'
+              ? { archivedEventCount: item.activity.archivedEventCount }
+              : {}
+          ),
+          ...(
+            typeof item.activity.hasOlderEvents === 'boolean'
+              ? { hasOlderEvents: item.activity.hasOlderEvents }
+              : {}
+          ),
+          ...(
+            typeof item.activity.rollingSummary === 'string' || item.activity.rollingSummary === null
+              ? { rollingSummary: item.activity.rollingSummary }
+              : {}
+          ),
+          totalEventCount:
+            typeof item.activity.totalEventCount === 'number'
+              ? item.activity.totalEventCount
+              : workflowEvents.length,
+        })
+      : createWorkflowItemActivitySummary({
+          totalEventCount: workflowEvents.length,
+        });
 
     return [{
+      activity,
       artifactFolderName:
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()

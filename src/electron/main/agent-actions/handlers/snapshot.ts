@@ -5,6 +5,7 @@ import {
   createArtifactFolderName,
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 
 import { ToolHandlerError } from './types';
@@ -26,6 +27,12 @@ export interface WorkflowSnapshot {
 
 /** Workflow item shape. */
 export interface WorkflowItem {
+  activity: {
+    archivedEventCount: number;
+    hasOlderEvents: boolean;
+    rollingSummary: string | null;
+    totalEventCount: number;
+  };
   artifactFolderName: string;
   brief: string;
   createdAt: number;
@@ -115,6 +122,7 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
   return {
     items: snapshot.items.map((item) => ({
       ...item,
+      activity: createWorkflowItemActivitySummary(item.activity),
       artifactFolderName:
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()
@@ -142,6 +150,7 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
   }
 
   for (const item of snapshot.items) {
+    item.activity = createWorkflowItemActivitySummary(item.activity);
     item.status = isWorkflowItemStatus(item.status) ? item.status : 'inbox';
     item.artifactFolderName =
       typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()

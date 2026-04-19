@@ -1,6 +1,7 @@
 // Items IPC tool handlers.
 
 import { createId } from '@/shared/id';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
 import { ensureProjectArtifactFolder } from '@/electron/main/workflow/project-artifacts';
@@ -88,6 +89,9 @@ export const itemTools: RegisteredTool[] = [
       const project = snapshot.projects.find((candidate) => candidate.id === projectId)!;
 
       const item = {
+        activity: createWorkflowItemActivitySummary({
+          totalEventCount: 1,
+        }),
         artifactFolderName,
         brief,
         createdAt: now,

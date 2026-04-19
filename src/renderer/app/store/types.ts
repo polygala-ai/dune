@@ -4,6 +4,8 @@ import type { StateCreator } from 'zustand';
 
 import type {
   Agent,
+  AgentMessage,
+  AgentTranscriptPage,
   CodingEngineStatus,
   ExternalChannelsState,
   AgentRuntimeInfo,
@@ -20,6 +22,7 @@ import type {
 import type {
   WorkflowItem,
   WorkflowItemStatus,
+  WorkflowProjectActivitySummary,
   WorkflowProjectFilter,
   WorkflowProjectScreen,
   WorkflowProjectView,
@@ -42,10 +45,16 @@ export interface NavigationSnapshot {
 }
 
 /** Agent state. */
+export interface AgentTranscriptCacheEntry {
+  messages: AgentMessage[];
+  totalMessageCount: number;
+}
+
 export interface AgentState {
   agents: Agent[];
   agentCustomizations: Record<string, AgentCustomizationDraft>;
   agentDrafts: Record<string, string>;
+  agentTranscriptCache: Record<string, AgentTranscriptCacheEntry>;
   codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isStreaming: boolean;
@@ -56,6 +65,7 @@ export interface AgentState {
 
 /** Agent actions shape. */
 export interface AgentActions {
+  appendTranscriptPage: (page: AgentTranscriptPage) => void;
   resetAgentCustomization: (agentId: string) => void;
   setAgentsSnapshot: (snapshot: AgentServiceSnapshot) => void;
   setDraft: (agentId: string | null, draft: string) => void;
@@ -204,6 +214,7 @@ export interface WorkflowSessionState {
     itemId: string;
     itemTitle: string;
   }>;
+  activitySummary: WorkflowProjectActivitySummary;
   filteredItemSummaries: Array<{
     brief: string;
     completedTaskCount: number;

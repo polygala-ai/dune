@@ -26,6 +26,10 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  getProjectActivityPage: (projectId, options) =>
+    ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
+  getAgentTranscriptPage: (agentId, options) =>
+    ipcRenderer.invoke(ipcChannels.getAgentTranscriptPage, agentId, options),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
@@ -38,6 +42,8 @@ const bridge: DesktopBridge = {
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
+  runIsolatedResearch: (agentId, input) =>
+    ipcRenderer.invoke(ipcChannels.runIsolatedResearch, agentId, input),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   updateAgentChannel: (input) => ipcRenderer.invoke(ipcChannels.updateAgentChannel, input),
   updateAgentDefinition: (agentId, definition) =>

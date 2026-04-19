@@ -553,20 +553,33 @@ export function WorkflowItemInspector({
 
           <InspectorSection
             badge={
-              item.workflowEvents.length === 0
+              item.activity.totalEventCount === 0
                 ? 'No events'
-                : `${item.workflowEvents.length} ${item.workflowEvents.length === 1 ? 'event' : 'events'}`
+                : `${item.activity.totalEventCount} ${item.activity.totalEventCount === 1 ? 'event' : 'events'}`
             }
             description="Recent changes for this item."
             eyebrow="Activity"
           >
-            {item.workflowEvents.length === 0 ? (
-              <div className="rounded-[18px] border border-dashed border-app-border bg-app-panel/35 px-4 py-4 text-sm leading-6 text-app-muted">
-                Activity will appear here as the work item changes.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {item.workflowEvents.map((event) => (
+            <div className="space-y-3">
+              {item.activity.rollingSummary ? (
+                <div className="rounded-[18px] border border-app-border bg-app-card/55 px-4 py-4">
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-app-muted">
+                    <span>Archived Summary</span>
+                    <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+                    <span>{item.activity.archivedEventCount} archived</span>
+                  </div>
+                  <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-app-text">
+                    {item.activity.rollingSummary}
+                  </pre>
+                </div>
+              ) : null}
+
+              {item.workflowEvents.length === 0 ? (
+                <div className="rounded-[18px] border border-dashed border-app-border bg-app-panel/35 px-4 py-4 text-sm leading-6 text-app-muted">
+                  Activity will appear here as the work item changes.
+                </div>
+              ) : (
+                item.workflowEvents.map((event) => (
                   <div className="relative pl-5" key={event.id}>
                     <div className="absolute left-[5px] top-3 h-2.5 w-2.5 rounded-full bg-app-accent/70" />
                     <div className="rounded-[16px] border border-app-border bg-app-panel/55 px-4 py-3">
@@ -583,9 +596,9 @@ export function WorkflowItemInspector({
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </InspectorSection>
         </div>
       </div>

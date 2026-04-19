@@ -31,6 +31,7 @@ export function cloneSnapshot(snapshot: AgentServiceSnapshot): AgentServiceSnaps
       })),
       projectId: agent.projectId ?? null,
       telegram: cloneTelegramAgentRuntimeState(agent.telegram),
+      transcript: { ...agent.transcript },
     })),
     codingEngines: snapshot.codingEngines.map((engine) => ({ ...engine })),
     externalChannels: cloneExternalChannelsState(snapshot.externalChannels),

@@ -8,6 +8,7 @@ import type {
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
+  RunIsolatedResearchInput,
   CreateAgentInput,
   StartTelegramSetupSessionInput,
   UpdateAgentChannelInput,
@@ -130,9 +131,22 @@ export class DesktopRuntimeController {
     return this.activeRuntime.service.getTelegramSetupSession(sessionId);
   }
 
+  /** Returns one lazy transcript page for an agent. */
+  async getTranscriptPage(
+    agentId: string,
+    options?: { beforeMessageId?: string | null; limit?: number },
+  ) {
+    return this.activeRuntime.service.getTranscriptPage(agentId, options);
+  }
+
   /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.activeRuntime.reloadExternalChannels?.();
+  }
+
+  /** Runs an isolated multi-target research pass and reduces the results. */
+  async runIsolatedResearch(agentId: string, input: RunIsolatedResearchInput) {
+    return this.activeRuntime.service.runIsolatedResearch(agentId, input);
   }
 
   /** Sends agent message. */

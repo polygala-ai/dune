@@ -100,6 +100,8 @@ interface MockAgent {
   _options: AgentOptions;
   addChannel: ReturnType<typeof vi.fn>;
   channelDrivers: Map<string, ChannelDriver>;
+  getGroup: ReturnType<typeof vi.fn>;
+  getTask: ReturnType<typeof vi.fn>;
   name: string;
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
@@ -107,6 +109,7 @@ interface MockAgent {
   registerGroup: ReturnType<typeof vi.fn>;
   registeredGroups: Record<string, unknown>;
   removeChannel: ReturnType<typeof vi.fn>;
+  scheduleTask: ReturnType<typeof vi.fn>;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
@@ -114,6 +117,11 @@ interface MockAgent {
 /** Creates agent lite module harness. */
 function createAgentLiteModuleHarness(
   harnessOptions: {
+    resolveTaskResult?: (options: {
+      contextMode: 'group' | 'isolated';
+      jid: string;
+      prompt: string;
+    }) => { error?: string; result?: string };
     start?: () => Promise<void> | void;
   } = {},
 ) {
@@ -132,6 +140,19 @@ function createAgentLiteModuleHarness(
     const eventHandlers = new Map<string, EventHandler[]>();
     const channelDrivers = new Map<string, ChannelDriver>();
     const registeredGroups: Record<string, unknown> = {};
+    const tasks = new Map<string, {
+      contextMode: 'group' | 'isolated';
+      createdAt: string;
+      groupFolder: string;
+      id: string;
+      jid: string;
+      lastResult: string | null;
+      nextRun: string | null;
+      prompt: string;
+      scheduleType: 'once';
+      scheduleValue: string;
+      status: 'active' | 'completed';
+    }>();
 
     const onImpl = (event: string, handler: EventHandler) => {
       if (!eventHandlers.has(event)) {
@@ -177,6 +198,129 @@ function createAgentLiteModuleHarness(
       }),
       registeredGroups,
       removeChannel: vi.fn(),
+      getTask: vi.fn((taskId: string) => {
+        const task = tasks.get(taskId);
+
+        if (!task) {
+          return undefined;
+        }
+
+        return {
+          contextMode: task.contextMode,
+          createdAt: task.createdAt,
+          groupFolder: task.groupFolder,
+          id: task.id,
+          jid: task.jid,
+          lastResult: task.lastResult,
+          lastRun: task.createdAt,
+          nextRun: task.nextRun,
+          prompt: task.prompt,
+          runs: [],
+          scheduleType: task.scheduleType,
+          scheduleValue: task.scheduleValue,
+          status: task.status,
+        };
+      }),
+      getGroup: vi.fn((jid: string) => registeredGroups[jid]),
+      scheduleTask: vi.fn(async (taskOptions: {
+        contextMode?: 'group' | 'isolated';
+        jid: string;
+        prompt: string;
+        scheduleType: 'once';
+        scheduleValue: string;
+      }) => {
+        const contextMode = taskOptions.contextMode ?? 'isolated';
+        const taskId = `task-${Math.random().toString(36).slice(2, 8)}`;
+        const createdAt = new Date().toISOString();
+        const group = registeredGroups[taskOptions.jid] as { folder?: string } | undefined;
+        const taskRecord: {
+          contextMode: 'group' | 'isolated';
+          createdAt: string;
+          groupFolder: string;
+          id: string;
+          jid: string;
+          lastResult: string | null;
+          nextRun: string | null;
+          prompt: string;
+          scheduleType: 'once';
+          scheduleValue: string;
+          status: 'active' | 'completed';
+        } = {
+          contextMode,
+          createdAt,
+          groupFolder: group?.folder ?? 'main',
+          id: taskId,
+          jid: taskOptions.jid,
+          lastResult: null,
+          nextRun: null,
+          prompt: taskOptions.prompt,
+          scheduleType: 'once' as const,
+          scheduleValue: taskOptions.scheduleValue,
+          status: 'active' as const,
+        };
+
+        tasks.set(taskId, taskRecord);
+
+        queueMicrotask(() => {
+          mockAgent._emit('task.run.started', {
+            agentId: 'mock-agent',
+            contextMode,
+            groupFolder: taskRecord.groupFolder,
+            jid: taskOptions.jid,
+            taskId,
+            timestamp: createdAt,
+          });
+
+          const resolvedTask = harnessOptions.resolveTaskResult?.({
+            contextMode,
+            jid: taskOptions.jid,
+            prompt: taskOptions.prompt,
+          }) ?? { result: `Task result for ${taskOptions.jid}` };
+
+          if (resolvedTask.error) {
+            mockAgent._emit('task.run.failed', {
+              agentId: 'mock-agent',
+              durationMs: 1,
+              error: resolvedTask.error,
+              groupFolder: taskRecord.groupFolder,
+              jid: taskOptions.jid,
+              nextRun: null,
+              taskId,
+              timestamp: createdAt,
+            });
+            taskRecord.status = 'completed';
+            return;
+          }
+
+          taskRecord.lastResult = resolvedTask.result ?? null;
+          taskRecord.status = 'completed';
+          mockAgent._emit('task.run.succeeded', {
+            agentId: 'mock-agent',
+            durationMs: 1,
+            groupFolder: taskRecord.groupFolder,
+            jid: taskOptions.jid,
+            nextRun: null,
+            result: resolvedTask.result ?? null,
+            taskId,
+            timestamp: createdAt,
+          });
+        });
+
+        return {
+          contextMode,
+          createdAt,
+          groupFolder: taskRecord.groupFolder,
+          id: taskId,
+          jid: taskOptions.jid,
+          lastResult: null,
+          lastRun: null,
+          nextRun: null,
+          prompt: taskOptions.prompt,
+          scheduleType: 'once' as const,
+          scheduleValue: taskOptions.scheduleValue,
+          status: 'active' as const,
+        };
+      }),
       start: vi.fn(async () => {
         await harnessOptions.start?.();
         const channels = mockAgent._options.channels ?? {};
@@ -2430,5 +2574,128 @@ describe('AgentRuntime', () => {
     await expect(host.shutdown()).resolves.toBeUndefined();
 
     expect(harness.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps only the live transcript window in the snapshot and pages older messages lazily', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Transcript pager',
+      projectId: 'project-1',
+    });
+
+    for (let index = 0; index < 45; index += 1) {
+      await host.service.postSystemMessage(agentId, `System note ${index + 1}`);
+    }
+
+    const snapshotAgent = host.getSnapshot().agents.find((agent) => agent.id === agentId);
+
+    expect(snapshotAgent?.messages).toHaveLength(40);
+    expect(snapshotAgent?.transcript.archivedMessageCount).toBe(5);
+    expect(snapshotAgent?.transcript.totalMessageCount).toBe(45);
+    expect(snapshotAgent?.transcript.hasOlderMessages).toBe(true);
+
+    const olderPage = await host.service.getTranscriptPage(agentId, {
+      beforeMessageId: snapshotAgent?.messages[0]?.id ?? null,
+      limit: 10,
+    });
+
+    expect(olderPage.messages.map((message) => message.content)).toEqual([
+      'System note 1',
+      'System note 2',
+      'System note 3',
+      'System note 4',
+      'System note 5',
+    ]);
+    expect(olderPage.hasOlderMessages).toBe(false);
+    expect(olderPage.totalMessageCount).toBe(45);
+
+    const fallbackPage = await host.service.getTranscriptPage(agentId, {
+      beforeMessageId: 'missing-message-id',
+      limit: 3,
+    });
+
+    expect(fallbackPage.messages.map((message) => message.content)).toEqual([
+      'System note 43',
+      'System note 44',
+      'System note 45',
+    ]);
+  });
+
+  it('runs per-target research in isolated task contexts and merges with a reducer task', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness({
+      resolveTaskResult: ({ prompt }) => {
+        if (prompt.includes('You are merging isolated research results.')) {
+          return {
+            result: prompt.includes('## Result 1: Alpha') && prompt.includes('## Result 2: Beta')
+              ? 'Reducer merged Alpha and Beta.'
+              : 'Reducer missing target outputs.',
+          };
+        }
+
+        if (prompt.includes('Target title: Alpha')) {
+          return { result: 'Alpha isolated result.' };
+        }
+
+        if (prompt.includes('Target title: Beta')) {
+          return { result: 'Beta isolated result.' };
+        }
+
+        return { result: 'Unknown isolated result.' };
+      },
+    });
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.ensureProjectMainAgent('project-1', 'Research Platform');
+    const result = await host.service.runIsolatedResearch(agentId, {
+      maxConcurrency: 2,
+      reducerPrompt: 'Merge the isolated target findings into one recommendation.',
+      sharedPrompt: 'Research each target independently and return a concise report.',
+      targets: [
+        { brief: 'Inspect Alpha.', id: 'alpha', title: 'Alpha' },
+        { brief: 'Inspect Beta.', id: 'beta', title: 'Beta' },
+      ],
+    });
+
+    const mockAgent = harness.mockAgent();
+    const scheduledTasks = mockAgent.scheduleTask.mock.calls.map(([options]) => options as {
+      contextMode?: 'group' | 'isolated';
+      jid: string;
+      prompt: string;
+    });
+
+    expect(result.results).toEqual([
+      { result: 'Alpha isolated result.', targetId: 'alpha', title: 'Alpha' },
+      { result: 'Beta isolated result.', targetId: 'beta', title: 'Beta' },
+    ]);
+    expect(result.mergedResult).toBe('Reducer merged Alpha and Beta.');
+    expect(scheduledTasks).toHaveLength(3);
+    expect(scheduledTasks.every((task) => task.contextMode === 'isolated')).toBe(true);
+    expect(scheduledTasks.every((task) => task.jid.startsWith(`${toAgentChatJid(agentId)}:isolated-research:`))).toBe(true);
+    expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Alpha'))).toBe(true);
+    expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Beta'))).toBe(true);
+    expect(scheduledTasks.some((task) => task.prompt.includes('You are merging isolated research results.'))).toBe(true);
   });
 });

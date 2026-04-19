@@ -38,6 +38,7 @@ export function presentAgent(
       ...message,
       createdAtLabel: formatMessageTimestamp(message.createdAt, now),
     })),
+    transcript: { ...agent.transcript },
   };
 }
 
@@ -52,4 +53,3 @@ export function selectAgentById(
 
   return agents.find((agent) => agent.id === selectedAgentId) ?? null;
 }
-

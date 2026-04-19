@@ -16,6 +16,7 @@ import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock
 import type {
   AgentDefinition,
   CreateAgentInput,
+  RunIsolatedResearchInput,
   StartTelegramSetupSessionInput,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
@@ -116,11 +117,36 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     ) => {
       return this.bridge.ensureProjectMainAgent(projectId, projectName, projectRootPath);
     },
+    getTranscriptPage: async (
+      agentId: string,
+      options?: { beforeMessageId?: string | null; limit?: number },
+    ) => {
+      if (!this.bridge.getAgentTranscriptPage) {
+        const snapshot = this.getSnapshot();
+        const agent = snapshot.agents.find((candidate) => candidate.id === agentId);
+
+        return {
+          agentId,
+          hasOlderMessages: false,
+          messages: agent?.messages ?? [],
+          totalMessageCount: agent?.messages.length ?? 0,
+        };
+      }
+
+      return this.bridge.getAgentTranscriptPage(agentId, options);
+    },
     getTelegramSetupSession: async (sessionId: string) => {
       return this.bridge.getTelegramSetupSession(sessionId);
     },
     getSnapshot: () => this.getSnapshot(),
     listAgents: () => this.getSnapshot().agents,
+    runIsolatedResearch: async (agentId: string, input: RunIsolatedResearchInput) => {
+      if (!this.bridge.runIsolatedResearch) {
+        throw new Error('Isolated research is unavailable in this runtime.');
+      }
+
+      return this.bridge.runIsolatedResearch(agentId, input);
+    },
     selectAgent: (agentId: string) => {
       void this.bridge.selectAgent(agentId);
     },
@@ -176,6 +202,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
           attachments: message.attachments.map((attachment) => ({ ...attachment })),
           ...(message.usage ? { usage: { ...message.usage } } : {}),
         })),
+        transcript: { ...agent.transcript },
         telegram: cloneTelegramAgentRuntimeState(agent.telegram),
       })),
       externalChannels: cloneExternalChannelsState(this.snapshot.externalChannels),

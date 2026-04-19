@@ -33,7 +33,7 @@ export function useTranscriptScroll({
     agent?.activityEvents.length,
     agent?.codingEngineEvents.length,
     agent?.id,
-    agent?.messages.length,
+    agent?.messages.at(-1)?.id,
     agent?.messages.at(-1)?.content,
     route,
     transcriptRef,

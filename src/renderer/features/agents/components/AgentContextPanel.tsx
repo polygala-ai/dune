@@ -61,6 +61,10 @@ interface AgentContextPanelProps {
 
 /** Returns whether the card is a suppressed context card. */
 function isSuppressedContextCard(card: AgentContextCard) {
+  if (card.id === 'transcript-rolling-summary') {
+    return true;
+  }
+
   if (card.eyebrow === 'Bridge' && card.title === 'Desktop-managed runtime') {
     return true;
   }

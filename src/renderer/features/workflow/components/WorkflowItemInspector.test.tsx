@@ -9,6 +9,7 @@ import type {
   WorkflowItem,
   WorkflowProject,
 } from '@/renderer/features/workflow/types';
+import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 
 const project: WorkflowProject = {
   color: '#2563eb',
@@ -24,6 +25,7 @@ const item: WorkflowItem & {
   primaryAgentName: string | null;
   workflowEvents: Array<{ createdAt: number; createdAtLabel: string; description: string; id: string; kind: string }>;
 } = {
+  activity: createWorkflowItemActivitySummary(),
   artifactFolderName: 'homepage-copy-abcd1234',
   brief: 'Rewrite the homepage narrative.',
   createdAt: 1,

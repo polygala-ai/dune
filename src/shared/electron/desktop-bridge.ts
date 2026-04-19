@@ -3,11 +3,15 @@
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
   AgentDefinition,
+  AgentTranscriptPage,
   CreateAgentInput,
+  RunIsolatedResearchInput,
+  RunIsolatedResearchResult,
   StartTelegramSetupSessionInput,
   TelegramSetupSession,
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
+import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
@@ -25,6 +29,14 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  getProjectActivityPage?: (
+    projectId: string,
+    options?: { beforeEntryId?: string | null; limit?: number },
+  ) => Promise<WorkflowProjectActivityPage>;
+  getAgentTranscriptPage?: (
+    agentId: string,
+    options?: { beforeMessageId?: string | null; limit?: number },
+  ) => Promise<AgentTranscriptPage>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
   listProjectArtifactEntries?: (
@@ -37,6 +49,10 @@ export interface DesktopBridge {
   reloadExternalChannels?: () => Promise<void>;
   resetRuntime?: () => Promise<void>;
   restartApp?: () => Promise<void>;
+  runIsolatedResearch?: (
+    agentId: string,
+    input: RunIsolatedResearchInput,
+  ) => Promise<RunIsolatedResearchResult>;
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
   startTelegramSetupSession?: (input: StartTelegramSetupSessionInput) => Promise<string>;

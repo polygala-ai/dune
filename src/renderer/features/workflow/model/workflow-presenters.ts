@@ -106,6 +106,7 @@ export function getWorkflowSnapshotState(snapshot: WorkflowSnapshot): WorkflowSn
   return {
     items: snapshot.items.map((item) => ({
       ...item,
+      activity: { ...item.activity },
       tasks: item.tasks.map((task) => ({ ...task })),
       workProducts: item.workProducts.map((product) => ({ ...product })),
       workflowEvents: item.workflowEvents.map((event) => ({ ...event })),

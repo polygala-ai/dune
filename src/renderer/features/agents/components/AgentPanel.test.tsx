@@ -57,6 +57,12 @@ function createAgent(
     status: 'ready',
     statusLabel: 'Ready',
     telegram: null,
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: 0,
+    },
     updatedAt: 1,
     updatedLabel: 'Now',
     workspace: 'AgentLite agent',
@@ -87,7 +93,9 @@ describe('AgentPanel', () => {
         })}
         composerRef={createRef<HTMLTextAreaElement>()}
         draft=""
+        isLoadingOlderMessages={false}
         onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
         onSubmit={vi.fn(() => Promise.resolve(undefined))}
         transcriptRef={createRef<HTMLDivElement>()}
       />,
@@ -115,7 +123,9 @@ describe('AgentPanel', () => {
         })}
         composerRef={createRef<HTMLTextAreaElement>()}
         draft=""
+        isLoadingOlderMessages={false}
         onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
         onSubmit={vi.fn(() => Promise.resolve(undefined))}
         transcriptRef={createRef<HTMLDivElement>()}
       />,
@@ -151,7 +161,9 @@ describe('AgentPanel', () => {
         })}
         composerRef={createRef<HTMLTextAreaElement>()}
         draft=""
+        isLoadingOlderMessages={false}
         onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
         onSubmit={vi.fn(() => Promise.resolve(undefined))}
         transcriptRef={createRef<HTMLDivElement>()}
       />,

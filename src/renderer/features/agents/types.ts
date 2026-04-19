@@ -189,6 +189,50 @@ export interface AgentContextCard {
   body: string;
 }
 
+/** Agent transcript summary. */
+export interface AgentTranscriptSummary {
+  archivedMessageCount: number;
+  hasOlderMessages: boolean;
+  rollingSummary: string | null;
+  totalMessageCount: number;
+}
+
+/** Lazy transcript page. */
+export interface AgentTranscriptPage {
+  agentId: string;
+  hasOlderMessages: boolean;
+  messages: AgentMessage[];
+  totalMessageCount: number;
+}
+
+/** Per-target isolated research request. */
+export interface IsolatedResearchTarget {
+  brief: string;
+  id?: string | null;
+  title: string;
+}
+
+/** Per-target isolated research result. */
+export interface IsolatedResearchTargetResult {
+  result: string;
+  targetId: string | null;
+  title: string;
+}
+
+/** Isolated batch research request. */
+export interface RunIsolatedResearchInput {
+  maxConcurrency?: number;
+  reducerPrompt: string;
+  sharedPrompt: string;
+  targets: IsolatedResearchTarget[];
+}
+
+/** Isolated batch research response. */
+export interface RunIsolatedResearchResult {
+  mergedResult: string;
+  results: IsolatedResearchTargetResult[];
+}
+
 /** Presented agent message shape. */
 export interface PresentedAgentMessage extends AgentMessage {
   createdAtLabel: string;
@@ -216,6 +260,7 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   updatedAt: number;
   workspace: string;
   contextCards: AgentContextCard[];
+  transcript: AgentTranscriptSummary;
   messages: AgentMessage[];
 }
 
@@ -233,6 +278,7 @@ export interface PresentedAgent extends AgentSummary {
   updatedAt: number;
   workspace: string;
   contextCards: AgentContextCard[];
+  transcript: AgentTranscriptSummary;
   messages: PresentedAgentMessage[];
 }
 

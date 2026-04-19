@@ -30,6 +30,12 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
     definition: { archetype: 'custom', responsibilities: [] },
     status: 'ready',
     telegram: null,
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: 0,
+    },
     updatedAt: Date.now(),
     workspace: 'Prototype agent',
     ...overrides,

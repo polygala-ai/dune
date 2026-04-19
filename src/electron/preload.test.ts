@@ -79,6 +79,8 @@ describe('preload bridge', () => {
     await desktopBridge?.deleteLocalData?.();
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
+    await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
+    await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
@@ -86,6 +88,11 @@ describe('preload bridge', () => {
     await desktopBridge?.prepareProjectRootPath?.('/tmp/project-1', ['homepage-copy-abcd1234']);
     await desktopBridge?.reloadExternalChannels?.();
     await desktopBridge?.restartApp?.();
+    await desktopBridge?.runIsolatedResearch?.('agent-1', {
+      reducerPrompt: 'Merge the findings.',
+      sharedPrompt: 'Research each target.',
+      targets: [{ brief: 'Alpha brief', title: 'Alpha' }],
+    });
     await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
@@ -122,6 +129,16 @@ describe('preload bridge', () => {
       'homepage-copy-abcd1234',
     );
     expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.getAgentTranscriptPage,
+      'agent-1',
+      { beforeMessageId: 'message-1', limit: 20 },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.getProjectActivityPage,
+      'project-1',
+      { beforeEntryId: 'event-1', limit: 20 },
+    );
+    expect(invoke).toHaveBeenCalledWith(
       ipcChannels.listProjectArtifactEntries,
       '/tmp/project-1',
       'homepage-copy-abcd1234',
@@ -136,6 +153,15 @@ describe('preload bridge', () => {
     );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.reloadExternalChannels);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.restartApp);
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.runIsolatedResearch,
+      'agent-1',
+      {
+        reducerPrompt: 'Merge the findings.',
+        sharedPrompt: 'Research each target.',
+        targets: [{ brief: 'Alpha brief', title: 'Alpha' }],
+      },
+    );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.selectProjectDirectory);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getTelegramSetupSession,
@@ -202,6 +228,8 @@ describe('preload bridge', () => {
       'deleteLocalData',
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
+      'getAgentTranscriptPage',
+      'getProjectActivityPage',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
       'listProjectArtifactEntries',
@@ -211,6 +239,7 @@ describe('preload bridge', () => {
       'reloadExternalChannels',
       'resetRuntime',
       'restartApp',
+      'runIsolatedResearch',
       'selectProjectDirectory',
       'selectAgent',
       'sendAgentMessage',

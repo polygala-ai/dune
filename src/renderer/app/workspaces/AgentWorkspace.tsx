@@ -18,9 +18,11 @@ interface AgentWorkspaceProps {
   draft: string;
   isCompactShell: boolean;
   isContextPanelOpen: boolean;
+  isLoadingOlderMessages: boolean;
   isSidebarOpen: boolean;
   onCreateAgent: () => void;
   onDraftChange: (value: string) => void;
+  onLoadOlderMessages: () => Promise<void>;
   onSubmit: (value: string) => Promise<void>;
   onToggleInspector: () => void;
   onToggleSidebar: () => void;
@@ -37,9 +39,11 @@ export function AgentWorkspace({
   draft,
   isCompactShell,
   isContextPanelOpen,
+  isLoadingOlderMessages,
   isSidebarOpen,
   onCreateAgent,
   onDraftChange,
+  onLoadOlderMessages,
   onSubmit,
   onToggleInspector,
   onToggleSidebar,
@@ -72,7 +76,9 @@ export function AgentWorkspace({
             agent={agent}
             composerRef={composerRef}
             draft={draft}
+            isLoadingOlderMessages={isLoadingOlderMessages}
             onDraftChange={onDraftChange}
+            onLoadOlderMessages={onLoadOlderMessages}
             onSubmit={onSubmit}
             transcriptRef={transcriptRef}
           />

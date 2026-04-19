@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  Agent as AgentLiteAgent,
   AgentLite,
   ChannelDriverFactory,
+  RegisterGroupOptions,
 } from '@boxlite-ai/agentlite';
 
 import type {
@@ -19,11 +21,14 @@ import type {
   AgentDefinition,
   AgentMessage,
   AgentMessageUsage,
+  AgentTranscriptPage,
   AgentRuntimeInfo,
   AgentStatus,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
+  RunIsolatedResearchInput,
+  RunIsolatedResearchResult,
   StartTelegramSetupSessionInput,
   TelegramAgentRuntimeState,
   TelegramConnectionStatus,
@@ -76,12 +81,15 @@ import {
   createAssistantMessage,
   createBuiltInAgentCopy,
   createDraftAgent,
+  createAgentTranscriptSummary,
   createExternalAgentCopy,
   createMessageId,
+  createPersistedTranscriptArchive,
   createUserMessage,
   normalizePersistedAgentRecord,
   normalizePersistedMessages,
   summarizePreview,
+  type PersistedTranscriptArchive,
   type PersistedAgentRecord,
 } from './records';
 import {
@@ -102,7 +110,182 @@ const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 const MAX_ACTIVITY_EVENTS = 50;
+const MAX_LIVE_TRANSCRIPT_MESSAGES = 40;
+const MAX_ROLLING_SUMMARY_MESSAGES = 24;
+const DEFAULT_TRANSCRIPT_PAGE_LIMIT = 80;
+const MAX_TRANSCRIPT_PAGE_LIMIT = 200;
+const DEFAULT_RESEARCH_CONCURRENCY = 4;
+const MAX_RESEARCH_CONCURRENCY = 8;
+const MAX_RESEARCH_TARGETS = 24;
+const RESEARCH_RUN_TIMEOUT_MS = 3 * 60 * 1000;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
+const TRANSCRIPT_SUMMARY_CARD_ID = 'transcript-rolling-summary';
+const ISOLATED_RESEARCH_GROUP_FOLDER_PREFIX = 'isolated-research-slot-';
+
+function cloneAgentMessage(message: AgentMessage): AgentMessage {
+  return {
+    ...message,
+    attachments: message.attachments.map((attachment) => ({ ...attachment })),
+    ...(message.usage ? { usage: { ...message.usage } } : {}),
+  };
+}
+
+function cloneAgentMessages(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) => cloneAgentMessage(message));
+}
+
+function clampTranscriptPageLimit(limit?: number) {
+  if (!Number.isFinite(limit)) {
+    return DEFAULT_TRANSCRIPT_PAGE_LIMIT;
+  }
+
+  return Math.max(1, Math.min(MAX_TRANSCRIPT_PAGE_LIMIT, Math.trunc(limit ?? DEFAULT_TRANSCRIPT_PAGE_LIMIT)));
+}
+
+function clampResearchConcurrency(limit?: number) {
+  if (!Number.isFinite(limit)) {
+    return DEFAULT_RESEARCH_CONCURRENCY;
+  }
+
+  return Math.max(1, Math.min(MAX_RESEARCH_CONCURRENCY, Math.trunc(limit ?? DEFAULT_RESEARCH_CONCURRENCY)));
+}
+
+function roleLabel(role: AgentMessage['role']) {
+  switch (role) {
+    case 'assistant':
+      return 'Agent';
+    case 'system':
+      return 'System';
+    case 'user':
+    default:
+      return 'User';
+  }
+}
+
+function buildRollingTranscriptSummary(messages: AgentMessage[]) {
+  const summarizedMessages = messages
+    .filter((message) => message.content.trim().length > 0)
+    .slice(-MAX_ROLLING_SUMMARY_MESSAGES)
+    .map((message) => `- ${roleLabel(message.role)}: ${summarizeMessagePreview(message.content, 160)}`);
+
+  if (summarizedMessages.length === 0) {
+    return null;
+  }
+
+  return [
+    `${messages.length} earlier transcript messages were compacted out of the live window.`,
+    'Preserve the decisions, constraints, and unresolved questions captured here when you continue.',
+    '',
+    ...summarizedMessages,
+  ].join('\n');
+}
+
+function appendArchivedTranscriptSummary(base: string, summary: string | null) {
+  const trimmedSummary = summary?.trim() ?? '';
+
+  if (!trimmedSummary) {
+    return base;
+  }
+
+  const block = ['## Archived Conversation Summary', trimmedSummary].join('\n\n');
+
+  return base ? `${base}\n\n${block}` : block;
+}
+
+function upsertTranscriptSummaryContextCard(
+  contextCards: Agent['contextCards'],
+  summary: string | null,
+): Agent['contextCards'] {
+  const nextCards = contextCards.filter((card) => card.id !== TRANSCRIPT_SUMMARY_CARD_ID);
+  const trimmedSummary = summary?.trim() ?? '';
+
+  if (!trimmedSummary) {
+    return nextCards;
+  }
+
+  return [
+    {
+      body: trimmedSummary,
+      eyebrow: 'Rolling summary',
+      id: TRANSCRIPT_SUMMARY_CARD_ID,
+      title: 'Archived Conversation',
+    },
+    ...nextCards,
+  ];
+}
+
+function createIsolatedResearchGroupJid(agentId: string, slotNumber: number) {
+  return `${toAgentChatJid(agentId)}:isolated-research:${slotNumber}`;
+}
+
+function createIsolatedResearchGroupOptions(
+  agentName: string,
+  slotNumber: number,
+  mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }>,
+): RegisterGroupOptions {
+  const name = `${agentName} Research ${slotNumber}`;
+  const containerConfig = mounts.length > 0
+    ? {
+        additionalMounts: mounts.map((mount) => ({
+          containerPath: mount.containerPath,
+          hostPath: mount.hostPath,
+          readonly: mount.readonly ?? false,
+        })),
+      }
+    : null;
+
+  return {
+    ...(containerConfig ? { containerConfig } : {}),
+    folder: `${ISOLATED_RESEARCH_GROUP_FOLDER_PREFIX}${slotNumber}`,
+    isMain: false,
+    name,
+    requiresTrigger: false,
+    trigger: `@${name}`,
+  };
+}
+
+function buildIsolatedResearchPrompt(
+  target: RunIsolatedResearchInput['targets'][number],
+  sharedPrompt: string,
+) {
+  const lines = [
+    'You are running one isolated research pass for a single target.',
+    'This run does not share transcript history with other targets.',
+    'Return a concise, self-contained markdown report that another reducer can merge later.',
+    '',
+    'Shared instructions:',
+    sharedPrompt.trim(),
+    '',
+    `Target title: ${target.title.trim()}`,
+    'Target brief:',
+    target.brief.trim(),
+  ];
+
+  return lines.join('\n');
+}
+
+function buildReducerPrompt(
+  reducerPrompt: string,
+  results: RunIsolatedResearchResult['results'],
+) {
+  const serializedResults = results.map((result, index) => [
+    `## Result ${index + 1}: ${result.title}`,
+    result.targetId ? `Target ID: ${result.targetId}` : 'Target ID: none',
+    '',
+    result.result.trim(),
+  ].join('\n'));
+
+  return [
+    'You are merging isolated research results.',
+    'Use only the per-target outputs below. Do not assume any other transcript history.',
+    '',
+    'Reducer instructions:',
+    reducerPrompt.trim(),
+    '',
+    'Per-target results:',
+    ...serializedResults,
+  ].join('\n');
+}
 
 interface AgentSessionTokenTotals {
   inputTokens: number;
@@ -420,6 +603,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       deleteAgent: async (agentId) => this.deleteAgent(agentId),
       ensureProjectMainAgent: async (projectId, projectName, projectRootPath) =>
         this.ensureProjectMainAgent(projectId, projectName, projectRootPath),
+      getTranscriptPage: async (agentId, options) =>
+        this.getTranscriptPage(agentId, options),
       getTelegramSetupSession: async (sessionId) =>
         this.telegram.getSetupSession(sessionId),
       getSnapshot: () => this.getSnapshot(),
@@ -427,6 +612,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       selectAgent: (agentId) => {
         this.selectAgent(agentId);
       },
+      runIsolatedResearch: async (agentId, input) =>
+        this.runIsolatedResearch(agentId, input),
       sendMessage: async (agentId, text) => this.sendMessage(agentId, text),
       scheduleItemAssignment: async (agentId, itemId) =>
         this.scheduleItemAssignment(agentId, itemId),
@@ -836,8 +1023,12 @@ export class AgentRuntime implements AgentRuntimeContract {
           : agent,
       ),
     };
+    const didCompactTranscript = this.compactTranscriptForAgent(trimmedId);
     this.persistState();
     this.emit();
+    if (didCompactTranscript) {
+      void this.rotateCompactedAgentRuntime(trimmedId);
+    }
 
     const duneAgent = this.lifecycle.getRuntime(trimmedId)
       ?? await this.ensureAgentRuntime(record);
@@ -1059,6 +1250,379 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
+  private buildAgentInstructions(record: PersistedAgentRecord) {
+    return appendArchivedTranscriptSummary(
+      composeAgentSystemPrompt(record.agent.definition, this.homeDir),
+      record.transcriptArchive?.rollingSummary ?? null,
+    );
+  }
+
+  private getCombinedTranscriptMessages(agentId: string): AgentMessage[] {
+    const record = this.records.get(agentId);
+    const liveAgent = this.snapshot.agents.find((candidate) => candidate.id === agentId) ?? null;
+    const archivedMessages = record?.transcriptArchive?.messages ?? [];
+    const liveMessages = liveAgent?.messages ?? record?.agent.messages ?? [];
+
+    return [
+      ...cloneAgentMessages(archivedMessages),
+      ...cloneAgentMessages(liveMessages),
+    ];
+  }
+
+  private async getTranscriptPage(
+    agentId: string,
+    options?: { beforeMessageId?: string | null; limit?: number },
+  ): Promise<AgentTranscriptPage> {
+    const trimmedAgentId = agentId.trim();
+    const record = this.records.get(trimmedAgentId);
+
+    if (!record) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const allMessages = this.getCombinedTranscriptMessages(trimmedAgentId);
+    const limit = clampTranscriptPageLimit(options?.limit);
+    const beforeMessageId = options?.beforeMessageId?.trim() ?? '';
+    const anchorIndex = beforeMessageId
+      ? allMessages.findIndex((message) => message.id === beforeMessageId)
+      : -1;
+    const endExclusive = anchorIndex >= 0 ? anchorIndex : allMessages.length;
+    const start = Math.max(0, endExclusive - limit);
+
+    return {
+      agentId: trimmedAgentId,
+      hasOlderMessages: start > 0,
+      messages: allMessages.slice(start, endExclusive),
+      totalMessageCount: allMessages.length,
+    };
+  }
+
+  private async ensureIsolatedResearchGroups(
+    record: PersistedAgentRecord,
+    duneAgent: DuneAgent,
+    slotCount: number,
+  ) {
+    const { didUpdateRecord, mounts } = await this.resolveAgentMounts(record);
+    const agentLiteAgent = duneAgent.agentLiteAgent;
+
+    if (didUpdateRecord) {
+      this.persistState();
+    }
+
+    for (let slotNumber = 1; slotNumber <= slotCount; slotNumber += 1) {
+      const jid = createIsolatedResearchGroupJid(record.agent.id, slotNumber);
+
+      if (agentLiteAgent.getGroup(jid)) {
+        continue;
+      }
+
+      await agentLiteAgent.registerGroup(
+        jid,
+        createIsolatedResearchGroupOptions(record.agent.name, slotNumber, mounts),
+      );
+    }
+  }
+
+  private async runScheduledTaskAndWaitForResult(
+    agentLiteAgent: AgentLiteAgent,
+    options: {
+      contextMode: 'group' | 'isolated';
+      jid: string;
+      prompt: string;
+      timeoutMs?: number;
+    },
+  ): Promise<string> {
+    const timeoutMs = options.timeoutMs ?? RESEARCH_RUN_TIMEOUT_MS;
+
+    return new Promise<string>((resolve, reject) => {
+      let taskId: string | null = null;
+      let settled = false;
+      let timeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+      const finalizeResolve = (result: string | null | undefined) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        resolve(result?.trim() || 'No result returned.');
+      };
+
+      const finalizeReject = (error: Error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const cleanup = () => {
+        if (timeoutHandle) {
+          globalThis.clearTimeout(timeoutHandle);
+        }
+
+        agentLiteAgent.off('task.run.succeeded', handleSucceeded);
+        agentLiteAgent.off('task.run.failed', handleFailed);
+        agentLiteAgent.off('task.run.skipped', handleSkipped);
+      };
+
+      const handleSucceeded = (event: {
+        result: string | null;
+        taskId: string;
+      }) => {
+        if (event.taskId !== taskId) {
+          return;
+        }
+
+        finalizeResolve(event.result);
+      };
+
+      const handleFailed = (event: {
+        error: string;
+        taskId: string;
+      }) => {
+        if (event.taskId !== taskId) {
+          return;
+        }
+
+        finalizeReject(new Error(event.error || 'The research task failed.'));
+      };
+
+      const handleSkipped = (event: {
+        detail?: string;
+        reason: string;
+        taskId: string;
+      }) => {
+        if (event.taskId !== taskId) {
+          return;
+        }
+
+        finalizeReject(new Error(
+          event.detail
+            ? `The research task was skipped: ${event.reason} (${event.detail}).`
+            : `The research task was skipped: ${event.reason}.`,
+        ));
+      };
+
+      agentLiteAgent.on('task.run.succeeded', handleSucceeded);
+      agentLiteAgent.on('task.run.failed', handleFailed);
+      agentLiteAgent.on('task.run.skipped', handleSkipped);
+
+      timeoutHandle = globalThis.setTimeout(() => {
+        finalizeReject(new Error(`The research task timed out after ${timeoutMs}ms.`));
+      }, timeoutMs);
+
+      void (async () => {
+        try {
+          const task = await agentLiteAgent.scheduleTask({
+            contextMode: options.contextMode,
+            jid: options.jid,
+            prompt: options.prompt,
+            scheduleType: 'once',
+            scheduleValue: new Date().toISOString(),
+          });
+          taskId = task.id;
+
+          const taskDetails = agentLiteAgent.getTask(task.id);
+          const mostRecentRun = taskDetails?.runs[0] ?? null;
+
+          if (mostRecentRun?.status === 'error') {
+            finalizeReject(new Error(mostRecentRun.error || 'The research task failed.'));
+            return;
+          }
+
+          if (taskDetails?.status === 'completed' || mostRecentRun?.status === 'success') {
+            finalizeResolve(taskDetails?.lastResult ?? mostRecentRun?.result ?? null);
+          }
+        } catch (error) {
+          finalizeReject(error instanceof Error ? error : new Error(String(error)));
+        }
+      })();
+    });
+  }
+
+  private async runIsolatedResearch(
+    agentId: string,
+    input: RunIsolatedResearchInput,
+  ): Promise<RunIsolatedResearchResult> {
+    const trimmedAgentId = agentId.trim();
+    const record = this.records.get(trimmedAgentId);
+
+    if (!record) {
+      throw new Error(`Agent "${agentId}" was not found.`);
+    }
+
+    const sharedPrompt = input.sharedPrompt.trim();
+    const reducerPrompt = input.reducerPrompt.trim();
+    const trimmedTargets = input.targets
+      .map((target) => ({
+        brief: target.brief.trim(),
+        id: target.id?.trim() ?? null,
+        title: target.title.trim(),
+      }))
+      .filter((target) => target.brief.length > 0 && target.title.length > 0);
+
+    if (!sharedPrompt) {
+      throw new Error('A shared research prompt is required.');
+    }
+
+    if (!reducerPrompt) {
+      throw new Error('A reducer prompt is required.');
+    }
+
+    if (trimmedTargets.length === 0) {
+      throw new Error('At least one research target is required.');
+    }
+
+    if (trimmedTargets.length > MAX_RESEARCH_TARGETS) {
+      throw new Error(`Research runs are limited to ${MAX_RESEARCH_TARGETS} targets at a time.`);
+    }
+
+    const duneAgent = this.lifecycle.getRuntime(trimmedAgentId)
+      ?? await this.ensureAgentRuntime(record);
+    const maxConcurrency = Math.min(
+      clampResearchConcurrency(input.maxConcurrency),
+      trimmedTargets.length,
+    );
+
+    await this.ensureIsolatedResearchGroups(record, duneAgent, maxConcurrency);
+
+    const agentLiteAgent = duneAgent.agentLiteAgent;
+    const slotNumbers = Array.from({ length: maxConcurrency }, (_, index) => index + 1);
+    const results = new Array<RunIsolatedResearchResult['results'][number]>(trimmedTargets.length);
+    let nextTargetIndex = 0;
+
+    const runTargetOnSlot = async (slotNumber: number) => {
+      while (nextTargetIndex < trimmedTargets.length) {
+        const currentIndex = nextTargetIndex;
+        nextTargetIndex += 1;
+        const target = trimmedTargets[currentIndex]!;
+        const jid = createIsolatedResearchGroupJid(trimmedAgentId, slotNumber);
+
+        try {
+          const result = await this.runScheduledTaskAndWaitForResult(agentLiteAgent, {
+            contextMode: 'isolated',
+            jid,
+            prompt: buildIsolatedResearchPrompt(target, sharedPrompt),
+          });
+
+          results[currentIndex] = {
+            result,
+            targetId: target.id,
+            title: target.title,
+          };
+        } catch (error) {
+          results[currentIndex] = {
+            result: `Research failed for "${target.title}": ${String(error)}`,
+            targetId: target.id,
+            title: target.title,
+          };
+        }
+      }
+    };
+
+    await Promise.all(slotNumbers.map((slotNumber) => runTargetOnSlot(slotNumber)));
+
+    const mergedResult = await this.runScheduledTaskAndWaitForResult(agentLiteAgent, {
+      contextMode: 'isolated',
+      jid: createIsolatedResearchGroupJid(trimmedAgentId, slotNumbers[0] ?? 1),
+      prompt: buildReducerPrompt(reducerPrompt, results),
+    });
+
+    return {
+      mergedResult,
+      results,
+    };
+  }
+
+  private compactTranscriptForAgent(agentId: string) {
+    const record = this.records.get(agentId);
+    const snapshotAgent = this.snapshot.agents.find((candidate) => candidate.id === agentId) ?? null;
+
+    if (!record || !snapshotAgent) {
+      return false;
+    }
+
+    if (
+      snapshotAgent.messages.length <= MAX_LIVE_TRANSCRIPT_MESSAGES
+      || snapshotAgent.messages.some((message) => message.status === 'streaming')
+    ) {
+      return false;
+    }
+
+    const overflowMessages = snapshotAgent.messages.slice(0, -MAX_LIVE_TRANSCRIPT_MESSAGES);
+    const liveMessages = snapshotAgent.messages.slice(-MAX_LIVE_TRANSCRIPT_MESSAGES);
+    const existingArchive = createPersistedTranscriptArchive(record.transcriptArchive ?? {});
+    const archivedMessages = [
+      ...cloneAgentMessages(existingArchive.messages),
+      ...cloneAgentMessages(overflowMessages),
+    ];
+    const rollingSummary = buildRollingTranscriptSummary(archivedMessages);
+    const transcriptArchive = {
+      lastCompactedAt: this.now(),
+      messages: archivedMessages,
+      rollingSummary,
+    } satisfies PersistedTranscriptArchive;
+    const transcript = createAgentTranscriptSummary({
+      archivedMessageCount: archivedMessages.length,
+      hasOlderMessages: archivedMessages.length > 0,
+      rollingSummary,
+      totalMessageCount: archivedMessages.length + liveMessages.length,
+    });
+    const contextCards = upsertTranscriptSummaryContextCard(
+      snapshotAgent.contextCards,
+      rollingSummary,
+    );
+
+    record.transcriptArchive = transcriptArchive;
+    record.agent = {
+      ...record.agent,
+      contextCards: contextCards.map((card) => ({ ...card })),
+      messages: cloneAgentMessages(liveMessages),
+      transcript,
+    };
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              contextCards,
+              messages: liveMessages,
+              transcript,
+            }
+          : agent,
+      ),
+    };
+
+    return true;
+  }
+
+  private async rotateCompactedAgentRuntime(agentId: string) {
+    const record = this.records.get(agentId);
+
+    if (
+      !record
+      || record.agent.definition.archetype === 'project-main'
+      || this.messageStream.has(agentId)
+      || !this.lifecycle.hasRuntime(agentId)
+    ) {
+      return;
+    }
+
+    this.lifecycle.deleteRuntime(agentId);
+
+    try {
+      await this.lifecycle.deleteSdkAgent(record.groupFolder);
+      await this.ensureAgentRuntime(record);
+    } catch (error) {
+      console.error(`Failed to rotate compacted runtime session for "${record.agent.name}".`, error);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Message handling
   // -------------------------------------------------------------------------
@@ -1267,8 +1831,12 @@ export class AgentRuntime implements AgentRuntimeContract {
           : a,
       ),
     };
+    const didCompactTranscript = this.compactTranscriptForAgent(agentId);
     this.persistState();
     this.emit();
+    if (didCompactTranscript) {
+      void this.rotateCompactedAgentRuntime(agentId);
+    }
   }
 
   private async handleObserverInboundMessage(
@@ -1519,8 +2087,12 @@ export class AgentRuntime implements AgentRuntimeContract {
       ),
       isStreaming: this.messageStream.isStreaming,
     };
+    const didCompactTranscript = this.compactTranscriptForAgent(agentId);
     this.persistState();
     this.emit();
+    if (didCompactTranscript) {
+      void this.rotateCompactedAgentRuntime(agentId);
+    }
     this.onAgentIdle?.(agentId);
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
@@ -1610,6 +2182,68 @@ export class AgentRuntime implements AgentRuntimeContract {
   // Runtime lifecycle
   // -------------------------------------------------------------------------
 
+  private async resolveAgentMounts(record: PersistedAgentRecord): Promise<{
+    didUpdateRecord: boolean;
+    mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }>;
+  }> {
+    const mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }> = [];
+    let didUpdateRecord = false;
+
+    if (!record.agent.projectId) {
+      return { didUpdateRecord, mounts };
+    }
+
+    try {
+      const resolvedProjectName = this.resolveProjectName
+        ? await this.resolveProjectName(record.agent.projectId)
+        : null;
+      const resolvedProjectRootPath = this.resolveProjectRootPath
+        ? await this.resolveProjectRootPath(record.agent.projectId)
+        : null;
+      const projectName = resolvedProjectName ?? record.projectName ?? null;
+      const projectRootPath = normalizeProjectRootPath(
+        resolvedProjectRootPath ?? record.projectRootPath,
+      );
+
+      if (record.projectName !== projectName) {
+        record.projectName = projectName;
+        didUpdateRecord = true;
+      }
+
+      if (record.projectRootPath !== projectRootPath) {
+        record.projectRootPath = projectRootPath;
+        didUpdateRecord = true;
+      }
+
+      const duneMountLayout = createDuneMountLayout(
+        this.homeDir,
+        record.agent.projectId,
+        projectName,
+        projectRootPath,
+        record.agent.id,
+        record.agent.name,
+        record.agent.definition.archetype,
+      );
+      mounts.push({
+        containerPath: 'dune',
+        hostPath: duneMountLayout.duneMountRoot,
+        readonly: false,
+      });
+
+      if (projectRootPath) {
+        mounts.push({
+          containerPath: 'project',
+          hostPath: path.resolve(projectRootPath),
+          readonly: false,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to create dune mount layout for "${record.agent.name}".`, error);
+    }
+
+    return { didUpdateRecord, mounts };
+  }
+
   private async ensureAgentLiteReady(): Promise<AgentLite> {
     const existing = this.lifecycle.getEngine();
     if (existing) {
@@ -1697,54 +2331,7 @@ export class AgentRuntime implements AgentRuntimeContract {
 
     const startPromise = (async () => {
       const agentLite = this.lifecycle.getEngine() ?? await this.ensureAgentLiteReady();
-      const mounts: Array<{ containerPath: string; hostPath: string; readonly?: boolean }> = [];
-      let didUpdateRecord = false;
-      if (record.agent.projectId) {
-        try {
-          const resolvedProjectName = this.resolveProjectName
-            ? await this.resolveProjectName(record.agent.projectId)
-            : null;
-          const resolvedProjectRootPath = this.resolveProjectRootPath
-            ? await this.resolveProjectRootPath(record.agent.projectId)
-            : null;
-          const projectName = resolvedProjectName ?? record.projectName ?? null;
-          const projectRootPath = normalizeProjectRootPath(
-            resolvedProjectRootPath ?? record.projectRootPath,
-          );
-          if (record.projectName !== projectName) {
-            record.projectName = projectName;
-            didUpdateRecord = true;
-          }
-          if (record.projectRootPath !== projectRootPath) {
-            record.projectRootPath = projectRootPath;
-            didUpdateRecord = true;
-          }
-          const duneMountLayout = createDuneMountLayout(
-            this.homeDir,
-            record.agent.projectId,
-            projectName,
-            projectRootPath,
-            record.agent.id,
-            record.agent.name,
-            record.agent.definition.archetype,
-          );
-          mounts.push({
-            containerPath: 'dune',
-            hostPath: duneMountLayout.duneMountRoot,
-            readonly: false,
-          });
-
-          if (projectRootPath) {
-            mounts.push({
-              containerPath: 'project',
-              hostPath: path.resolve(projectRootPath),
-              readonly: false,
-            });
-          }
-        } catch (error) {
-          console.error(`Failed to create dune mount layout for "${record.agent.name}".`, error);
-        }
-      }
+      const { didUpdateRecord, mounts } = await this.resolveAgentMounts(record);
 
       let externalChannelFactory: ChannelDriverFactory | undefined;
       let boundExternalJid: string | undefined;
@@ -1777,7 +2364,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         decorateOutboundMessage: (chatJid, text) => this.decorateOutboundMessage(chatJid, text),
         externalChannelFactory,
         groupFolder: record.groupFolder,
-        instructions: composeAgentSystemPrompt(record.agent.definition, this.homeDir),
+        instructions: this.buildAgentInstructions(record),
         ...(mounts.length > 0 ? { mounts } : {}),
         name: record.agent.name,
         onExternalInbound: (text, senderName, attachments) => {
@@ -2072,6 +2659,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     try {
       const agents = (await this.agentStore.get<PersistedAgentRecord[]>('agents')) ?? [];
       const selectedAgentId = await this.agentStore.get<string | null>('selectedAgentId');
+      let didCompactPersistedTranscript = false;
 
       this.records.clear();
 
@@ -2094,7 +2682,13 @@ export class AgentRuntime implements AgentRuntimeContract {
         telegramSetupSessions: [],
       };
 
+      for (const agent of snapshotAgents) {
+        didCompactPersistedTranscript = this.compactTranscriptForAgent(agent.id) || didCompactPersistedTranscript;
+      }
+
       if (didPruneOrphans) {
+        this.persistState();
+      } else if (didCompactPersistedTranscript) {
         this.persistState();
       }
     } catch (error) {
@@ -2128,6 +2722,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             ...(message.usage ? { usage: { ...message.usage } } : {}),
           })),
           telegram: cloneTelegramAgentRuntimeState(agent.telegram),
+          transcript: { ...agent.transcript },
         };
       }
     }

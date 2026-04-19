@@ -140,7 +140,9 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
           agent={agent}
           composerRef={composerRef}
           draft={draft}
+          isLoadingOlderMessages={false}
           onDraftChange={handleDraftChange}
+          onLoadOlderMessages={async () => undefined}
           onSubmit={handleSubmit}
           transcriptRef={transcriptRef}
         />
