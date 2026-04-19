@@ -29,6 +29,7 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  exportWorkItemTemplates?: (suggestedName: string, content: string) => Promise<string | null>;
   getProjectActivityPage?: (
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },
@@ -39,6 +40,7 @@ export interface DesktopBridge {
   ) => Promise<AgentTranscriptPage>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
+  importWorkItemTemplates?: () => Promise<string | null>;
   listProjectArtifactEntries?: (
     rootPath: string,
     artifactFolderName: string,

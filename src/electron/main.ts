@@ -12,6 +12,7 @@ import {
   session,
 } from 'electron';
 import fixPath from 'fix-path';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
@@ -953,6 +954,50 @@ void app.whenReady().then(async () => {
     async (_event, rootPath: string, artifactFolderName: string) =>
       listProjectArtifactEntries(rootPath, artifactFolderName),
   );
+  ipcMain.handle(
+    ipcChannels.exportWorkItemTemplates,
+    async (_event, suggestedName: string, content: string) => {
+      const dialogTarget = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
+      const dialogOptions = {
+        defaultPath: suggestedName,
+        filters: [{ extensions: ['json'], name: 'JSON' }],
+        title: 'Export work item templates',
+      } satisfies Electron.SaveDialogOptions;
+      const result = dialogTarget
+        ? await dialog.showSaveDialog(dialogTarget, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions);
+
+      if (result.canceled || !result.filePath) {
+        return null;
+      }
+
+      fs.writeFileSync(result.filePath, content, 'utf-8');
+      return result.filePath;
+    },
+  );
+  ipcMain.handle(ipcChannels.importWorkItemTemplates, async () => {
+    const dialogTarget = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
+    const dialogOptions = {
+      filters: [{ extensions: ['json'], name: 'JSON' }],
+      properties: ['openFile'],
+      title: 'Import work item templates',
+    } satisfies Electron.OpenDialogOptions;
+    const result = dialogTarget
+      ? await dialog.showOpenDialog(dialogTarget, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled) {
+      return null;
+    }
+
+    const selectedPath = result.filePaths[0];
+
+    if (!selectedPath) {
+      return null;
+    }
+
+    return fs.readFileSync(selectedPath, 'utf-8');
+  });
   ipcMain.handle(ipcChannels.selectProjectDirectory, async () => {
     const dialogTarget = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
     const dialogOptions = {

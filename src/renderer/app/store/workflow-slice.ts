@@ -14,14 +14,15 @@ import type {
   WorkflowEventKind,
   WorkflowItem,
   WorkflowItemStatus,
-  WorkflowProjectFilter,
   WorkflowProjectView,
   WorkflowSnapshot,
-  WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
 
 import { createId, createProjectId } from '@/shared/id';
-import { createDefaultTasks } from '@/shared/workflow/default-tasks';
+import {
+  createDefaultTasks,
+  createWorkflowTasks,
+} from '@/shared/workflow/default-tasks';
 import {
   createArtifactFolderName,
   normalizeProjectRootPath,
@@ -497,7 +498,9 @@ export function createWorkflowSlice(
               input.projectId,
             ).length,
             status: input.status,
-            tasks: createDefaultTasks(updatedAt),
+            tasks: input.taskTitles
+              ? createWorkflowTasks(input.taskTitles, updatedAt)
+              : createDefaultTasks(updatedAt),
             title,
             updatedAt,
             workProducts: [],

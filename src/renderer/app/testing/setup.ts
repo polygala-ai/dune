@@ -69,6 +69,7 @@ beforeEach(() => {
     ensureProjectArtifactFolder: vi.fn(() => Promise.resolve('/tmp/project/item-123')),
     ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    exportWorkItemTemplates: vi.fn(() => Promise.resolve('/tmp/dune-work-item-templates.json')),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       codingEngines: [],
@@ -82,6 +83,7 @@ beforeEach(() => {
       telegramSetupSessions: [],
     })),
     getTelegramSetupSession: vi.fn(() => Promise.resolve(null)),
+    importWorkItemTemplates: vi.fn(() => Promise.resolve('[]')),
     listProjectArtifactEntries: vi.fn(() => Promise.resolve([])),
     openExternal: vi.fn(() => Promise.resolve(undefined)),
     openPath: vi.fn(() => Promise.resolve(undefined)),

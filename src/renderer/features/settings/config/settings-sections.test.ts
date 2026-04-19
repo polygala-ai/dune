@@ -6,7 +6,15 @@ import type { SettingsRoute } from '@/renderer/features/settings/types';
 
 import { settingsSectionRegistry, settingsSections } from './settings-sections';
 
-const allRoutes: SettingsRoute[] = ['appearance', 'models', 'network', 'shortcuts', 'nuclear'];
+const allRoutes: SettingsRoute[] = [
+  'appearance',
+  'artifacts',
+  'models',
+  'network',
+  'templates',
+  'shortcuts',
+  'nuclear',
+];
 
 describe('settingsSectionRegistry', () => {
   it('has an entry for every SettingsRoute', () => {
@@ -15,11 +23,13 @@ describe('settingsSectionRegistry', () => {
     }
   });
 
-  it('renders network below models in the section order', () => {
+  it('renders templates below artifacts in the section order', () => {
     expect(settingsSections.map((section) => section.id)).toEqual([
       'appearance',
       'models',
       'network',
+      'artifacts',
+      'templates',
       'shortcuts',
       'nuclear',
     ]);
