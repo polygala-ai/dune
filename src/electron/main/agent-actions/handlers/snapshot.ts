@@ -6,6 +6,7 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
+import { normalizeDependencyIds } from '@/shared/workflow/dependency-utils';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 
 import { ToolHandlerError } from './types';
@@ -36,6 +37,7 @@ export interface WorkflowItem {
   artifactFolderName: string;
   brief: string;
   createdAt: number;
+  dependsOn?: string[] | undefined;
   id: string;
   primaryAgentId: string | null;
   projectId: string;
@@ -151,6 +153,9 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()
           : createArtifactFolderName(item.title, item.id),
+      ...(normalizeDependencyIds(item.dependsOn)
+        ? { dependsOn: normalizeDependencyIds(item.dependsOn) }
+        : {}),
       scheduledTaskId: item.scheduledTaskId ?? null,
       tasks: item.tasks.map((task) => ({ ...task })),
       workProducts: item.workProducts.map((workProduct) => ({ ...workProduct })),
@@ -180,6 +185,13 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
       typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
         ? item.artifactFolderName.trim()
         : createArtifactFolderName(item.title, item.id);
+    const normalizedDependencyIds = normalizeDependencyIds(item.dependsOn);
+
+    if (normalizedDependencyIds) {
+      item.dependsOn = normalizedDependencyIds;
+    } else {
+      delete item.dependsOn;
+    }
   }
 
   for (const project of snapshot.projects) {

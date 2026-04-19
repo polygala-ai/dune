@@ -15,9 +15,11 @@ const baseItem = (
   brief: `Brief for ${title}`,
   completedTaskCount: 0,
   currentTaskTitle: null,
+  dependsOnCount: 0,
   hasBlockedTasks: false,
   id,
   isAgentWorking: false,
+  isBlockedByDependencies: false,
   primaryAgentId: null,
   primaryAgentName: null,
   specialStateLabel:
@@ -30,6 +32,7 @@ const baseItem = (
   statusLabel: status,
   title,
   totalTaskCount: 1,
+  unresolvedDependencyCount: 0,
   updatedLabel: 'just now',
 });
 

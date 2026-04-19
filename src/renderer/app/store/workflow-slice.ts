@@ -3,6 +3,7 @@
 import type { AppStoreSlice } from '@/renderer/app/store/types';
 import type {
   WorkflowActions,
+  WorkflowMutationResult,
   WorkflowSlice,
   WorkflowState,
 } from '@/renderer/app/store/types';
@@ -27,6 +28,11 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
+import {
+  hasCircularDependency,
+  isItemBlocked,
+  normalizeDependencyIds,
+} from '@/shared/workflow/dependency-utils';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -308,6 +314,81 @@ export function createWorkflowSlice(
         });
 
         return taskId;
+      },
+      addDependency: (itemId, dependsOnId, note) => {
+        const normalizedNote = normalizeNote(note);
+        let result: WorkflowMutationResult = { ok: false, error: 'Work item not found.' };
+
+        set((state) => {
+          const targetItem = state.items.find((item) => item.id === itemId) ?? null;
+          const dependencyItem = state.items.find((item) => item.id === dependsOnId) ?? null;
+
+          if (!targetItem) {
+            result = { ok: false, error: 'Work item not found.' };
+            return state;
+          }
+
+          if (!dependencyItem) {
+            result = { ok: false, error: 'Dependency item not found.' };
+            return state;
+          }
+
+          if (targetItem.projectId !== dependencyItem.projectId) {
+            result = { ok: false, error: 'Dependencies must stay within the same project.' };
+            return state;
+          }
+
+          if (targetItem.id === dependencyItem.id) {
+            result = { ok: false, error: 'A work item cannot depend on itself.' };
+            return state;
+          }
+
+          const currentDependencyIds = normalizeDependencyIds(targetItem.dependsOn) ?? [];
+
+          if (currentDependencyIds.includes(dependsOnId)) {
+            result = { ok: true };
+            return state;
+          }
+
+          const nextDependencyIds = [...currentDependencyIds, dependsOnId];
+
+          if (hasCircularDependency(itemId, nextDependencyIds, state.items)) {
+            result = { ok: false, error: 'Cannot create a circular dependency.' };
+            return state;
+          }
+
+          const updatedAt = Date.now();
+          result = { ok: true };
+
+          return {
+            ...withSelection({
+              items: state.items.map((item) => {
+                if (item.id !== itemId) {
+                  return item;
+                }
+
+                return appendItemEvents(
+                  {
+                    ...item,
+                    dependsOn: nextDependencyIds,
+                  },
+                  [
+                    ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                    { description: `Added dependency on “${dependencyItem.title}”.`, kind: 'item' as const },
+                  ],
+                  updatedAt,
+                );
+              }),
+              projects: touchProject(state.projects, targetItem.projectId, updatedAt),
+              selectedItemId: itemId,
+              selectedProjectFilter: state.selectedProjectFilter,
+              selectedProjectId: targetItem.projectId,
+              selectedProjectView: state.selectedProjectView,
+            }),
+          };
+        });
+
+        return result;
       },
       addWorkProduct: (itemId, input) => {
         const title = input.title.trim();
@@ -631,6 +712,10 @@ export function createWorkflowSlice(
             return state;
           }
 
+          if (status === 'active' && item.status !== 'active' && isItemBlocked(item, state.items)) {
+            return state;
+          }
+
           const normalizedNote = normalizeNote(note);
           const updatedAt = Date.now();
           const destination = getProjectItems(
@@ -685,6 +770,65 @@ export function createWorkflowSlice(
       openProjectSettings: () => {
         set({ selectedProjectScreen: 'settings' });
       },
+      removeDependency: (itemId, dependsOnId, note) => {
+        const normalizedNote = normalizeNote(note);
+        let result: WorkflowMutationResult = { ok: false, error: 'Work item not found.' };
+
+        set((state) => {
+          const targetItem = state.items.find((item) => item.id === itemId) ?? null;
+          const dependencyItem = state.items.find((item) => item.id === dependsOnId) ?? null;
+
+          if (!targetItem) {
+            result = { ok: false, error: 'Work item not found.' };
+            return state;
+          }
+
+          const currentDependencyIds = normalizeDependencyIds(targetItem.dependsOn) ?? [];
+
+          if (!currentDependencyIds.includes(dependsOnId)) {
+            result = { ok: true };
+            return state;
+          }
+
+          const updatedAt = Date.now();
+          const nextDependencyIds = currentDependencyIds.filter((dependencyId) => dependencyId !== dependsOnId);
+          result = { ok: true };
+
+          return {
+            ...withSelection({
+              items: state.items.map((item) => {
+                if (item.id !== itemId) {
+                  return item;
+                }
+
+                return appendItemEvents(
+                  {
+                    ...item,
+                    ...(nextDependencyIds.length > 0 ? { dependsOn: nextDependencyIds } : {}),
+                  },
+                  [
+                    ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
+                    {
+                      description: dependencyItem
+                        ? `Removed dependency on “${dependencyItem.title}”.`
+                        : `Removed dependency on “${dependsOnId}”.`,
+                      kind: 'item' as const,
+                    },
+                  ],
+                  updatedAt,
+                );
+              }),
+              projects: touchProject(state.projects, targetItem.projectId, updatedAt),
+              selectedItemId: itemId,
+              selectedProjectFilter: state.selectedProjectFilter,
+              selectedProjectId: targetItem.projectId,
+              selectedProjectView: state.selectedProjectView,
+            }),
+          };
+        });
+
+        return result;
+      },
       closeProjectSettings: () => {
         set({ selectedProjectScreen: 'main' });
       },
@@ -699,7 +843,7 @@ export function createWorkflowSlice(
             selectedItemId: itemId,
             selectedProjectId: item?.projectId ?? state.selectedProjectId,
             selectedProjectScreen: 'main',
-            selectedProjectView: 'board' as WorkflowProjectView,
+            selectedProjectView: state.selectedProjectView as WorkflowProjectView,
           };
         });
       },

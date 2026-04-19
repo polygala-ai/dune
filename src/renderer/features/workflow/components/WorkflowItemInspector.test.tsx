@@ -47,11 +47,14 @@ describe('WorkflowItemInspector', () => {
   it('includes the acceptance status in the work item status selector', () => {
     render(
       <WorkflowItemInspector
+        allItems={[item]}
         item={item}
+        onAddDependency={vi.fn(() => ({ ok: true }))}
         onAddTask={vi.fn()}
         onAssignPrimaryAgent={vi.fn()}
         onCreateAgent={vi.fn()}
         onOpenAgent={vi.fn()}
+        onRemoveDependency={vi.fn(() => ({ ok: true }))}
         onUpdateItem={vi.fn()}
         onUpdateItemStatus={vi.fn()}
         onUpdateTask={vi.fn()}
@@ -94,11 +97,14 @@ describe('WorkflowItemInspector', () => {
 
     render(
       <WorkflowItemInspector
+        allItems={[item]}
         item={item}
+        onAddDependency={vi.fn(() => ({ ok: true }))}
         onAddTask={vi.fn()}
         onAssignPrimaryAgent={vi.fn()}
         onCreateAgent={vi.fn()}
         onOpenAgent={vi.fn()}
+        onRemoveDependency={vi.fn(() => ({ ok: true }))}
         onUpdateItem={vi.fn()}
         onUpdateItemStatus={vi.fn()}
         onUpdateTask={vi.fn()}
@@ -136,11 +142,14 @@ describe('WorkflowItemInspector', () => {
 
     render(
       <WorkflowItemInspector
+        allItems={[item]}
         item={item}
+        onAddDependency={vi.fn(() => ({ ok: true }))}
         onAddTask={vi.fn()}
         onAssignPrimaryAgent={vi.fn()}
         onCreateAgent={vi.fn()}
         onOpenAgent={vi.fn()}
+        onRemoveDependency={vi.fn(() => ({ ok: true }))}
         onUpdateItem={vi.fn()}
         onUpdateItemStatus={vi.fn()}
         onUpdateTask={vi.fn()}
@@ -162,6 +171,7 @@ describe('WorkflowItemInspector', () => {
   it('does not render archived summaries inside item activity', () => {
     render(
       <WorkflowItemInspector
+        allItems={[item]}
         item={{
           ...item,
           activity: createWorkflowItemActivitySummary({
@@ -170,10 +180,12 @@ describe('WorkflowItemInspector', () => {
             totalEventCount: 5,
           }),
         }}
+        onAddDependency={vi.fn(() => ({ ok: true }))}
         onAddTask={vi.fn()}
         onAssignPrimaryAgent={vi.fn()}
         onCreateAgent={vi.fn()}
         onOpenAgent={vi.fn()}
+        onRemoveDependency={vi.fn(() => ({ ok: true }))}
         onUpdateItem={vi.fn()}
         onUpdateItemStatus={vi.fn()}
         onUpdateTask={vi.fn()}

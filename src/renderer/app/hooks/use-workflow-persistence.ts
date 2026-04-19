@@ -20,6 +20,7 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
+import { normalizeDependencyIds } from '@/shared/workflow/dependency-utils';
 import { isPlainObject } from '@/shared/is-record';
 
 const STORE_NAME = 'workflow';
@@ -180,6 +181,13 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
       const normalized = normalizeEvent(event);
       return normalized ? [normalized] : [];
     });
+    const dependencyIds = Array.isArray(item.dependsOn)
+      ? normalizeDependencyIds(
+          item.dependsOn.flatMap((dependencyId) =>
+            typeof dependencyId === 'string' ? [dependencyId] : [],
+          ),
+        )
+      : undefined;
     const activity = isPlainObject(item.activity)
       ? createWorkflowItemActivitySummary({
           ...(
@@ -214,6 +222,7 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
           : createArtifactFolderName(item.title, item.id),
       brief: item.brief,
       createdAt: item.createdAt,
+      ...(dependencyIds ? { dependsOn: dependencyIds } : {}),
       id: item.id,
       primaryAgentId:
         typeof item.primaryAgentId === 'string' || item.primaryAgentId === null

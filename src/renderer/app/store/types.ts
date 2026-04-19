@@ -98,6 +98,12 @@ export interface WorkflowItemActivity {
   isWorking: boolean;
 }
 
+/** Workflow mutation result shape. */
+export interface WorkflowMutationResult {
+  error?: string;
+  ok: boolean;
+}
+
 /** Workflow state. */
 export interface WorkflowState extends WorkflowSnapshot {
   isWorkflowHydrated: boolean;
@@ -107,6 +113,7 @@ export interface WorkflowState extends WorkflowSnapshot {
 
 /** Workflow actions shape. */
 export interface WorkflowActions {
+  addDependency: (itemId: string, dependsOnId: string, note?: string) => WorkflowMutationResult;
   addTask: (itemId: string, title: string, note?: string) => string | null;
   addWorkProduct: (itemId: string, input: { body: string; note?: string; title: string }) => string | null;
   assignPrimaryAgent: (
@@ -134,6 +141,7 @@ export interface WorkflowActions {
   hydrateWorkflow: (snapshot: WorkflowSnapshot) => void;
   moveItem: (itemId: string, status: WorkflowItemStatus, index: number, note?: string) => void;
   openProjectSettings: () => void;
+  removeDependency: (itemId: string, dependsOnId: string, note?: string) => WorkflowMutationResult;
   closeProjectSettings: () => void;
   selectItem: (itemId: string | null) => void;
   selectProjectFilter: (filter: WorkflowProjectFilter) => void;
@@ -219,8 +227,10 @@ export interface WorkflowSessionState {
   filteredItemSummaries: Array<{
     brief: string;
     completedTaskCount: number;
+    dependsOnCount: number;
     hasBlockedTasks: boolean;
     id: string;
+    isBlockedByDependencies: boolean;
     primaryAgentId: string | null;
     primaryAgentName: string | null;
     specialStateLabel: string | null;
@@ -228,6 +238,7 @@ export interface WorkflowSessionState {
     statusLabel: string;
     title: string;
     totalTaskCount: number;
+    unresolvedDependencyCount: number;
     updatedLabel: string;
   }>;
   isWorkflowHydrated: boolean;

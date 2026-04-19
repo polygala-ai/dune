@@ -73,6 +73,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         brief:
           'Shape the next brief so an agent can pick it up cleanly once the direction is approved.',
         createdAt: now - 1000 * 60 * 230,
+        dependsOn: [activeItemId],
         id: readyItemId,
         primaryAgentId: null,
         projectId,
@@ -117,6 +118,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         brief:
           'Rewrite the landing story so the positioning and CTA rhythm are easier to understand in one pass.',
         createdAt: now - 1000 * 60 * 360,
+        dependsOn: [doneItemId],
         id: activeItemId,
         primaryAgentId: null,
         projectId,

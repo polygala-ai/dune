@@ -146,6 +146,14 @@ export function registerDuneActions(
     primaryAgentId: z.string().nullable().optional()
       .describe('Agent ID to assign, or null to unassign. Cannot change while item is done.'),
   });
+  reg('workflow.items.add_dependency', {
+    itemId: z.string().describe('Work item ID'),
+    dependsOnId: z.string().describe('Dependency work item ID'),
+  });
+  reg('workflow.items.remove_dependency', {
+    itemId: z.string().describe('Work item ID'),
+    dependsOnId: z.string().describe('Dependency work item ID'),
+  });
   reg('workflow.items.move', {
     itemId: z.string().describe('Work item ID'),
     note: z.string().optional().describe('Optional note to add to workflow history with this move.'),

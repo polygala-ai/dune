@@ -245,6 +245,11 @@ export function openWorkflow(projectId?: string | null) {
   openProjectView('board', projectId);
 }
 
+/** Opens the dependency graph. */
+export function openDependencyGraph(projectId?: string | null) {
+  openProjectView('graph', projectId);
+}
+
 /** Opens item. */
 export function openItem(itemId: string) {
   withNavigationChange(() => {
@@ -367,6 +372,7 @@ export function useAppCommands() {
     goForward,
     openAgent,
     openAgents,
+    openDependencyGraph,
     openItem,
     openPlugins,
     openProjectActivity,

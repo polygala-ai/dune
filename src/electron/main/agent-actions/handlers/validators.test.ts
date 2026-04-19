@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowItem } from './snapshot';
 import { assertAgentCanMoveItem } from './validators';
 
-function createItem(status: WorkflowItem['status']): WorkflowItem {
+function createItem(
+  status: WorkflowItem['status'],
+  overrides: Partial<WorkflowItem> = {},
+): WorkflowItem {
   return {
     activity: {
       archivedEventCount: 0,
@@ -25,6 +28,7 @@ function createItem(status: WorkflowItem['status']): WorkflowItem {
     updatedAt: 1,
     workProducts: [],
     workflowEvents: [],
+    ...overrides,
   };
 }
 
@@ -57,6 +61,23 @@ describe('assertAgentCanMoveItem', () => {
     expect(() =>
       assertAgentCanMoveItem('agent-1', createItem('acceptance'), 'active'),
     ).not.toThrow();
+  });
+
+  it('rejects moves to active when dependencies are still unresolved', () => {
+    const dependency = createItem('active', {
+      id: 'item-2',
+      primaryAgentId: null,
+      title: 'Dependency item',
+    });
+    const blockedItem = createItem('ready', {
+      dependsOn: ['item-2'],
+    });
+
+    expect(() =>
+      assertAgentCanMoveItem('agent-1', blockedItem, 'active', [blockedItem, dependency]),
+    ).toThrow(
+      'Cannot move item to active: it has unresolved dependencies. All dependencies must reach done or acceptance first.',
+    );
   });
 
   it('rejects agent moves out of done', () => {

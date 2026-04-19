@@ -73,6 +73,10 @@ import {
   getWorkflowItemActivityArchiveItemId,
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
 } from '@/shared/workflow/activity';
+import {
+  isDependencyResolved,
+  isItemBlocked,
+} from '@/shared/workflow/dependency-utils';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
 
 if (started) {
@@ -648,6 +652,57 @@ void app.whenReady().then(async () => {
   }
 
   /**
+   * Detects dependency-resolution transitions and nudges newly unblocked item
+   * assignees through the runtime.
+   */
+  async function reconcileDependencies(previous: unknown, next: unknown): Promise<void> {
+    if (!runtimeController || !isWorkflowSnapshotLike(previous) || !isWorkflowSnapshotLike(next)) {
+      return;
+    }
+
+    const previousItemsById = new Map(previous.items.map((item) => [item.id, item] as const));
+    const notifiedItemIds = new Set<string>();
+
+    for (const item of next.items) {
+      const previousItem = previousItemsById.get(item.id);
+
+      if (!previousItem || isDependencyResolved(previousItem) || !isDependencyResolved(item)) {
+        continue;
+      }
+
+      for (const dependentItem of next.items) {
+        if (
+          !dependentItem.dependsOn?.includes(item.id) ||
+          !dependentItem.primaryAgentId ||
+          notifiedItemIds.has(dependentItem.id)
+        ) {
+          continue;
+        }
+
+        const previousDependentItem = previousItemsById.get(dependentItem.id);
+
+        if (
+          !previousDependentItem ||
+          !isItemBlocked(previousDependentItem, previous.items) ||
+          isItemBlocked(dependentItem, next.items)
+        ) {
+          continue;
+        }
+
+        notifiedItemIds.add(dependentItem.id);
+        await runtimeController.postSystemMessage(
+          dependentItem.primaryAgentId,
+          [
+            `Dependency resolved for work item "${dependentItem.title}" (id: ${dependentItem.id}).`,
+            `"${item.title}" reached ${item.status}, so all dependencies are now satisfied.`,
+            'You can resume work when ready.',
+          ].join(' '),
+        ).catch(() => {});
+      }
+    }
+  }
+
+  /**
    * Periodic sweep: for every item assigned to an agent and still in a
    * lane that should keep an assignment task,
    * ensure the agentlite registry still has a task for it. If the stored
@@ -719,6 +774,7 @@ void app.whenReady().then(async () => {
 
       const previous = await stores.workflow.get('snapshot');
       await reconcileAssignments(previous, value);
+      await reconcileDependencies(previous, value);
       if (isWorkflowSnapshotLike(value)) {
         await compactWorkflowActivity(value);
       }

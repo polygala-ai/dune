@@ -1,5 +1,7 @@
 //  validation helpers IPC tool handlers.
 
+import { isItemBlocked } from '@/shared/workflow/dependency-utils';
+
 import { ToolHandlerError, type RuntimeAgent } from './types';
 import {
   createWorkflowEvent,
@@ -51,6 +53,7 @@ export function assertAgentCanMoveItem(
   agentId: string,
   item: WorkflowItem,
   nextStatus: WorkflowItemStatus,
+  allItems: readonly WorkflowItem[] = [item],
 ) {
   if (item.status === 'done') {
     throw new ToolHandlerError(
@@ -79,6 +82,13 @@ export function assertAgentCanMoveItem(
     throw new ToolHandlerError(
       'validation-error',
       'Inbox items can only be moved to ready by agents.',
+    );
+  }
+
+  if (nextStatus === 'active' && item.status !== 'active' && isItemBlocked(item, allItems)) {
+    throw new ToolHandlerError(
+      'validation-error',
+      'Cannot move item to active: it has unresolved dependencies. All dependencies must reach done or acceptance first.',
     );
   }
 
