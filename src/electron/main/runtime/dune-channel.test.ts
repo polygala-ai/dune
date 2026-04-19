@@ -53,7 +53,14 @@ describe('DuneChannel', () => {
     );
   });
 
-  it('decorates outbound assistant messages before persistence and fan-out', async () => {
+  it('decorates outbound assistant messages only for external fan-out', async () => {
+    const externalDriver = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      isConnected: vi.fn().mockReturnValue(true),
+      ownsJid: vi.fn().mockReturnValue(true),
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    };
     const onOutboundMessage = vi.fn().mockResolvedValue(undefined);
     const onChatMetadata = vi.fn();
     const onMessage = vi.fn();
@@ -70,21 +77,28 @@ describe('DuneChannel', () => {
           },
         }),
       },
+      externalChannelFactory: async () => externalDriver,
       decorateOutboundMessage: (chatJid, text) => `${text}\n\n📊 ${chatJid}`,
       onOutboundMessage,
+      boundExternalJid: 'tg:123',
       primaryJid: 'dune:agent:test',
     });
 
+    await duneChannel.connect();
     await duneChannel.sendMessage('dune:agent:test', 'dune credentials ok');
 
     expect(onMessage).toHaveBeenCalledWith(
       'dune:agent:test',
       expect.objectContaining({
-        content: 'dune credentials ok\n\n📊 dune:agent:test',
+        content: 'dune credentials ok',
       }),
     );
     expect(onOutboundMessage).toHaveBeenCalledWith(
       'dune:agent:test',
+      'dune credentials ok',
+    );
+    expect(externalDriver.sendMessage).toHaveBeenCalledWith(
+      'tg:123',
       'dune credentials ok\n\n📊 dune:agent:test',
     );
   });

@@ -286,7 +286,7 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly messageStream = new MessageStream();
 
-  private readonly pendingTokenUsage = new Map<string, AgentMessageUsage>();
+  private readonly pendingStructuredUsage = new Map<string, AgentMessageUsage>();
 
   private readonly pendingTokenUsageSummaries = new Map<string, string>();
 
@@ -496,7 +496,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.shutdownPromise = Promise.race([
       (async () => {
         this.messageStream.clear();
-        this.pendingTokenUsage.clear();
+        this.pendingStructuredUsage.clear();
         this.pendingTokenUsageSummaries.clear();
         this.sessionTokenTotals.clear();
         this.runningTaskIds.clear();
@@ -529,7 +529,7 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Resets agent. */
   reset() {
     this.messageStream.clear();
-    this.pendingTokenUsage.clear();
+    this.pendingStructuredUsage.clear();
     this.pendingTokenUsageSummaries.clear();
     this.sessionTokenTotals.clear();
     this.runningTaskIds.clear();
@@ -968,7 +968,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     this.messageStream.forget(agentId);
-    this.pendingTokenUsage.delete(agentId);
+    this.pendingStructuredUsage.delete(agentId);
     this.pendingTokenUsageSummaries.delete(agentId);
     this.sessionTokenTotals.delete(agentId);
     this.runningTaskIds.delete(agentId);
@@ -1113,7 +1113,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       transcriptText: string;
     },
   ) {
-    this.pendingTokenUsage.delete(agentId);
+    this.pendingStructuredUsage.delete(agentId);
     this.pendingTokenUsageSummaries.delete(agentId);
     const persistedRecord = this.records.get(agentId);
 
@@ -1248,7 +1248,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       inputTokens: usage.sessionInputTotal,
       outputTokens: usage.sessionOutputTotal,
     });
-    this.pendingTokenUsage.set(agentId, usage);
+    this.pendingStructuredUsage.set(agentId, usage);
     this.pendingTokenUsageSummaries.set(agentId, formatAgentTokenUsageSummary(usage));
   }
 
@@ -1424,10 +1424,11 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     const now = this.now();
-    const usage = this.pendingTokenUsage.get(agentId);
+    const usage = this.pendingStructuredUsage.get(agentId);
 
     this.messageStream.forget(agentId);
-    this.pendingTokenUsage.delete(agentId);
+    this.pendingStructuredUsage.delete(agentId);
+    this.pendingTokenUsageSummaries.delete(agentId);
 
     this.snapshot = {
       ...this.snapshot,
@@ -1778,7 +1779,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         const sdkSubtype = event.sdkSubtype;
 
         if (sdkType === 'result') {
-          this.pendingTokenUsage.delete(agentId);
+          this.pendingStructuredUsage.delete(agentId);
           this.pendingTokenUsageSummaries.delete(agentId);
           this.captureTokenUsageSummary(agentId, msg);
         }
@@ -1898,7 +1899,7 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private rollbackOptimisticAgent(agentId: string) {
-    this.pendingTokenUsage.delete(agentId);
+    this.pendingStructuredUsage.delete(agentId);
     this.pendingTokenUsageSummaries.delete(agentId);
     this.sessionTokenTotals.delete(agentId);
     this.runningTaskIds.delete(agentId);
