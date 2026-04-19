@@ -52,6 +52,10 @@ import type {
   WorkflowSnapshot as StoredWorkflowSnapshot,
 } from '@/electron/main/agent-actions/handlers/snapshot';
 import {
+  createWorkflowEvent,
+  recordWorkflowItemEvents,
+} from '@/electron/main/agent-actions/handlers/snapshot';
+import {
   assertEmptyProjectRootDirectory,
   ensureProjectArtifactFolder,
   listProjectArtifactEntries,
@@ -227,11 +231,11 @@ async function nudgeIdleMainAgents(
             `Current board: ${activeCount} active, ${reviewCount} in review, ${acceptanceCount} in acceptance, ${doneCount} done, 0 in inbox.`,
             '',
             'Your job:',
-            '1. Review items in review — reject with feedback if not ready, and leave approved work there for a human to move into acceptance.',
+            '1. Review items in review — reject with feedback if not ready, and move approved work into acceptance.',
             '2. Check active items — follow up on anything stalled.',
             '3. Identify gaps — what new work is needed based on project goals?',
             '4. Create new work items in inbox for anything missing.',
-            '5. Move this item to review when finished. Human acceptance and done happen after that.',
+            '5. Move this item to review when finished. Approved review items should move to acceptance; only humans move items to done.',
           ].join('\n'),
           createdAt: now,
           id: `item-auto-${now}`,
@@ -241,7 +245,7 @@ async function nudgeIdleMainAgents(
           sortOrder: 0,
           status: 'ready',
           tasks: [
-            { createdAt: now, id: `task-${now}-1`, notes: '', status: 'todo', title: 'Review items in review lane — reject when needed and leave approved work for human acceptance', updatedAt: now },
+            { createdAt: now, id: `task-${now}-1`, notes: '', status: 'todo', title: 'Review items in review lane — reject when needed and move approved work to acceptance', updatedAt: now },
             { createdAt: now, id: `task-${now}-2`, notes: '', status: 'todo', title: 'Check active items for blockers or stalled progress', updatedAt: now },
             { createdAt: now, id: `task-${now}-3`, notes: '', status: 'todo', title: 'Create new work items for what the project needs next', updatedAt: now },
             { createdAt: now, id: `task-${now}-4`, notes: '', status: 'todo', title: 'Move this item to review when the pass is complete', updatedAt: now },
@@ -418,6 +422,20 @@ function isWorkflowSnapshotLike(value: unknown): value is StoredWorkflowSnapshot
   return isPlainObject(value) && Array.isArray(value.items) && Array.isArray(value.projects);
 }
 
+function recordDuneScheduledTaskEvent(
+  snapshot: StoredWorkflowSnapshot,
+  item: StoredWorkflowSnapshot['items'][number],
+  description: string,
+  createdAt: number,
+) {
+  recordWorkflowItemEvents(
+    snapshot,
+    item,
+    [createWorkflowEvent('assignment', description, createdAt, 'Dune')],
+    createdAt,
+  );
+}
+
 void app.whenReady().then(async () => {
   const agentLiteHomeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
   const duneHomeDir = agentLiteHomeDir ?? os.homedir();
@@ -530,14 +548,16 @@ void app.whenReady().then(async () => {
   /**
    * Diffs old vs new workflow snapshot for per-item assignment changes, and
    * calls scheduleItemAssignment / cancelItemAssignment on the runtime.
-   * Mutates `next.items[*].scheduledTaskId` to reflect the outcome.
+   * Mutates `next.items[*].scheduledTaskId` to reflect the outcome and records
+   * Dune-driven scheduler changes in item activity.
    */
   async function reconcileAssignments(previous: unknown, next: unknown): Promise<void> {
-    if (!runtimeController || !isPlainObject(next)) {
+    if (!runtimeController || !isWorkflowSnapshotLike(next)) {
       return;
     }
 
-    const nextItems = Array.isArray(next.items) ? next.items : [];
+    const nextSnapshot = next;
+    const nextItems = nextSnapshot.items;
     const prevItemsById = new Map<string, Record<string, unknown>>();
 
     if (isPlainObject(previous) && Array.isArray(previous.items)) {
@@ -550,7 +570,7 @@ void app.whenReady().then(async () => {
 
     const nextItemIds = new Set<string>();
 
-    // Handle assignment changes and moves into human-owned lanes on items that still exist.
+    // Handle assignment changes and moves into lanes that clear agent assignments on items that still exist.
     for (const item of nextItems) {
       if (!isPlainObject(item) || typeof item.id !== 'string') {
         continue;
@@ -565,9 +585,9 @@ void app.whenReady().then(async () => {
       const nextStatus = typeof item.status === 'string' ? item.status : null;
 
       const agentChanged = prevAgentId !== nextAgentId;
-      const isHumanOwnedLane = nextStatus === 'acceptance' || nextStatus === 'done';
+      const clearsAssignmentLane = nextStatus === 'acceptance' || nextStatus === 'done';
 
-      if (!agentChanged && !isHumanOwnedLane) {
+      if (!agentChanged && !clearsAssignmentLane) {
         // scheduledTaskId is owned by the main process; the renderer only echoes
         // a stale copy. Always restore the authoritative value from the previous
         // stored snapshot so unrelated edits don't wipe it.
@@ -579,14 +599,35 @@ void app.whenReady().then(async () => {
         await runtimeController.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
       }
 
-      if (isHumanOwnedLane || !nextAgentId) {
+      if (clearsAssignmentLane || !nextAgentId) {
         item.scheduledTaskId = null;
+
+        if (prevTaskId) {
+          recordDuneScheduledTaskEvent(
+            nextSnapshot,
+            item,
+            'Dune cleared the scheduled assignment task.',
+            Date.now(),
+          );
+        }
+
         continue;
       }
 
       try {
         const taskId = await runtimeController.scheduleItemAssignment(nextAgentId, item.id);
         item.scheduledTaskId = taskId;
+
+        if (taskId) {
+          recordDuneScheduledTaskEvent(
+            nextSnapshot,
+            item,
+            prevTaskId
+              ? 'Dune rescheduled the assignment task for the assigned agent.'
+              : 'Dune scheduled the assignment task for the assigned agent.',
+            Date.now(),
+          );
+        }
       } catch {
         item.scheduledTaskId = null;
       }
@@ -610,21 +651,14 @@ void app.whenReady().then(async () => {
    * agent-owned lane,
    * ensure the agentlite registry still has a task for it. If the stored
    * scheduledTaskId is null or no longer known to agentlite (e.g. after a
-   * restart that lost the registry), schedule a fresh task.
+   * restart that lost the registry), schedule a fresh task and record it.
    */
   async function sweepItemAssignmentTasks(): Promise<void> {
     if (!runtimeController) return;
 
-    const snapshot = await stores.workflow.get<{
-      items?: Array<{
-        id?: string;
-        primaryAgentId?: string | null;
-        scheduledTaskId?: string | null;
-        status?: string;
-      }>;
-    }>('snapshot');
+    const snapshot = await stores.workflow.get<StoredWorkflowSnapshot>('snapshot');
 
-    if (!snapshot || !Array.isArray(snapshot.items)) return;
+    if (!isWorkflowSnapshotLike(snapshot)) return;
 
     let dirty = false;
 
@@ -648,6 +682,12 @@ void app.whenReady().then(async () => {
         const taskId = await runtimeController.scheduleItemAssignment(item.primaryAgentId, item.id);
         if (taskId) {
           item.scheduledTaskId = taskId;
+          recordDuneScheduledTaskEvent(
+            snapshot,
+            item,
+            'Dune recreated the missing assignment task for the assigned agent.',
+            Date.now(),
+          );
           dirty = true;
         }
       } catch {
@@ -658,7 +698,9 @@ void app.whenReady().then(async () => {
     if (dirty) {
       // Write directly to the raw store to bypass reconcileAssignments (which
       // would overwrite the freshly-minted taskIds from the renderer's stale
-      // echo). Emit workflowChanged manually so the renderer reloads.
+      // echo). Compact activity first, then emit workflowChanged manually so
+      // the renderer reloads.
+      await compactWorkflowActivity(snapshot);
       await stores.workflow.set('snapshot', snapshot);
       for (const window of BrowserWindow.getAllWindows()) {
         window.webContents.send(ipcChannels.workflowChanged);

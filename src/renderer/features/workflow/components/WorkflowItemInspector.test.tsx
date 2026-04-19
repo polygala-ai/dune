@@ -158,4 +158,31 @@ describe('WorkflowItemInspector', () => {
     });
     expect(listProjectArtifactEntries).not.toHaveBeenCalled();
   });
+
+  it('does not render archived summaries inside item activity', () => {
+    render(
+      <WorkflowItemInspector
+        item={{
+          ...item,
+          activity: createWorkflowItemActivitySummary({
+            archivedEventCount: 3,
+            rollingSummary: 'Earlier archived activity summary',
+            totalEventCount: 5,
+          }),
+        }}
+        onAddTask={vi.fn()}
+        onAssignPrimaryAgent={vi.fn()}
+        onCreateAgent={vi.fn()}
+        onOpenAgent={vi.fn()}
+        onUpdateItem={vi.fn()}
+        onUpdateItemStatus={vi.fn()}
+        onUpdateTask={vi.fn()}
+        project={project}
+        projectAgents={[]}
+      />,
+    );
+
+    expect(screen.queryByText('Archived Summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Earlier archived activity summary')).not.toBeInTheDocument();
+  });
 });

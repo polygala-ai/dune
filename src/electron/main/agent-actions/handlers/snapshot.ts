@@ -86,6 +86,20 @@ export function prependWorkflowEvents(
   }
 }
 
+/** Records workflow item events and updates item/project timestamps. */
+export function recordWorkflowItemEvents(
+  snapshot: WorkflowSnapshot,
+  item: WorkflowItem,
+  events: WorkflowEvent[],
+  updatedAt: number,
+): void {
+  const nextUpdatedAt = Math.max(item.updatedAt, updatedAt);
+
+  prependWorkflowEvents(item, events);
+  item.updatedAt = nextUpdatedAt;
+  touchProject(snapshot, item.projectId, nextUpdatedAt);
+}
+
 /** Workflow project shape. */
 export interface WorkflowProject {
   color: string;

@@ -33,19 +33,35 @@ describe('assertAgentCanMoveItem', () => {
     expect(() => assertAgentCanMoveItem('agent-1', createItem('review'), 'active')).not.toThrow();
   });
 
-  it('rejects agent moves into human-only lanes', () => {
+  it('allows review items to move to acceptance after approval', () => {
     expect(() =>
       assertAgentCanMoveItem('agent-1', createItem('review'), 'acceptance'),
-    ).toThrow('Only humans can move work items into acceptance or done.');
-
-    expect(() =>
-      assertAgentCanMoveItem('agent-1', createItem('review'), 'done'),
-    ).toThrow('Only humans can move work items into acceptance or done.');
+    ).not.toThrow();
   });
 
-  it('rejects agent moves out of acceptance', () => {
+  it('rejects unsupported agent moves from review', () => {
+    expect(() =>
+      assertAgentCanMoveItem('agent-1', createItem('review'), 'ready'),
+    ).toThrow(
+      'Review items can only be moved to acceptance (approval) or back to active (rejection) by agents.',
+    );
+  });
+
+  it('rejects agent moves into done', () => {
+    expect(() =>
+      assertAgentCanMoveItem('agent-1', createItem('review'), 'done'),
+    ).toThrow('Only humans can move work items into done.');
+  });
+
+  it('allows acceptance items to move back into the workflow', () => {
     expect(() =>
       assertAgentCanMoveItem('agent-1', createItem('acceptance'), 'active'),
-    ).toThrow('Agents cannot move work items out of acceptance or done.');
+    ).not.toThrow();
+  });
+
+  it('rejects agent moves out of done', () => {
+    expect(() =>
+      assertAgentCanMoveItem('agent-1', createItem('done'), 'active'),
+    ).toThrow('Agents cannot move work items out of done.');
   });
 });

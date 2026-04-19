@@ -561,19 +561,6 @@ export function WorkflowItemInspector({
             eyebrow="Activity"
           >
             <div className="space-y-3">
-              {item.activity.rollingSummary ? (
-                <div className="rounded-[18px] border border-app-border bg-app-card/55 px-4 py-4">
-                  <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-app-muted">
-                    <span>Archived Summary</span>
-                    <span className="h-1 w-1 rounded-full bg-app-border-strong" />
-                    <span>{item.activity.archivedEventCount} archived</span>
-                  </div>
-                  <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-app-text">
-                    {item.activity.rollingSummary}
-                  </pre>
-                </div>
-              ) : null}
-
               {item.workflowEvents.length === 0 ? (
                 <div className="rounded-[18px] border border-dashed border-app-border bg-app-panel/35 px-4 py-4 text-sm leading-6 text-app-muted">
                   Activity will appear here as the work item changes.

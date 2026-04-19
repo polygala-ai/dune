@@ -37,16 +37,14 @@ All actions default to the current project when `projectId` is omitted in the pa
 
 ```
 inbox → ready → active → review → acceptance → done
-                           ↑           ↑           ↑
-                    agent review   human only   human only
 ```
 
 - **inbox** — unsorted, unreviewed.
 - **ready** — triaged by project-main, has a clear brief, assignable.
 - **active** — an agent is working on it.
 - **review** — the worker thinks it's done; awaits review.
-- **acceptance** — a human decision is required before the item can be marked complete.
-- **done** — the human has signed off. **Only humans move items to acceptance or done.**
+- **acceptance** — an agent reviewer approved the work; it now awaits human sign-off.
+- **done** — the human has signed off. **Only humans move items to done.**
 
 ## Core rules
 
@@ -57,7 +55,7 @@ inbox → ready → active → review → acceptance → done
 5. **Coordinate through work items.** Don't message other agents directly for work coordination — use work items, tasks, assignments, and feedback.
 6. **Don't edit raw Dune storage.** Never touch files under `{{rootMountPath}}` that look like internal state (snapshots, databases). Work through actions.
 7. **If an action is denied, stop.** Explain briefly and ask the user how to proceed rather than retrying with different arguments.
-8. **Never move items to `acceptance` or `done`.** Those are human decisions.
+8. **Agents may move approved `review` items to `acceptance` and can move items back out of `acceptance` when more work is needed, but only humans move items to `done`.**
 
 ## Typical first moves
 

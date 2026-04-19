@@ -150,7 +150,7 @@ export function registerDuneActions(
     itemId: z.string().describe('Work item ID'),
     note: z.string().optional().describe('Optional note to add to workflow history with this move.'),
     status: z.enum(['inbox', 'ready', 'active', 'review', 'acceptance', 'done'])
-      .describe('Destination lane. Agents may not move items into acceptance or done.'),
+      .describe('Destination lane. Agents may move reviewed items into acceptance and can move items out of acceptance, but only humans may move items into done.'),
     index: z.number().optional().describe('Position within the lane (default: end)'),
   });
   reg('workflow.items.add_feedback', {

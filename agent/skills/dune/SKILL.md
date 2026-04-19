@@ -61,7 +61,7 @@ Update fields on an item — title, brief, or the primary agent assignment.
 ### `workflow_items_move`
 Move an item between lanes. This is how work progresses.
 - **Payload**: `{ itemId (required), status (required), index?, note? }`
-- **status**: one of `"inbox" | "ready" | "active" | "review" | "acceptance" | "done"`. Agents **must not** set `"acceptance"` or `"done"` — those lanes are human-only.
+- **status**: one of `"inbox" | "ready" | "active" | "review" | "acceptance" | "done"`. Agents may move approved `review` items to `"acceptance"` and may move items back out of `"acceptance"` when more work is needed, but only humans may move items to `"done"`.
 - **index**: position within the destination lane. Default: end.
 - **note**: optional workflow-history note recorded alongside the move.
 
