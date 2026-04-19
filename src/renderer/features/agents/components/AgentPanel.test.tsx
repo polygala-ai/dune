@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentPanel } from '@/renderer/features/agents/components/AgentPanel';
@@ -171,5 +171,39 @@ describe('AgentPanel', () => {
 
     expect(container.textContent).toContain('42↑ 318↓');
     expect(container.textContent).toContain('$0.0021');
+  });
+
+  it('disables the local composer for externally attached agents', () => {
+    render(
+      <AgentPanel
+        agent={createAgent({
+          channel: {
+            canCompose: false,
+            id: 'slack',
+            kind: 'external',
+            label: 'Slack',
+            status: 'connected',
+            target: {
+              channelId: 'slack',
+              jid: 'slack:C123',
+              kind: 'group',
+              name: 'QA Inbox',
+            },
+          },
+        })}
+        composerRef={createRef<HTMLTextAreaElement>()}
+        draft=""
+        isLoadingOlderMessages={false}
+        onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
+        onSubmit={vi.fn(() => Promise.resolve(undefined))}
+        transcriptRef={createRef<HTMLDivElement>()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Agent composer')).toBeDisabled();
+    expect(
+      screen.getByText('This agent is attached to QA Inbox. Reply in the source channel.'),
+    ).toBeInTheDocument();
   });
 });

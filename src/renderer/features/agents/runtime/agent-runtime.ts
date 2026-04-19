@@ -58,7 +58,6 @@ type ConnectedBridge = DesktopBridge & Required<
     | 'selectAgent'
     | 'sendAgentMessage'
     | 'startTelegramSetupSession'
-    | 'updateAgentChannel'
     | 'subscribe'
   >
 >;
@@ -77,7 +76,6 @@ function hasRuntimeBridge(
       bridge.selectAgent &&
       bridge.sendAgentMessage &&
       bridge.startTelegramSetupSession &&
-      bridge.updateAgentChannel &&
       bridge.subscribe,
   );
 }
@@ -161,7 +159,7 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     },
     subscribe: (listener: AgentServiceListener) => this.subscribe(listener),
     updateAgentChannel: async (input: UpdateAgentChannelInput) => {
-      await this.bridge.updateAgentChannel(input);
+      await this.bridge.updateAgentChannel?.(input);
     },
     updateAgentDefinition: async (agentId: string, definition: AgentDefinition) => {
       await this.bridge.updateAgentDefinition?.(agentId, definition);

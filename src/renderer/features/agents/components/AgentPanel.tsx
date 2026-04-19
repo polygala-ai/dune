@@ -205,12 +205,21 @@ export function AgentPanel({
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
-  const composerHint = `${modifierLabel} Enter to send · Shift Enter for a new line`;
+  const isComposerDisabled = !agent.channel.canCompose;
+  const composerHint = isComposerDisabled
+    ? agent.channel.target
+      ? `This agent is attached to ${agent.channel.target.name}. Reply in the source channel.`
+      : 'This agent is attached to an external channel. Reply in the source channel.'
+    : `${modifierLabel} Enter to send · Shift Enter for a new line`;
 
   /** Handles key down composer. */
   const handleComposerKeyDown = async (
     event: KeyboardEvent<HTMLTextAreaElement>,
   ) => {
+    if (isComposerDisabled) {
+      return;
+    }
+
     const isPrimaryModifier = modifierLabel === '⌘' ? event.metaKey : event.ctrlKey;
 
     if (event.key === 'Enter' && isPrimaryModifier) {
@@ -328,6 +337,9 @@ export function AgentPanel({
         className="shrink-0 border-t border-app-border px-8 py-4"
         onSubmit={(event) => {
           event.preventDefault();
+          if (isComposerDisabled) {
+            return;
+          }
           void onSubmit(draft);
         }}
       >
@@ -335,6 +347,7 @@ export function AgentPanel({
           <textarea
             aria-label="Agent composer"
             className="min-h-[84px] w-full bg-transparent px-1 text-[14px] leading-7 text-app-text outline-none placeholder:text-app-muted"
+            disabled={isComposerDisabled}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               void handleComposerKeyDown(event);
@@ -348,7 +361,7 @@ export function AgentPanel({
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-[12px] leading-5 text-app-muted">{composerHint}</p>
 
-            <Button disabled={!draft.trim()} size="sm" type="submit">
+            <Button disabled={isComposerDisabled || !draft.trim()} size="sm" type="submit">
               Send
               <ArrowUpRight className="h-4 w-4" />
             </Button>

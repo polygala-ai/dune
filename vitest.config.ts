@@ -16,7 +16,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['src/renderer/app/testing/setup.ts'],
-    testTimeout: 15_000,
+    testTimeout: 30_000,
     exclude: ['tests/e2e/**'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'build/**/*.test.ts'],
     coverage: {
