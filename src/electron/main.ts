@@ -438,7 +438,7 @@ export async function reconcileAssignments(
     }
 
     if (prevAgentId && prevTaskId) {
-      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
+      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => undefined);
     }
 
     if (movedToDone || !nextAgentId) {
@@ -472,7 +472,7 @@ export async function reconcileAssignments(
     const prevTaskId = typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
 
     if (prevAgentId && prevTaskId) {
-      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
+      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => undefined);
     }
   }
 }

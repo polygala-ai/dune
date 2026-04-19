@@ -22,7 +22,7 @@ const mockApp = {
   on: vi.fn(),
   quit: vi.fn(),
   relaunch: vi.fn(),
-  whenReady: vi.fn(async () => undefined),
+  whenReady: vi.fn(() => Promise.resolve(undefined)),
 };
 
 const mockBrowserWindow = {
@@ -74,8 +74,8 @@ describe('assignment task orchestration', () => {
   });
 
   it('status gating: does not schedule a wake-up for acceptance items', async () => {
-    const scheduleItemAssignment = vi.fn(async () => 'task-new');
-    const cancelItemAssignment = vi.fn(async () => undefined);
+    const scheduleItemAssignment = vi.fn(() => Promise.resolve('task-new'));
+    const cancelItemAssignment = vi.fn(() => Promise.resolve(undefined));
     const next = {
       items: [{
         id: 'item-1',
@@ -96,8 +96,8 @@ describe('assignment task orchestration', () => {
   });
 
   it('becameActionable: schedules a wake-up on acceptance to active transition', async () => {
-    const scheduleItemAssignment = vi.fn(async () => 'task-new');
-    const cancelItemAssignment = vi.fn(async () => undefined);
+    const scheduleItemAssignment = vi.fn(() => Promise.resolve('task-new'));
+    const cancelItemAssignment = vi.fn(() => Promise.resolve(undefined));
     const previous = {
       items: [{
         id: 'item-1',
@@ -127,8 +127,8 @@ describe('assignment task orchestration', () => {
   });
 
   it('no-duplicate: preserves the existing task for already-active items', async () => {
-    const scheduleItemAssignment = vi.fn(async () => 'task-new');
-    const cancelItemAssignment = vi.fn(async () => undefined);
+    const scheduleItemAssignment = vi.fn(() => Promise.resolve('task-new'));
+    const cancelItemAssignment = vi.fn(() => Promise.resolve(undefined));
     const previous = {
       items: [{
         id: 'item-1',
@@ -157,7 +157,7 @@ describe('assignment task orchestration', () => {
   });
 
   it('sweepItemAssignmentTasks: skips acceptance items', async () => {
-    const scheduleItemAssignment = vi.fn(async () => 'task-new');
+    const scheduleItemAssignment = vi.fn(() => Promise.resolve('task-new'));
     const isItemTaskKnown = vi.fn(() => false);
     const snapshot = {
       items: [{
@@ -167,12 +167,16 @@ describe('assignment task orchestration', () => {
         status: 'acceptance',
       }],
     };
-    const getSnapshot = vi.fn(async () => snapshot);
-    const persistSnapshot = vi.fn(async (_value: unknown) => undefined);
+    const getSnapshot = vi.fn(() => Promise.resolve(snapshot));
+    const persistSnapshot = vi.fn((value: unknown) => Promise.resolve(value));
     const workflowStore: Pick<AppStorage, 'get' | 'set'> = {
-      get: async <T,>(_key: string) => getSnapshot() as Promise<T | null>,
-      set: async <T,>(_key: string, value: T) => {
-        await persistSnapshot(value);
+      get: <T,>(key: string) => {
+        void key;
+        return getSnapshot() as Promise<T | null>;
+      },
+      set: <T,>(key: string, value: T) => {
+        void key;
+        return persistSnapshot(value).then(() => undefined);
       },
     };
     const emitWorkflowChanged = vi.fn();
