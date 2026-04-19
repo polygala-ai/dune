@@ -7,6 +7,7 @@ import type {
 } from '@/shared/agents/agent-runtime';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
+  AgentMessage,
   AgentDefinition,
   RunIsolatedResearchInput,
   CreateAgentInput,
@@ -139,6 +140,53 @@ export class DesktopRuntimeController {
     return this.activeRuntime.service.getTranscriptPage(agentId, options);
   }
 
+  /** Returns the full conversation transcript for an agent group. */
+  async getConversationMessages(groupId: string) {
+    const trimmedGroupId = groupId.trim();
+    const runtimeAgents =
+      typeof this.activeRuntime.service.listAgents === 'function'
+        ? this.activeRuntime.service.listAgents()
+        : this.getSnapshot().agents;
+    const runtimeAgent =
+      runtimeAgents.find((agent) => agent.id === trimmedGroupId)
+      ?? this.getSnapshot().agents.find((agent) => agent.id === trimmedGroupId);
+
+    if (!runtimeAgent) {
+      throw new Error(`Agent group "${groupId}" was not found.`);
+    }
+
+    const messages: AgentMessage[] = [];
+    let beforeMessageId: string | null = null;
+    let hasOlderMessages = true;
+
+    while (hasOlderMessages) {
+      const page = await this.getTranscriptPage(trimmedGroupId, {
+        ...(beforeMessageId ? { beforeMessageId } : {}),
+        limit: 200,
+      });
+
+      if (page.messages.length === 0) {
+        break;
+      }
+
+      messages.unshift(
+        ...page.messages.map((message) => ({
+          ...message,
+          attachments: message.attachments.map((attachment) => ({ ...attachment })),
+          ...(message.usage ? { usage: { ...message.usage } } : {}),
+        })),
+      );
+      hasOlderMessages = page.hasOlderMessages;
+      beforeMessageId = page.messages[0]?.id ?? null;
+    }
+
+    return {
+      groupId: trimmedGroupId,
+      groupName: runtimeAgent.name,
+      messages,
+    };
+  }
+
   /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.activeRuntime.reloadExternalChannels?.();
@@ -195,7 +243,7 @@ export class DesktopRuntimeController {
   }
 
   /** Resets desktop runtime. */
-  async reset() {
+  reset() {
     if (typeof this.activeRuntime.reset === 'function') {
       this.activeRuntime.reset();
     }

@@ -5,6 +5,7 @@ import {
   ipcRenderer,
 } from 'electron';
 
+import type { ConversationExportFormat } from '@/shared/electron/conversation-export';
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 
@@ -26,6 +27,8 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  exportConversation: (groupId, format: ConversationExportFormat) =>
+    ipcRenderer.invoke(ipcChannels.exportConversation, { format, groupId }),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
