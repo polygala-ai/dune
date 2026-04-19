@@ -65,12 +65,20 @@ if (!process.env.VITEST) {
   process.env.VITEST = 'true';
 }
 
-const { reconcileAssignments, sweepItemAssignmentTasks } = await import('@/electron/main');
+const {
+  isActionableStatus,
+  reconcileAssignments,
+  sweepItemAssignmentTasks,
+} = await import('@/electron/main');
 
 describe('assignment task orchestration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockBrowserWindow.getAllWindows.mockReturnValue([]);
+  });
+
+  it('isActionableStatus: rejects acceptance items', () => {
+    expect(isActionableStatus('acceptance')).toBe(false);
   });
 
   it('status gating: does not schedule a wake-up for acceptance items', async () => {
@@ -194,5 +202,47 @@ describe('assignment task orchestration', () => {
     expect(isItemTaskKnown).not.toHaveBeenCalled();
     expect(persistSnapshot).not.toHaveBeenCalled();
     expect(emitWorkflowChanged).not.toHaveBeenCalled();
+  });
+
+  it('sweepItemAssignmentTasks: does not recreate known tasks for active items', async () => {
+    const scheduleItemAssignment = vi.fn(() => Promise.resolve('task-new'));
+    const isItemTaskKnown = vi.fn(() => true);
+    const snapshot = {
+      items: [{
+        id: 'item-1',
+        primaryAgentId: 'agent-1',
+        scheduledTaskId: 'task-existing',
+        status: 'active',
+      }],
+    };
+    const getSnapshot = vi.fn(() => Promise.resolve(snapshot));
+    const persistSnapshot = vi.fn((value: unknown) => Promise.resolve(value));
+    const workflowStore: Pick<AppStorage, 'get' | 'set'> = {
+      get: <T,>(key: string) => {
+        void key;
+        return getSnapshot() as Promise<T | null>;
+      },
+      set: <T,>(key: string, value: T) => {
+        void key;
+        return persistSnapshot(value).then(() => undefined);
+      },
+    };
+    const emitWorkflowChanged = vi.fn();
+
+    await sweepItemAssignmentTasks(
+      {
+        isItemTaskKnown,
+        scheduleItemAssignment,
+      },
+      workflowStore,
+      emitWorkflowChanged,
+    );
+
+    expect(isItemTaskKnown).toHaveBeenCalledTimes(1);
+    expect(isItemTaskKnown).toHaveBeenCalledWith('agent-1', 'task-existing');
+    expect(scheduleItemAssignment).not.toHaveBeenCalled();
+    expect(persistSnapshot).not.toHaveBeenCalled();
+    expect(emitWorkflowChanged).not.toHaveBeenCalled();
+    expect(snapshot.items[0]?.scheduledTaskId).toBe('task-existing');
   });
 });
