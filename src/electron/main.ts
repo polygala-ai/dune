@@ -70,6 +70,21 @@ let telegramReconnectPromise: Promise<void> | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 const TASK_SWEEP_INTERVAL_MS = 120_000;
 
+type AssignmentReconciliationRuntimeController = Pick<
+  DesktopRuntimeController,
+  'cancelItemAssignment' | 'scheduleItemAssignment'
+>;
+
+type AssignmentTaskSweepRuntimeController = Pick<
+  DesktopRuntimeController,
+  'isItemTaskKnown' | 'scheduleItemAssignment'
+>;
+
+/** Returns whether an item status should keep agent assignment tasks alive. */
+export function isActionableStatus(status: string): boolean {
+  return status === 'ready' || status === 'active' || status === 'review';
+}
+
 /** Returns whether Telegram polling or setup observers should stay alive. */
 function hasActiveTelegramChannels(snapshot: AgentServiceSnapshot) {
   return snapshot.agents.some((agent) =>
@@ -364,7 +379,171 @@ function createInitialRuntimeSnapshot() {
   };
 }
 
-void app.whenReady().then(async () => {
+/**
+ * Diffs old vs new workflow snapshot for per-item assignment changes, and
+ * calls scheduleItemAssignment / cancelItemAssignment on the runtime.
+ * Mutates `next.items[*].scheduledTaskId` to reflect the outcome.
+ */
+export async function reconcileAssignments(
+  previous: unknown,
+  next: unknown,
+  controller: AssignmentReconciliationRuntimeController | null,
+): Promise<void> {
+  if (!controller || !isPlainObject(next)) {
+    return;
+  }
+
+  const nextItems = Array.isArray(next.items) ? next.items : [];
+  const prevItemsById = new Map<string, Record<string, unknown>>();
+
+  if (isPlainObject(previous) && Array.isArray(previous.items)) {
+    for (const item of previous.items) {
+      if (isPlainObject(item) && typeof item.id === 'string') {
+        prevItemsById.set(item.id, item);
+      }
+    }
+  }
+
+  const nextItemIds = new Set<string>();
+
+  // Handle assignment changes and moves-to-done on items that still exist.
+  for (const item of nextItems) {
+    if (!isPlainObject(item) || typeof item.id !== 'string') {
+      continue;
+    }
+
+    nextItemIds.add(item.id);
+
+    const prev = prevItemsById.get(item.id);
+    const prevAgentId = prev && typeof prev.primaryAgentId === 'string' ? prev.primaryAgentId : null;
+    const prevTaskId = prev && typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
+    const prevStatus = prev && typeof prev.status === 'string' ? prev.status : null;
+    const nextAgentId = typeof item.primaryAgentId === 'string' ? item.primaryAgentId : null;
+    const nextStatus = typeof item.status === 'string' ? item.status : null;
+
+    const prevActionable = isActionableStatus(prevStatus ?? '');
+    const nextActionable = isActionableStatus(nextStatus ?? '');
+    const agentChanged = prevAgentId !== nextAgentId;
+    const movedToDone = nextStatus === 'done' && prevStatus !== 'done';
+    const becameActionable = !prevActionable && nextActionable && !!nextAgentId;
+    const shouldSchedule = (agentChanged || becameActionable) && nextActionable;
+    const lostActionable = prevActionable && !nextActionable;
+
+    if (!agentChanged && !movedToDone && !becameActionable && !lostActionable) {
+      // scheduledTaskId is owned by the main process; the renderer only echoes
+      // a stale copy. Always restore the authoritative value from the previous
+      // stored snapshot so unrelated edits don't wipe it.
+      item.scheduledTaskId = prevTaskId;
+      continue;
+    }
+
+    if (prevAgentId && prevTaskId) {
+      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
+    }
+
+    if (movedToDone || !nextAgentId) {
+      item.scheduledTaskId = null;
+      continue;
+    }
+
+    if (!nextActionable) {
+      item.scheduledTaskId = null;
+      continue;
+    }
+
+    if (!shouldSchedule) {
+      item.scheduledTaskId = prevTaskId;
+      continue;
+    }
+
+    try {
+      const taskId = await controller.scheduleItemAssignment(nextAgentId, item.id);
+      item.scheduledTaskId = taskId;
+    } catch {
+      item.scheduledTaskId = null;
+    }
+  }
+
+  // Cancel tasks for items that were deleted entirely.
+  for (const [id, prev] of prevItemsById) {
+    if (nextItemIds.has(id)) continue;
+
+    const prevAgentId = typeof prev.primaryAgentId === 'string' ? prev.primaryAgentId : null;
+    const prevTaskId = typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
+
+    if (prevAgentId && prevTaskId) {
+      await controller.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Periodic sweep: for every actionable item assigned to an agent, ensure the
+ * agentlite registry still has a task for it. If the stored scheduledTaskId is
+ * null or no longer known to agentlite (e.g. after a restart that lost the
+ * registry), schedule a fresh task.
+ */
+export async function sweepItemAssignmentTasks(
+  controller: AssignmentTaskSweepRuntimeController | null,
+  workflowStore: Pick<AppStorage, 'get' | 'set'>,
+  emitWorkflowChanged: () => void,
+): Promise<void> {
+  if (!controller) {
+    return;
+  }
+
+  const snapshot = await workflowStore.get<{
+    items?: Array<{
+      id?: string;
+      primaryAgentId?: string | null;
+      scheduledTaskId?: string | null;
+      status?: string;
+    }>;
+  }>('snapshot');
+
+  if (!snapshot || !Array.isArray(snapshot.items)) {
+    return;
+  }
+
+  let dirty = false;
+
+  for (const item of snapshot.items) {
+    if (
+      typeof item.id !== 'string' ||
+      typeof item.primaryAgentId !== 'string' ||
+      !isActionableStatus(typeof item.status === 'string' ? item.status : '')
+    ) {
+      continue;
+    }
+
+    const hasLiveTask = typeof item.scheduledTaskId === 'string'
+      && controller.isItemTaskKnown(item.primaryAgentId, item.scheduledTaskId);
+
+    if (hasLiveTask) continue;
+
+    try {
+      const taskId = await controller.scheduleItemAssignment(item.primaryAgentId, item.id);
+      if (taskId) {
+        item.scheduledTaskId = taskId;
+        dirty = true;
+      }
+    } catch {
+      // Ignore — agent may not be ready; next sweep retries.
+    }
+  }
+
+  if (dirty) {
+    // Write directly to the raw store to bypass reconcileAssignments (which
+    // would overwrite the freshly-minted taskIds from the renderer's stale
+    // echo). Emit workflowChanged manually so the renderer reloads.
+    await workflowStore.set('snapshot', snapshot);
+    emitWorkflowChanged();
+  }
+}
+
+async function bootstrapMainProcess(): Promise<void> {
+  await app.whenReady();
+
   const agentLiteHomeDir = process.env.DUNE_AGENTLITE_HOME_DIR;
   const duneHomeDir = agentLiteHomeDir ?? os.homedir();
   const agentLiteRuntimeRoot = resolveAgentLiteRuntimeRoot(agentLiteHomeDir);
@@ -375,159 +554,11 @@ void app.whenReady().then(async () => {
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
-  /**
-   * Diffs old vs new workflow snapshot for per-item assignment changes, and
-   * calls scheduleItemAssignment / cancelItemAssignment on the runtime.
-   * Mutates `next.items[*].scheduledTaskId` to reflect the outcome.
-   */
-  async function reconcileAssignments(previous: unknown, next: unknown): Promise<void> {
-    if (!runtimeController || !isPlainObject(next)) {
-      return;
+  const emitWorkflowChanged = () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(ipcChannels.workflowChanged);
     }
-
-    const nextItems = Array.isArray(next.items) ? next.items : [];
-    const prevItemsById = new Map<string, Record<string, unknown>>();
-    const actionableStatuses = new Set(['ready', 'active', 'review']);
-
-    if (isPlainObject(previous) && Array.isArray(previous.items)) {
-      for (const item of previous.items) {
-        if (isPlainObject(item) && typeof item.id === 'string') {
-          prevItemsById.set(item.id, item);
-        }
-      }
-    }
-
-    const nextItemIds = new Set<string>();
-
-    // Handle assignment changes and moves-to-done on items that still exist.
-    for (const item of nextItems) {
-      if (!isPlainObject(item) || typeof item.id !== 'string') {
-        continue;
-      }
-
-      nextItemIds.add(item.id);
-
-      const prev = prevItemsById.get(item.id);
-      const prevAgentId = prev && typeof prev.primaryAgentId === 'string' ? prev.primaryAgentId : null;
-      const prevTaskId = prev && typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
-      const prevStatus = prev && typeof prev.status === 'string' ? prev.status : null;
-      const nextAgentId = typeof item.primaryAgentId === 'string' ? item.primaryAgentId : null;
-      const nextStatus = typeof item.status === 'string' ? item.status : null;
-
-      const prevActionable = actionableStatuses.has(prevStatus ?? '');
-      const nextActionable = actionableStatuses.has(nextStatus ?? '');
-      const agentChanged = prevAgentId !== nextAgentId;
-      const movedToDone = nextStatus === 'done' && prevStatus !== 'done';
-      const becameActionable = !prevActionable && nextActionable && !!nextAgentId;
-      const shouldSchedule = (agentChanged || becameActionable) && nextActionable;
-      const lostActionable = prevActionable && !nextActionable;
-
-      if (!agentChanged && !movedToDone && !becameActionable && !lostActionable) {
-        // scheduledTaskId is owned by the main process; the renderer only echoes
-        // a stale copy. Always restore the authoritative value from the previous
-        // stored snapshot so unrelated edits don't wipe it.
-        item.scheduledTaskId = prevTaskId;
-        continue;
-      }
-
-      if (prevAgentId && prevTaskId) {
-        await runtimeController.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
-      }
-
-      if (movedToDone || !nextAgentId) {
-        item.scheduledTaskId = null;
-        continue;
-      }
-
-      if (!nextActionable) {
-        item.scheduledTaskId = null;
-        continue;
-      }
-
-      if (!shouldSchedule) {
-        item.scheduledTaskId = prevTaskId;
-        continue;
-      }
-
-      try {
-        const taskId = await runtimeController.scheduleItemAssignment(nextAgentId, item.id);
-        item.scheduledTaskId = taskId;
-      } catch {
-        item.scheduledTaskId = null;
-      }
-    }
-
-    // Cancel tasks for items that were deleted entirely.
-    for (const [id, prev] of prevItemsById) {
-      if (nextItemIds.has(id)) continue;
-
-      const prevAgentId = typeof prev.primaryAgentId === 'string' ? prev.primaryAgentId : null;
-      const prevTaskId = typeof prev.scheduledTaskId === 'string' ? prev.scheduledTaskId : null;
-
-      if (prevAgentId && prevTaskId) {
-        await runtimeController.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
-      }
-    }
-  }
-
-  /**
-   * Periodic sweep: for every item assigned to an agent and not yet done,
-   * ensure the agentlite registry still has a task for it. If the stored
-   * scheduledTaskId is null or no longer known to agentlite (e.g. after a
-   * restart that lost the registry), schedule a fresh task.
-   */
-  async function sweepItemAssignmentTasks(): Promise<void> {
-    if (!runtimeController) return;
-
-    const snapshot = await stores.workflow.get<{
-      items?: Array<{
-        id?: string;
-        primaryAgentId?: string | null;
-        scheduledTaskId?: string | null;
-        status?: string;
-      }>;
-    }>('snapshot');
-
-    if (!snapshot || !Array.isArray(snapshot.items)) return;
-
-    let dirty = false;
-
-    for (const item of snapshot.items) {
-      if (
-        typeof item.id !== 'string' ||
-        typeof item.primaryAgentId !== 'string' ||
-        item.status === 'done' ||
-        item.status === 'inbox'
-      ) {
-        continue;
-      }
-
-      const hasLiveTask = typeof item.scheduledTaskId === 'string'
-        && runtimeController.isItemTaskKnown(item.primaryAgentId, item.scheduledTaskId);
-
-      if (hasLiveTask) continue;
-
-      try {
-        const taskId = await runtimeController.scheduleItemAssignment(item.primaryAgentId, item.id);
-        if (taskId) {
-          item.scheduledTaskId = taskId;
-          dirty = true;
-        }
-      } catch {
-        // Ignore — agent may not be ready; next sweep retries.
-      }
-    }
-
-    if (dirty) {
-      // Write directly to the raw store to bypass reconcileAssignments (which
-      // would overwrite the freshly-minted taskIds from the renderer's stale
-      // echo). Emit workflowChanged manually so the renderer reloads.
-      await stores.workflow.set('snapshot', snapshot);
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send(ipcChannels.workflowChanged);
-      }
-    }
-  }
+  };
 
   const workflowStore = {
     delete: async (key) => stores.workflow.delete(key),
@@ -540,7 +571,7 @@ void app.whenReady().then(async () => {
       }
 
       const previous = await stores.workflow.get('snapshot');
-      await reconcileAssignments(previous, value);
+      await reconcileAssignments(previous, value, runtimeController);
       await stores.workflow.set(key, value);
     },
   } satisfies AppStorage;
@@ -594,9 +625,7 @@ void app.whenReady().then(async () => {
         actionServices: {
           getRuntimeController: requireRuntimeController,
           onWorkflowChanged: () => {
-            for (const window of BrowserWindow.getAllWindows()) {
-              window.webContents.send(ipcChannels.workflowChanged);
-            }
+            emitWorkflowChanged();
             if (!nudgeScheduled) {
               nudgeScheduled = true;
               setTimeout(() => {
@@ -659,9 +688,9 @@ void app.whenReady().then(async () => {
 
       // Periodic sweep: ensure every assigned item has a live agentlite task.
       taskSweepIntervalHandle = setInterval(() => {
-        void sweepItemAssignmentTasks();
+        void sweepItemAssignmentTasks(runtimeController, stores.workflow, emitWorkflowChanged);
       }, TASK_SWEEP_INTERVAL_MS);
-      void sweepItemAssignmentTasks();
+      void sweepItemAssignmentTasks(runtimeController, stores.workflow, emitWorkflowChanged);
     }).catch((error) => {
       console.error('Failed to bootstrap the Dune runtime.', error);
       throw error;
@@ -857,8 +886,11 @@ void app.whenReady().then(async () => {
       void reconnectTelegramChannels('unlock-screen');
     });
   }
+}
 
-});
+if (process.env.VITEST !== 'true') {
+  void bootstrapMainProcess();
+}
 
 app.on('window-all-closed', () => {
   app.quit();
