@@ -119,6 +119,7 @@ const MAX_RESEARCH_CONCURRENCY = 8;
 const MAX_RESEARCH_TARGETS = 24;
 const RESEARCH_RUN_TIMEOUT_MS = 3 * 60 * 1000;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
+const BUDGET_WARNING_THRESHOLD_USD = 1;
 const TRANSCRIPT_SUMMARY_CARD_ID = 'transcript-rolling-summary';
 const ISOLATED_RESEARCH_GROUP_FOLDER_PREFIX = 'isolated-research-slot-';
 
@@ -415,6 +416,20 @@ const importTelegramModule = globalThis.Function(
 
 export type { TelegramSecretsStore };
 
+export interface AgentErrorEvent {
+  agentId: string;
+  agentName: string;
+  context: string;
+  error: string;
+}
+
+export interface BudgetWarningEvent {
+  agentId: string;
+  agentName: string;
+  thresholdUsd: number;
+  totalCostUsd: number;
+}
+
 /** Agent runtime options. */
 export interface AgentRuntimeOptions {
   actionServices?: ActionHostServices;
@@ -425,7 +440,9 @@ export interface AgentRuntimeOptions {
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
+  onAgentError?: (event: AgentErrorEvent) => void;
   onAgentIdle?: (agentId: string) => void;
+  onBudgetWarning?: (event: BudgetWarningEvent) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
@@ -476,6 +493,10 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly sessionTokenTotals = new Map<string, AgentSessionTokenTotals>();
 
+  private readonly sessionCostTotals = new Map<string, number>();
+
+  private readonly budgetWarningAgents = new Set<string>();
+
   /** Per-agent set of currently running agentlite scheduled task IDs. */
   private readonly runningTaskIds = new Map<string, Set<string>>();
 
@@ -488,6 +509,10 @@ export class AgentRuntime implements AgentRuntimeContract {
   private readonly homeDir: string;
 
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
+
+  private readonly onAgentError: AgentRuntimeOptions['onAgentError'];
+
+  private readonly onBudgetWarning: AgentRuntimeOptions['onBudgetWarning'];
 
   private readonly onItemActivityChanged: AgentRuntimeOptions['onItemActivityChanged'];
 
@@ -530,7 +555,9 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.agentStore = options.agentStore;
     this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
+    this.onAgentError = options.onAgentError;
     this.onAgentIdle = options.onAgentIdle;
+    this.onBudgetWarning = options.onBudgetWarning;
     this.onItemActivityChanged = options.onItemActivityChanged;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
@@ -640,6 +667,11 @@ export class AgentRuntime implements AgentRuntimeContract {
     return cloneSnapshot(this.snapshot);
   }
 
+  /** Returns the runtime Telegram bridge for main-process integrations. */
+  getTelegramBridge() {
+    return this.telegram;
+  }
+
   /** Subscribes to agent updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
@@ -670,6 +702,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           `Failed to start agent runtime for "${record.agent.name}" (${record.agent.id}).`,
           error,
         );
+        this.emitAgentError(record.agent.id, error, 'runtime-start');
       }
     }
 
@@ -696,6 +729,8 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.pendingTokenUsage.clear();
         this.pendingTokenUsageSummaries.clear();
         this.sessionTokenTotals.clear();
+        this.sessionCostTotals.clear();
+        this.budgetWarningAgents.clear();
         this.runningTaskIds.clear();
         this.telegram.clearAllSetupSessions();
 
@@ -729,6 +764,8 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.pendingTokenUsage.clear();
     this.pendingTokenUsageSummaries.clear();
     this.sessionTokenTotals.clear();
+    this.sessionCostTotals.clear();
+    this.budgetWarningAgents.clear();
     this.runningTaskIds.clear();
     this.telegram.reset();
     this.records.clear();
@@ -838,6 +875,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       await this.ensureAgentRuntime(persistedRecord);
     } catch (error) {
       console.error(`Failed to start agent runtime for "${trimmedName}".`, error);
+      this.emitAgentError(agentId, error, 'runtime-start');
       if (input.channelId === 'telegram') {
         await this.telegram.deleteAgentToken(agentId);
         await this.telegram.refreshRuntimeState();
@@ -981,6 +1019,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         await this.ensureAgentRuntime(record);
       } catch (error) {
         console.error(`Failed to restart agent runtime after definition update.`, error);
+        this.emitAgentError(trimmedId, error, 'runtime-restart');
       }
     }
   }
@@ -1156,6 +1195,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       await this.ensureAgentRuntime(persistedRecord);
     } catch (error) {
       console.error(`Failed to start project main agent for "${expectedName}".`, error);
+      this.emitAgentError(agentId, error, 'runtime-start');
       this.rollbackOptimisticAgent(agentId);
       throw error;
     }
@@ -1172,6 +1212,8 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.pendingTokenUsage.delete(agentId);
     this.pendingTokenUsageSummaries.delete(agentId);
     this.sessionTokenTotals.delete(agentId);
+    this.sessionCostTotals.delete(agentId);
+    this.budgetWarningAgents.delete(agentId);
     this.runningTaskIds.delete(agentId);
     const deletedRecord = this.records.get(agentId)!;
     const deletedAgent = deletedRecord.agent;
@@ -1620,6 +1662,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       await this.ensureAgentRuntime(record);
     } catch (error) {
       console.error(`Failed to rotate compacted runtime session for "${record.agent.name}".`, error);
+      this.emitAgentError(agentId, error, 'runtime-rotate');
     }
   }
 
@@ -1792,11 +1835,44 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
 
-    await duneAgent.pushUserMessage(
-      toAgentChatJid(agentId),
-      options.rawText,
-      options.senderName,
-    );
+    try {
+      await duneAgent.pushUserMessage(
+        toAgentChatJid(agentId),
+        options.rawText,
+        options.senderName,
+      );
+    } catch (error) {
+      console.error(`Failed to dispatch input to "${persistedRecord.agent.name}".`, error);
+      this.emitAgentError(agentId, error, 'message-dispatch');
+      this.messageStream.forget(agentId);
+      this.pendingTokenUsage.delete(agentId);
+      this.pendingTokenUsageSummaries.delete(agentId);
+      this.snapshot = {
+        ...this.snapshot,
+        agents: this.snapshot.agents.map((item) =>
+          item.id === agentId
+            ? {
+                ...item,
+                messages: item.messages.map((message) =>
+                  message.id === assistantMessage.id
+                    ? {
+                        ...message,
+                        content: error instanceof Error ? error.message : String(error),
+                        status: 'complete',
+                      }
+                    : message,
+                ),
+                status: 'ready',
+                updatedAt: this.now(),
+              }
+            : item,
+        ),
+        isStreaming: this.messageStream.isStreaming,
+      };
+      this.persistState();
+      this.emit();
+      throw error;
+    }
   }
 
   private handleExternalInboundMessage(agentId: string, text: string, senderName: string, attachmentSources: string[] = []) {
@@ -1886,6 +1962,53 @@ export class AgentRuntime implements AgentRuntimeContract {
     });
     this.pendingTokenUsage.set(agentId, usage);
     this.pendingTokenUsageSummaries.set(agentId, formatAgentTokenUsageSummary(usage));
+    this.maybeEmitBudgetWarning(agentId, usage.costUsd);
+  }
+
+  private emitAgentError(agentId: string, error: unknown, context: string) {
+    if (!this.onAgentError) {
+      return;
+    }
+
+    const agentName = this.snapshot.agents.find((agent) => agent.id === agentId)?.name
+      ?? this.records.get(agentId)?.agent.name
+      ?? agentId;
+
+    this.onAgentError({
+      agentId,
+      agentName,
+      context,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  private maybeEmitBudgetWarning(agentId: string, costUsd?: number) {
+    if (!this.onBudgetWarning || typeof costUsd !== 'number' || costUsd <= 0) {
+      return;
+    }
+
+    const nextTotal = (this.sessionCostTotals.get(agentId) ?? 0) + costUsd;
+    this.sessionCostTotals.set(agentId, nextTotal);
+
+    if (
+      this.budgetWarningAgents.has(agentId)
+      || nextTotal < BUDGET_WARNING_THRESHOLD_USD
+    ) {
+      return;
+    }
+
+    this.budgetWarningAgents.add(agentId);
+
+    const agentName = this.snapshot.agents.find((agent) => agent.id === agentId)?.name
+      ?? this.records.get(agentId)?.agent.name
+      ?? agentId;
+
+    this.onBudgetWarning({
+      agentId,
+      agentName,
+      thresholdUsd: BUDGET_WARNING_THRESHOLD_USD,
+      totalCostUsd: nextTotal,
+    });
   }
 
   private decorateOutboundMessage(chatJid: string, text: string) {
@@ -2502,6 +2625,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         void this.updateItemActivityForTask(event.taskId, false);
+        console.error(`Scheduled task failed for "${record.agent.name}".`, event.error);
+        this.emitAgentError(agentId, event.error, 'scheduled-task');
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
@@ -2560,6 +2685,8 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.pendingTokenUsage.delete(agentId);
     this.pendingTokenUsageSummaries.delete(agentId);
     this.sessionTokenTotals.delete(agentId);
+    this.sessionCostTotals.delete(agentId);
+    this.budgetWarningAgents.delete(agentId);
     this.runningTaskIds.delete(agentId);
     this.records.delete(agentId);
     this.lifecycle.deleteRuntime(agentId);
