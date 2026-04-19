@@ -33,6 +33,7 @@ const item: WorkflowItem & {
   primaryAgentId: null,
   primaryAgentName: null,
   projectId: project.id,
+  reviewerName: null,
   scheduledTaskId: null,
   sortOrder: 0,
   status: 'active',
@@ -184,5 +185,32 @@ describe('WorkflowItemInspector', () => {
 
     expect(screen.queryByText('Archived Summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Earlier archived activity summary')).not.toBeInTheDocument();
+  });
+
+  it('updates the reviewer field on blur', async () => {
+    const user = userEvent.setup();
+    const onUpdateItem = vi.fn();
+
+    render(
+      <WorkflowItemInspector
+        item={item}
+        onAddTask={vi.fn()}
+        onAssignPrimaryAgent={vi.fn()}
+        onCreateAgent={vi.fn()}
+        onOpenAgent={vi.fn()}
+        onUpdateItem={onUpdateItem}
+        onUpdateItemStatus={vi.fn()}
+        onUpdateTask={vi.fn()}
+        project={project}
+        projectAgents={[]}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Work item reviewer'), 'Dune Repo Lead');
+    await user.tab();
+
+    expect(onUpdateItem).toHaveBeenCalledWith('item-1', {
+      reviewerName: 'Dune Repo Lead',
+    });
   });
 });

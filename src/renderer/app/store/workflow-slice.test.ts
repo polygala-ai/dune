@@ -108,6 +108,24 @@ describe('workflow slice', () => {
     expect(item?.workflowEvents[1]?.description).toBe('Work item moved to Review.');
   });
 
+  it('stores reviewer metadata and records reviewer-specific activity', () => {
+    const state = useAppStore.getState();
+    const itemId = state.items[0]?.id;
+
+    if (!itemId) {
+      throw new Error('Expected seeded workflow to include at least one work item.');
+    }
+
+    state.updateItem(itemId, {
+      reviewerName: 'Dune Repo Lead',
+    });
+
+    const item = useAppStore.getState().items.find((candidate) => candidate.id === itemId);
+
+    expect(item?.reviewerName).toBe('Dune Repo Lead');
+    expect(item?.workflowEvents[0]?.description).toBe('Reviewer set to “Dune Repo Lead”.');
+  });
+
   it('blocks review to done for humans while allowing review to acceptance and review to active', () => {
     const state = useAppStore.getState();
     const projectId = state.selectedProjectId;

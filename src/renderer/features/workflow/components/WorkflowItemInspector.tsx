@@ -40,7 +40,10 @@ interface WorkflowItemInspectorProps {
   onAssignPrimaryAgent: (itemId: string, input: { agentId: string | null; agentName?: string | null }) => void;
   onCreateAgent: (itemId: string) => void;
   onOpenAgent: (agentId: string) => void;
-  onUpdateItem: (itemId: string, input: { brief?: string; title?: string }) => void;
+  onUpdateItem: (
+    itemId: string,
+    input: { brief?: string; reviewerName?: string | null; title?: string },
+  ) => void;
   onUpdateItemStatus: (itemId: string, status: WorkflowItemStatus) => void;
   onUpdateTask: (
     itemId: string,
@@ -125,6 +128,7 @@ export function WorkflowItemInspector({
   const [titleValue, setTitleValue] = useState('');
   const [briefValue, setBriefValue] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [reviewerValue, setReviewerValue] = useState('');
   const [artifactEntries, setArtifactEntries] = useState<ProjectArtifactEntry[]>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [artifactStatus, setArtifactStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -134,6 +138,7 @@ export function WorkflowItemInspector({
     setTitleValue(item?.title ?? '');
     setBriefValue(item?.brief ?? '');
     setNewTaskTitle('');
+    setReviewerValue(item?.reviewerName ?? '');
   }, [item?.id]);
 
   const artifactFolderPath = item
@@ -361,6 +366,33 @@ export function WorkflowItemInspector({
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-[20px] border border-app-border bg-app-panel/60 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                Reviewer
+              </div>
+              <input
+                aria-label="Work item reviewer"
+                className="focus-ring-app mt-3 h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors placeholder:text-app-muted focus-visible:border-app-border-strong focus-visible:ring-2"
+                onBlur={() => {
+                  const normalizedReviewerValue = reviewerValue.trim();
+                  const nextReviewerName = normalizedReviewerValue || null;
+
+                  if (nextReviewerName !== item.reviewerName) {
+                    onUpdateItem(item.id, { reviewerName: reviewerValue });
+                  } else {
+                    setReviewerValue(item.reviewerName ?? '');
+                  }
+                }}
+                onChange={(event) => setReviewerValue(event.target.value)}
+                placeholder="Dune Repo Lead"
+                value={reviewerValue}
+              />
+              <p className="mt-3 text-sm leading-6 text-app-muted">
+                Track who should review the outcome so search filters can isolate
+                ready-for-review work quickly.
+              </p>
             </div>
           </section>
 

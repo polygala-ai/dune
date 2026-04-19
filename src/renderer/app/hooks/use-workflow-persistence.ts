@@ -220,6 +220,12 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
           ? item.primaryAgentId
           : null,
       projectId: item.projectId,
+      reviewerName:
+        typeof item.reviewerName === 'string'
+          ? item.reviewerName.trim() || null
+          : item.reviewerName === null
+            ? null
+            : null,
       scheduledTaskId:
         typeof item.scheduledTaskId === 'string' ? item.scheduledTaskId : null,
       sortOrder: item.sortOrder,

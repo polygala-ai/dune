@@ -12,7 +12,7 @@ import {
 import { cn } from '@/renderer/shared/lib/utils';
 
 const commandDialogContentClassName =
-  'overflow-hidden border-app-border bg-app-panel-strong p-0';
+  'w-[min(96vw,980px)] overflow-hidden border-app-border bg-app-panel-strong p-0';
 
 const commandDialogClassName =
   'flex h-full w-full flex-col overflow-hidden rounded-[22px] bg-app-panel-strong text-app-text';
@@ -36,18 +36,19 @@ Command.displayName = CommandPrimitive.displayName;
 /** Command dialog props. */
 interface CommandDialogProps extends React.ComponentProps<typeof Dialog> {
   children: React.ReactNode;
+  commandProps?: React.ComponentPropsWithoutRef<typeof CommandPrimitive>;
 }
 
 /** Renders the command dialog UI. */
-function CommandDialog({ children, ...props }: CommandDialogProps) {
+function CommandDialog({ children, commandProps, ...props }: CommandDialogProps) {
   return (
     <Dialog {...props}>
       <DialogContent className={commandDialogContentClassName}>
         <DialogTitle className="sr-only">Quick switcher</DialogTitle>
         <DialogDescription className="sr-only">
-          Search actions and agents.
+          Search work items, apply filters, and jump around the app.
         </DialogDescription>
-        <Command className={commandDialogLayoutClassName}>
+        <Command className={commandDialogLayoutClassName} {...commandProps}>
           {children}
         </Command>
       </DialogContent>

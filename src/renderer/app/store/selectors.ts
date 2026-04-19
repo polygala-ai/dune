@@ -17,6 +17,7 @@ import {
   selectWorkflowItemById,
   selectWorkflowProjectById,
 } from '@/renderer/features/workflow/model/workflow-presenters';
+import { buildWorkflowSearchIndex } from '@/renderer/features/workflow/model/workflow-search';
 import {
   compareWorkflowProjectActivityEntries,
   createWorkflowProjectActivityEntry,
@@ -262,6 +263,31 @@ export function useWorkflowSession() {
     selectedProjectId,
     selectedProjectScreen,
     selectedProjectView,
+  };
+}
+
+/** Workflow search session hook. */
+export function useWorkflowSearchSession() {
+  const {
+    agents,
+    items,
+    projects,
+  } = useAppStore(
+    useShallow((state) => ({
+      agents: state.agents,
+      items: state.items,
+      projects: state.projects,
+    })),
+  );
+
+  return {
+    searchAgents: agents
+      .map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    searchIndex: buildWorkflowSearchIndex(items, agents, projects),
   };
 }
 
