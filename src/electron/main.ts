@@ -29,6 +29,12 @@ app.commandLine.appendSwitch('--disable-gpu-sandbox');
 app.commandLine.appendSwitch('--disable-software-rasterizer');
 
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
+import { NotificationManager } from '@/electron/main/notifications/notification-manager';
+import {
+  DEFAULT_SETTINGS as DEFAULT_NOTIFICATION_SETTINGS,
+  NotificationTrigger,
+  type NotificationSettingsUpdate,
+} from '@/electron/main/notifications/types';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import {
@@ -84,6 +90,7 @@ let networkProxyManager: NetworkProxyManager | null = null;
 let runtimeController: DesktopRuntimeController | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
+let notificationManager: NotificationManager | null = null;
 let taskSweepIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let powerBlockerId: number | null = null;
 let telegramReconnectPromise: Promise<void> | null = null;
@@ -292,6 +299,7 @@ const quitCoordinator = createQuitCoordinator({
       clearInterval(taskSweepIntervalHandle);
       taskSweepIntervalHandle = null;
     }
+    notificationManager?.dispose();
     stopPowerBlocker();
     await runtimeController?.shutdown();
   },
@@ -423,6 +431,41 @@ function isWorkflowSnapshotLike(value: unknown): value is StoredWorkflowSnapshot
   return isPlainObject(value) && Array.isArray(value.items) && Array.isArray(value.projects);
 }
 
+function notifyWorkflowStatusChanges(
+  previous: unknown,
+  next: unknown,
+) {
+  if (!notificationManager || !isWorkflowSnapshotLike(previous) || !isWorkflowSnapshotLike(next)) {
+    return;
+  }
+
+  const previousItems = new Map(previous.items.map((item) => [item.id, item]));
+
+  for (const item of next.items) {
+    const previousItem = previousItems.get(item.id);
+
+    if (!previousItem || previousItem.status === item.status) {
+      continue;
+    }
+
+    if (item.status === 'review') {
+      notificationManager.notify(NotificationTrigger.item_review, {
+        body: item.title,
+        itemId: item.id,
+        title: 'Item moved to review',
+      });
+    }
+
+    if (item.status === 'acceptance') {
+      notificationManager.notify(NotificationTrigger.item_acceptance, {
+        body: item.title,
+        itemId: item.id,
+        title: 'Item moved to acceptance',
+      });
+    }
+  }
+}
+
 function recordDuneScheduledTaskEvent(
   snapshot: StoredWorkflowSnapshot,
   item: StoredWorkflowSnapshot['items'][number],
@@ -448,6 +491,12 @@ void app.whenReady().then(async () => {
     settings: new JsonFileStorage(userDataDir, 'settings'),
     workflow: new JsonFileStorage(userDataDir, 'workflow'),
   };
+
+  notificationManager = new NotificationManager({
+    getRuntimeSnapshot: () => runtimeController?.getSnapshot() ?? null,
+    settingsStore: stores.settings,
+  });
+  await notificationManager.ready();
 
   async function compactWorkflowActivity(snapshot: StoredWorkflowSnapshot): Promise<void> {
     const activeItemIds = new Set(snapshot.items.map((item) => item.id));
@@ -723,6 +772,7 @@ void app.whenReady().then(async () => {
         await compactWorkflowActivity(value);
       }
       await stores.workflow.set(key, value);
+      notifyWorkflowStatusChanges(previous, value);
     },
   } satisfies AppStorage;
 
@@ -791,8 +841,15 @@ void app.whenReady().then(async () => {
         agentStore: stores.agents,
         bundledAgentDir: path.join(app.getAppPath(), 'agent'),
         ...(agentLiteHomeDir ? { homeDir: agentLiteHomeDir } : {}),
-        onAgentIdle: (_agentId) => {
+        onAgentIdle: () => {
           void nudgeIdleMainAgents(requireRuntimeController, workflowStore);
+        },
+        onAgentError: (agentId, error) => {
+          notificationManager?.notify(NotificationTrigger.agent_error, {
+            agentId,
+            body: error.message,
+            title: 'Agent error',
+          });
         },
         onItemActivityChanged: (payload) => {
           for (const window of BrowserWindow.getAllWindows()) {
@@ -876,6 +933,21 @@ void app.whenReady().then(async () => {
       return requireRuntimeController().getTranscriptPage(agentId, options);
     },
   );
+  ipcMain.handle(ipcChannels.getNotificationSettings, () =>
+    notificationManager?.getSettings() ?? DEFAULT_NOTIFICATION_SETTINGS,
+  );
+  ipcMain.handle(
+    ipcChannels.updateNotificationSettings,
+    (_event, partial: NotificationSettingsUpdate) =>
+      notificationManager?.updateSettings(partial) ?? DEFAULT_NOTIFICATION_SETTINGS,
+  );
+  ipcMain.handle(
+    ipcChannels.getNotificationHistory,
+    () => notificationManager?.getHistory() ?? [],
+  );
+  ipcMain.handle(ipcChannels.clearNotificationHistory, () => {
+    notificationManager?.clearHistory();
+  });
   ipcMain.handle(
     ipcChannels.getProjectActivityPage,
     async (_event, projectId: string, options?: { beforeEntryId?: string | null; limit?: number }) =>

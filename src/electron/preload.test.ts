@@ -69,6 +69,7 @@ describe('preload bridge', () => {
 
     await desktopBridge?.getRuntimeSnapshot?.();
     await desktopBridge?.applyNetworkSettings?.();
+    await desktopBridge?.clearNotificationHistory?.();
     await desktopBridge?.cancelTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.createAgent?.({
       channelId: 'dune-chat',
@@ -80,6 +81,8 @@ describe('preload bridge', () => {
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
+    await desktopBridge?.getNotificationHistory?.();
+    await desktopBridge?.getNotificationSettings?.();
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
@@ -96,6 +99,12 @@ describe('preload bridge', () => {
     await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
+    await desktopBridge?.updateNotificationSettings?.({
+      channels: {
+        macos: true,
+        telegram: false,
+      },
+    });
     await desktopBridge?.updateAgentChannel?.({
       agentId: 'agent-1',
       channelId: 'dune-chat',
@@ -106,6 +115,7 @@ describe('preload bridge', () => {
 
     expect(invoke).toHaveBeenCalledWith(ipcChannels.getRuntimeSnapshot);
     expect(invoke).toHaveBeenCalledWith(ipcChannels.applyNetworkSettings);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.clearNotificationHistory);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.cancelTelegramSetupSession,
       'telegram-session-1',
@@ -133,6 +143,8 @@ describe('preload bridge', () => {
       'agent-1',
       { beforeMessageId: 'message-1', limit: 20 },
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationHistory);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getNotificationSettings);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getProjectActivityPage,
       'project-1',
@@ -170,6 +182,15 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.startTelegramSetupSession,
       { token: 'bot-token' },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.updateNotificationSettings,
+      {
+        channels: {
+          macos: true,
+          telegram: false,
+        },
+      },
     );
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.updateAgentChannel,
@@ -211,6 +232,22 @@ describe('preload bridge', () => {
 
     await bridge?.storageKeys?.('settings');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.storageKeys, 'settings');
+
+    await bridge?.updateNotificationSettings?.({
+      channels: {
+        macos: true,
+        telegram: false,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.updateNotificationSettings,
+      {
+        channels: {
+          macos: true,
+          telegram: false,
+        },
+      },
+    );
   });
 
   it('exposes all expected bridge methods', async () => {
@@ -222,6 +259,7 @@ describe('preload bridge', () => {
 
     const expectedMethods = [
       'applyNetworkSettings',
+      'clearNotificationHistory',
       'cancelTelegramSetupSession',
       'createAgent',
       'copyText',
@@ -229,6 +267,8 @@ describe('preload bridge', () => {
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
       'getAgentTranscriptPage',
+      'getNotificationHistory',
+      'getNotificationSettings',
       'getProjectActivityPage',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
@@ -245,6 +285,7 @@ describe('preload bridge', () => {
       'sendAgentMessage',
       'startTelegramSetupSession',
       'updateAgentChannel',
+      'updateNotificationSettings',
       'storageDelete',
       'storageGet',
       'storageKeys',

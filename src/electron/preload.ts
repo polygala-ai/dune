@@ -10,6 +10,7 @@ import { ipcChannels } from '@/shared/electron/ipc-channels';
 
 const bridge: DesktopBridge = {
   applyNetworkSettings: () => ipcRenderer.invoke(ipcChannels.applyNetworkSettings),
+  clearNotificationHistory: () => ipcRenderer.invoke(ipcChannels.clearNotificationHistory),
   cancelTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.cancelTelegramSetupSession, sessionId),
   copyText: (text) => ipcRenderer.invoke(ipcChannels.copyText, text),
@@ -30,6 +31,8 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
     ipcRenderer.invoke(ipcChannels.getAgentTranscriptPage, agentId, options),
+  getNotificationHistory: () => ipcRenderer.invoke(ipcChannels.getNotificationHistory),
+  getNotificationSettings: () => ipcRenderer.invoke(ipcChannels.getNotificationSettings),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
@@ -57,6 +60,8 @@ const bridge: DesktopBridge = {
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
+  updateNotificationSettings: (partial) =>
+    ipcRenderer.invoke(ipcChannels.updateNotificationSettings, partial),
   subscribe: (listener) => {
     /** Handles snapshot. */
     const handleSnapshot = (

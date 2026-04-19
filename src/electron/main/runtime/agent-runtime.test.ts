@@ -2661,7 +2661,11 @@ describe('AgentRuntime', () => {
 
     await flushMicrotasks();
 
-    expect(mockAgent.getTask(taskId!)?.status).toBe('completed');
+    expect(
+      (
+        mockAgent.getTask as (taskId: string) => { status: 'active' | 'completed' } | undefined
+      )(taskId!)?.status,
+    ).toBe('completed');
     expect(host.service.isItemTaskKnown(agentId, taskId!)).toBe(false);
   });
 

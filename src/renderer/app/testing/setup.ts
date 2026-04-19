@@ -4,6 +4,8 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
+import { DEFAULT_SETTINGS as DEFAULT_NOTIFICATION_SETTINGS } from '@/electron/main/notifications/types';
+
 const listeners = new Set<(event: MediaQueryListEvent) => void>();
 
 Object.defineProperty(window, 'matchMedia', {
@@ -64,11 +66,14 @@ Object.defineProperty(window, 'ResizeObserver', {
 beforeEach(() => {
   window.duneDesktop = {
     applyNetworkSettings: vi.fn(() => Promise.resolve(undefined)),
+    clearNotificationHistory: vi.fn(() => Promise.resolve(undefined)),
     cancelTelegramSetupSession: vi.fn(() => Promise.resolve(undefined)),
     copyText: vi.fn(() => Promise.resolve(undefined)),
     ensureProjectArtifactFolder: vi.fn(() => Promise.resolve('/tmp/project/item-123')),
     ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    getNotificationHistory: vi.fn(() => Promise.resolve([])),
+    getNotificationSettings: vi.fn(() => Promise.resolve(DEFAULT_NOTIFICATION_SETTINGS)),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       codingEngines: [],
@@ -95,6 +100,7 @@ beforeEach(() => {
     storageGet: vi.fn(() => Promise.resolve(null)),
     storageKeys: vi.fn(() => Promise.resolve([])),
     storageSet: vi.fn(() => Promise.resolve(undefined)),
+    updateNotificationSettings: vi.fn(() => Promise.resolve(DEFAULT_NOTIFICATION_SETTINGS)),
   };
   document.documentElement.dataset.theme = 'light';
 });
