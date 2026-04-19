@@ -14,7 +14,7 @@ export interface DuneChannelOptions {
   config: ChannelDriverConfig;
   decorateOutboundMessage?: ((chatJid: string, text: string) => Promise<string> | string) | undefined;
   externalChannelFactory?: ChannelDriverFactory | undefined;
-  onExternalInbound?: ((text: string, senderName: string, attachments?: string[]) => Promise<void> | void) | undefined;
+  onExternalInbound?: ((text: string, senderName: string, attachments?: unknown[]) => Promise<void> | void) | undefined;
   onOutboundMessage: (chatJid: string, text: string) => Promise<void> | void;
   primaryJid: string;
 }
@@ -93,7 +93,7 @@ export class DuneChannel implements ChannelDriver {
         // Record inbound external messages in the snapshot so they appear in the UI.
         if (!msg.is_from_me && !msg.is_bot_message && this.onExternalInbound) {
           const senderName = msg.sender_name?.trim() || msg.sender?.trim() || 'External';
-          const attachments = Array.isArray(msg.attachments) ? (msg.attachments as string[]) : [];
+          const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
           void this.onExternalInbound(msg.content, senderName, attachments);
         }
 
