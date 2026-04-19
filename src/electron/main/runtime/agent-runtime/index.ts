@@ -1691,7 +1691,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
   }
 
-  /** Returns true when the agentlite task registry still knows the given task id. */
+  /** Returns true when the task still exists and remains active in agentlite. */
   private isItemTaskKnown(agentId: string, taskId: string): boolean {
     const duneAgent = this.lifecycle.getRuntime(agentId);
 
@@ -1700,7 +1700,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     try {
-      return duneAgent.agentLiteAgent.getTask(taskId) !== undefined;
+      return duneAgent.agentLiteAgent.getTask(taskId)?.status === 'active';
     } catch {
       return false;
     }

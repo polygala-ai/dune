@@ -2634,6 +2634,37 @@ describe('AgentRuntime', () => {
     ]);
   });
 
+  it('treats completed one-shot assignment tasks as missing for sweep checks', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Assignment Agent',
+      projectId: 'project-1',
+    });
+
+    const taskId = await host.service.scheduleItemAssignment(agentId, 'item-1');
+    const mockAgent = harness.mockAgent();
+
+    expect(taskId).toBeTruthy();
+
+    await flushMicrotasks();
+
+    expect(mockAgent.getTask(taskId!)?.status).toBe('completed');
+    expect(host.service.isItemTaskKnown(agentId, taskId!)).toBe(false);
+  });
+
   it('runs per-target research in isolated task contexts and merges with a reducer task', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness({

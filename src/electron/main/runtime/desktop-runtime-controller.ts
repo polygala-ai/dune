@@ -164,7 +164,7 @@ export class DesktopRuntimeController {
     await this.activeRuntime.service.cancelItemAssignment(agentId, taskId);
   }
 
-  /** Returns true when the agentlite registry still knows the given task id. */
+  /** Returns true when the task still exists and remains active in agentlite. */
   isItemTaskKnown(agentId: string, taskId: string): boolean {
     return this.activeRuntime.service.isItemTaskKnown(agentId, taskId);
   }

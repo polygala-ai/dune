@@ -73,6 +73,7 @@ import {
   getWorkflowItemActivityArchiveItemId,
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
 } from '@/shared/workflow/activity';
+import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
 
 if (started) {
   app.quit();
@@ -570,7 +571,7 @@ void app.whenReady().then(async () => {
 
     const nextItemIds = new Set<string>();
 
-    // Handle assignment changes and moves into lanes that clear agent assignments on items that still exist.
+    // Handle assignment changes and moves in or out of lanes that should keep a live assignment task.
     for (const item of nextItems) {
       if (!isPlainObject(item) || typeof item.id !== 'string') {
         continue;
@@ -585,9 +586,9 @@ void app.whenReady().then(async () => {
       const nextStatus = typeof item.status === 'string' ? item.status : null;
 
       const agentChanged = prevAgentId !== nextAgentId;
-      const clearsAssignmentLane = nextStatus === 'acceptance' || nextStatus === 'done';
+      const shouldHaveTask = shouldScheduleItemAssignmentTask(nextStatus);
 
-      if (!agentChanged && !clearsAssignmentLane) {
+      if (!agentChanged && shouldHaveTask) {
         // scheduledTaskId is owned by the main process; the renderer only echoes
         // a stale copy. Always restore the authoritative value from the previous
         // stored snapshot so unrelated edits don't wipe it.
@@ -599,7 +600,7 @@ void app.whenReady().then(async () => {
         await runtimeController.cancelItemAssignment(prevAgentId, prevTaskId).catch(() => {});
       }
 
-      if (clearsAssignmentLane || !nextAgentId) {
+      if (!shouldHaveTask || !nextAgentId) {
         item.scheduledTaskId = null;
 
         if (prevTaskId) {
@@ -647,8 +648,8 @@ void app.whenReady().then(async () => {
   }
 
   /**
-   * Periodic sweep: for every item assigned to an agent and still in an
-   * agent-owned lane,
+   * Periodic sweep: for every item assigned to an agent and still in a
+   * lane that should keep an assignment task,
    * ensure the agentlite registry still has a task for it. If the stored
    * scheduledTaskId is null or no longer known to agentlite (e.g. after a
    * restart that lost the registry), schedule a fresh task and record it.
@@ -666,9 +667,7 @@ void app.whenReady().then(async () => {
       if (
         typeof item.id !== 'string' ||
         typeof item.primaryAgentId !== 'string' ||
-        item.status === 'acceptance' ||
-        item.status === 'done' ||
-        item.status === 'inbox'
+        !shouldScheduleItemAssignmentTask(item.status)
       ) {
         continue;
       }
