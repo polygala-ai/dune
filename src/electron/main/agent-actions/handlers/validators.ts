@@ -167,6 +167,7 @@ export function clearPrimaryAgentAssignments(
   for (const item of snapshot.items) {
     if (item.primaryAgentId === agentId) {
       item.primaryAgentId = null;
+      item.scheduledTaskId = null;
       item.updatedAt = timestamp;
       item.workflowEvents.unshift(
         createWorkflowEvent('assignment', 'Primary agent cleared.', timestamp),

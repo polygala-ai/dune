@@ -89,12 +89,14 @@ describe('DesktopRuntimeController', () => {
     await expect(secondShutdown).resolves.toBeUndefined();
   });
 
-  it('forwards scheduleReadyAssignment to the active runtime service', async () => {
+  it('forwards scheduleItemAssignment and cancelItemAssignment to the active runtime service', async () => {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
     tempDirs.push(homeDir);
-    const scheduleReadyAssignment = vi.fn(async () => undefined);
+    const scheduleItemAssignment = vi.fn(async () => 'task-123');
+    const cancelItemAssignment = vi.fn(async () => undefined);
     const mockRuntime = createMockAgentRuntime();
-    mockRuntime.service.scheduleReadyAssignment = scheduleReadyAssignment;
+    mockRuntime.service.scheduleItemAssignment = scheduleItemAssignment;
+    mockRuntime.service.cancelItemAssignment = cancelItemAssignment;
     const controller = new DesktopRuntimeController({
       agentStore: { get: async () => null, set: async () => {} },
       createRealRuntime: () => ({
@@ -105,11 +107,11 @@ describe('DesktopRuntimeController', () => {
     });
 
     await controller.start();
-    await controller.scheduleReadyAssignment('agent-1', 'ASSIGNMENTS_UPDATED\nYou have 2 items.');
+    const taskId = await controller.scheduleItemAssignment('agent-1', 'item-1');
+    await controller.cancelItemAssignment('agent-1', 'task-123');
 
-    expect(scheduleReadyAssignment).toHaveBeenCalledWith(
-      'agent-1',
-      'ASSIGNMENTS_UPDATED\nYou have 2 items.',
-    );
+    expect(scheduleItemAssignment).toHaveBeenCalledWith('agent-1', 'item-1');
+    expect(cancelItemAssignment).toHaveBeenCalledWith('agent-1', 'task-123');
+    expect(taskId).toBe('task-123');
   });
 });

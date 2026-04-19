@@ -199,6 +199,7 @@ function getNextProjectColor(projectCount: number) {
 export function createInitialWorkflowState(): WorkflowState {
   return {
     isWorkflowHydrated: false,
+    itemActivity: {},
     items: [],
     projects: [],
     selectedItemId: null,
@@ -444,6 +445,7 @@ export function createWorkflowSlice(
             id: itemId,
             primaryAgentId: null,
             projectId: input.projectId,
+            scheduledTaskId: null,
             sortOrder: getProjectItems(
               state.items.filter((item) => item.status === input.status),
               input.projectId,
@@ -813,6 +815,14 @@ export function createWorkflowSlice(
             }),
           };
         });
+      },
+      setItemActivity: (itemId, activity) => {
+        set((state) => ({
+          itemActivity: {
+            ...state.itemActivity,
+            [itemId]: activity,
+          },
+        }));
       },
     };
 

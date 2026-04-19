@@ -20,6 +20,7 @@ export const ipcChannels = {
   resetRuntime: 'dune:runtime:reset',
   restartApp: 'dune:runtime:restart-app',
   runtimeSnapshotUpdated: 'dune:runtime:snapshot-updated',
+  itemActivityUpdated: 'dune:workflow:item-activity-updated',
   selectAgent: 'dune:runtime:select-agent',
   sendAgentMessage: 'dune:runtime:send-agent-message',
   startTelegramSetupSession: 'dune:runtime:start-telegram-setup-session',

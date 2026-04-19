@@ -31,6 +31,7 @@ const item: WorkflowItem & {
   primaryAgentId: null,
   primaryAgentName: null,
   projectId: project.id,
+  scheduledTaskId: null,
   sortOrder: 0,
   status: 'active',
   tasks: [],

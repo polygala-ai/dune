@@ -729,9 +729,19 @@ class MockAgentService implements AgentService {
     this.emit();
   }
 
-  /** Schedules ready assignment. */
-  scheduleReadyAssignment(_agentId: string, _prompt: string) {
+  /** Schedules a work-item assignment (no-op for mock). */
+  scheduleItemAssignment(_agentId: string, _itemId: string): Promise<string | null> {
+    return Promise.resolve(null);
+  }
+
+  /** Cancels a work-item assignment (no-op for mock). */
+  cancelItemAssignment(_agentId: string, _taskId: string): Promise<void> {
     return Promise.resolve();
+  }
+
+  /** Returns false for the mock (no persisted task registry). */
+  isItemTaskKnown(_agentId: string, _taskId: string): boolean {
+    return false;
   }
 
   /** Resets mock agent. */

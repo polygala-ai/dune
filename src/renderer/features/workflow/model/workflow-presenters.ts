@@ -122,6 +122,7 @@ export function getWorkflowSnapshotState(snapshot: WorkflowSnapshot): WorkflowSn
 export function presentWorkflowItemSummary(
   item: WorkflowItem,
   agentsById: Map<string, Agent>,
+  itemActivity: Record<string, { isWorking: boolean }> = {},
   now: number = Date.now(),
 ): WorkflowItemSummary {
   const totalTaskCount = item.tasks.length;
@@ -130,8 +131,10 @@ export function presentWorkflowItemSummary(
   const primaryAgent = item.primaryAgentId
     ? agentsById.get(item.primaryAgentId) ?? null
     : null;
-  const isAgentWorking = primaryAgent?.status === 'live';
-  const currentTask = item.tasks.find((task) => task.status === 'doing') ?? null;
+  const isAgentWorking = itemActivity[item.id]?.isWorking === true;
+  const currentTask = isAgentWorking
+    ? item.tasks.find((task) => task.status === 'doing') ?? null
+    : null;
   const specialStateLabel = hasBlockedTasks
     ? 'Blocked'
     : item.status === 'review'

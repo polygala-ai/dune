@@ -243,6 +243,7 @@ export interface AgentRuntimeOptions {
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
+  onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
@@ -305,6 +306,11 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
+  private readonly onItemActivityChanged: AgentRuntimeOptions['onItemActivityChanged'];
+
+  /** Per-item ephemeral run state driven by AgentLite task.run.* events. */
+  private readonly itemActivity = new Map<string, { isWorking: boolean; startedAt: number | null }>();
+
   private readonly runtimeRoot: string;
 
   private readonly duneSkillDir: string;
@@ -342,6 +348,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
     this.onAgentIdle = options.onAgentIdle;
+    this.onItemActivityChanged = options.onItemActivityChanged;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
     const stagingDir = seedAgentSupportSources(this.bundledAgentDir, this.homeDir);
@@ -421,8 +428,11 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.selectAgent(agentId);
       },
       sendMessage: async (agentId, text) => this.sendMessage(agentId, text),
-      scheduleReadyAssignment: async (agentId, prompt) =>
-        this.scheduleReadyAssignment(agentId, prompt),
+      scheduleItemAssignment: async (agentId, itemId) =>
+        this.scheduleItemAssignment(agentId, itemId),
+      cancelItemAssignment: async (agentId, taskId) =>
+        this.cancelItemAssignment(agentId, taskId),
+      isItemTaskKnown: (agentId, taskId) => this.isItemTaskKnown(agentId, taskId),
       startTelegramSetupSession: async (input) =>
         this.telegram.startSetupSession(input),
       subscribe: (listener) => this.subscribe(listener),
@@ -1077,28 +1087,86 @@ export class AgentRuntime implements AgentRuntimeContract {
     });
   }
 
-  private async scheduleReadyAssignment(agentId: string, prompt: string) {
+  private async scheduleItemAssignment(agentId: string, itemId: string): Promise<string | null> {
     const record = this.records.get(agentId);
 
     if (!record) {
-      return;
+      return null;
     }
 
     const agent = this.snapshot.agents.find((item) => item.id === agentId) ?? null;
 
     if (!agent?.channel.canCompose) {
-      return;
+      return null;
     }
 
     const duneAgent = this.lifecycle.getRuntime(agentId)
       ?? await this.ensureAgentRuntime(record);
 
-    await duneAgent.agentLiteAgent.scheduleTask({
+    const task = await duneAgent.agentLiteAgent.scheduleTask({
       jid: toAgentChatJid(agentId),
-      prompt,
+      prompt: `You have been assigned work item id: ${itemId}`,
       scheduleType: 'once',
       scheduleValue: new Date().toISOString(),
     });
+
+    return task.id;
+  }
+
+  private async cancelItemAssignment(agentId: string, taskId: string): Promise<void> {
+    const duneAgent = this.lifecycle.getRuntime(agentId);
+
+    if (!duneAgent) {
+      return;
+    }
+
+    try {
+      await duneAgent.agentLiteAgent.cancelTask(taskId);
+    } catch {
+      // Task may have already completed or been removed; ignore.
+    }
+  }
+
+  /** Returns true when the agentlite task registry still knows the given task id. */
+  private isItemTaskKnown(agentId: string, taskId: string): boolean {
+    const duneAgent = this.lifecycle.getRuntime(agentId);
+
+    if (!duneAgent) {
+      return false;
+    }
+
+    try {
+      return duneAgent.agentLiteAgent.getTask(taskId) !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  private async updateItemActivityForTask(taskId: string, isWorking: boolean): Promise<void> {
+    const workflowStore = this.actionServices?.workflowStore;
+
+    if (!workflowStore) {
+      return;
+    }
+
+    const snapshot = await workflowStore.get<{ items?: Array<{ id?: string; scheduledTaskId?: string | null }> }>('snapshot');
+    const itemId = snapshot?.items?.find((item) => item?.scheduledTaskId === taskId)?.id ?? null;
+
+    if (!itemId) {
+      return;
+    }
+
+    const current = this.itemActivity.get(itemId);
+
+    if (current?.isWorking === isWorking) {
+      return;
+    }
+
+    this.itemActivity.set(itemId, {
+      isWorking,
+      startedAt: isWorking ? this.now() : null,
+    });
+    this.onItemActivityChanged?.({ itemId, isWorking });
   }
 
   private async dispatchAgentInput(
@@ -1834,15 +1902,19 @@ export class AgentRuntime implements AgentRuntimeContract {
         }
       });
 
-      // Scheduled task lifecycle — drives agent.status for non-chat work.
+      // Scheduled task lifecycle — drives agent.status for non-chat work and
+      // per-item green-light activity for items whose scheduledTaskId matches.
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
+        void this.updateItemActivityForTask(event.taskId, true);
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);

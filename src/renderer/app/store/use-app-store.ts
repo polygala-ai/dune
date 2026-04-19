@@ -67,6 +67,7 @@ export const useAppStore = create<AppStore>((set, get, store) => {
     })(set, get, store),
     ...createWorkflowSlice({
       isWorkflowHydrated: initialState.isWorkflowHydrated,
+      itemActivity: initialState.itemActivity ?? {},
       items: initialState.items,
       projects: initialState.projects,
       selectedItemId: initialState.selectedItemId,

@@ -32,6 +32,7 @@ export interface WorkflowItem {
   id: string;
   primaryAgentId: string | null;
   projectId: string;
+  scheduledTaskId: string | null;
   sortOrder: number;
   status: string;
   tasks: WorkflowTask[];
@@ -118,6 +119,7 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()
           : createArtifactFolderName(item.title, item.id),
+      scheduledTaskId: item.scheduledTaskId ?? null,
       tasks: item.tasks.map((task) => ({ ...task })),
       workProducts: item.workProducts.map((workProduct) => ({ ...workProduct })),
       workflowEvents: item.workflowEvents.map((event) => ({ ...event })),

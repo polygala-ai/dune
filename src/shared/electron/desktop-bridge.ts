@@ -47,6 +47,9 @@ export interface DesktopBridge {
   selectProjectDirectory?: () => Promise<string | null>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;
+  subscribeItemActivity?: (
+    listener: (payload: { itemId: string; isWorking: boolean }) => void,
+  ) => () => void;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
 }

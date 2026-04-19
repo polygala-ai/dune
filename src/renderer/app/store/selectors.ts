@@ -87,6 +87,7 @@ export function useWorkflowSession() {
   const {
     agents,
     isWorkflowHydrated,
+    itemActivity,
     items,
     projects,
     selectedItemId,
@@ -98,6 +99,7 @@ export function useWorkflowSession() {
     useShallow((state) => ({
       agents: state.agents,
       isWorkflowHydrated: state.isWorkflowHydrated,
+      itemActivity: state.itemActivity,
       items: state.items,
       projects: state.projects,
       selectedItemId: state.selectedItemId,
@@ -158,7 +160,7 @@ export function useWorkflowSession() {
       )
       .sort((left, right) => right.createdAt - left.createdAt),
     filteredItemSummaries: filteredItems.map((item) =>
-      presentWorkflowItemSummary(item, agentsById),
+      presentWorkflowItemSummary(item, agentsById, itemActivity),
     ),
     isWorkflowHydrated,
     items: projectItems,
@@ -186,9 +188,9 @@ export function useWorkflowSession() {
     projects,
     recentItems: sortedProjectItemsByUpdated.slice(0, 4).map((item) => ({
       id: item.id,
-      specialStateLabel: presentWorkflowItemSummary(item, agentsById).specialStateLabel,
+      specialStateLabel: presentWorkflowItemSummary(item, agentsById, itemActivity).specialStateLabel,
       title: item.title,
-      updatedLabel: presentWorkflowItemSummary(item, agentsById).updatedLabel,
+      updatedLabel: presentWorkflowItemSummary(item, agentsById, itemActivity).updatedLabel,
     })),
     selectedItem: selectedItem
       ? {

@@ -48,7 +48,9 @@ export interface AgentService {
   listAgents: () => Agent[];
   selectAgent: (agentId: string) => void;
   sendMessage: (agentId: string, text: string) => Promise<void>;
-  scheduleReadyAssignment: (agentId: string, prompt: string) => Promise<void>;
+  scheduleItemAssignment: (agentId: string, itemId: string) => Promise<string | null>;
+  cancelItemAssignment: (agentId: string, taskId: string) => Promise<void>;
+  isItemTaskKnown: (agentId: string, taskId: string) => boolean;
   startTelegramSetupSession: (input: StartTelegramSetupSessionInput) => Promise<string>;
   subscribe: (listener: AgentServiceListener) => () => void;
   updateAgentChannel: (input: UpdateAgentChannelInput) => Promise<void>;

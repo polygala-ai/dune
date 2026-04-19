@@ -92,6 +92,7 @@ export interface WorkflowItem {
   id: string;
   primaryAgentId: string | null;
   projectId: string;
+  scheduledTaskId: string | null;
   sortOrder: number;
   status: WorkflowItemStatus;
   tasks: WorkflowTask[];

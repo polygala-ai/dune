@@ -140,9 +140,19 @@ export class DesktopRuntimeController {
     await this.activeRuntime.service.sendMessage(agentId, text);
   }
 
-  /** Schedules ready assignment via agentlite task. */
-  async scheduleReadyAssignment(agentId: string, prompt: string) {
-    await this.activeRuntime.service.scheduleReadyAssignment(agentId, prompt);
+  /** Schedules a work-item assignment task on the agent's agentlite runtime. */
+  async scheduleItemAssignment(agentId: string, itemId: string): Promise<string | null> {
+    return this.activeRuntime.service.scheduleItemAssignment(agentId, itemId);
+  }
+
+  /** Cancels a previously scheduled work-item assignment task. */
+  async cancelItemAssignment(agentId: string, taskId: string): Promise<void> {
+    await this.activeRuntime.service.cancelItemAssignment(agentId, taskId);
+  }
+
+  /** Returns true when the agentlite registry still knows the given task id. */
+  isItemTaskKnown(agentId: string, taskId: string): boolean {
+    return this.activeRuntime.service.isItemTaskKnown(agentId, taskId);
   }
 
   /** Starts Telegram setup session. */

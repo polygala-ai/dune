@@ -127,7 +127,9 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
     sendMessage: async (agentId: string, text: string) => {
       await this.bridge.sendAgentMessage(agentId, text);
     },
-    scheduleReadyAssignment: async () => undefined,
+    scheduleItemAssignment: () => Promise.resolve(null),
+    cancelItemAssignment: () => Promise.resolve(),
+    isItemTaskKnown: () => false,
     startTelegramSetupSession: async (input: StartTelegramSetupSessionInput) => {
       return this.bridge.startTelegramSetupSession(input);
     },

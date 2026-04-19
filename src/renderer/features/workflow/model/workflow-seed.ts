@@ -39,6 +39,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         id: inboxItemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: 0,
         status: 'inbox',
         tasks: [
@@ -74,6 +75,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         id: readyItemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: 0,
         status: 'ready',
         tasks: [
@@ -117,6 +119,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         id: activeItemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: 0,
         status: 'active',
         tasks: [
@@ -176,6 +179,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         id: reviewItemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: 0,
         status: 'review',
         tasks: [
@@ -219,6 +223,7 @@ export function createSeedWorkflowSnapshot(now: number = Date.now()): WorkflowSn
         id: doneItemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: 0,
         status: 'done',
         tasks: [

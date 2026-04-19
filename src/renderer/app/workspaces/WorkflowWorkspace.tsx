@@ -20,8 +20,6 @@ import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/compone
 import { WorkflowProjectAgents } from '@/renderer/features/workflow/components/WorkflowProjectAgents';
 import { WorkflowProjectSettings } from '@/renderer/features/workflow/components/WorkflowProjectSettings';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
-import { createAgentAssignmentMessage } from '@/shared/agents/assignment-message';
-import { resolveMountedItemArtifactPath } from '@/shared/workflow/project-artifacts';
 import {
   Dialog,
   DialogClose,
@@ -137,41 +135,12 @@ export function WorkflowWorkspace({
     );
   }
 
-  /** Handles primary agent assignment. */
+  /** Handles primary agent assignment. Persisting the snapshot triggers the main-process scheduler. */
   const handleAssignPrimaryAgent = async (
     itemId: string,
     input: { agentId: string | null; agentName?: string | null },
   ) => {
-    const state = useAppStore.getState();
-    const item = state.items.find((candidate) => candidate.id === itemId) ?? null;
-    const previousAgentId = item?.primaryAgentId ?? null;
-
     assignPrimaryAgent(itemId, input);
-
-    if (!item || !input.agentId || previousAgentId === input.agentId) {
-      return;
-    }
-
-    const projectName = state.projects.find((project) => project.id === item.projectId)?.name ?? null;
-    const projectRootPath = state.projects.find((project) => project.id === item.projectId)?.rootPath ?? null;
-    const assignmentMessage = createAgentAssignmentMessage({
-      agentName: input.agentName ?? null,
-      artifactPath: resolveMountedItemArtifactPath(projectRootPath, item.artifactFolderName),
-      itemBrief: item.brief,
-      itemStatus: item.status,
-      itemTitle: item.title,
-      projectName,
-      tasks: item.tasks.map((task) => ({
-        status: task.status,
-        title: task.title,
-      })),
-    });
-
-    try {
-      await agentRuntime.service.sendMessage(input.agentId, assignmentMessage);
-    } catch (error) {
-      console.error(`Failed to create an assignment task for agent "${input.agentId}".`, error);
-    }
   };
 
   /** Handles agent for item creation. */

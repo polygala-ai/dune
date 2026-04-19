@@ -73,6 +73,20 @@ const bridge: DesktopBridge = {
       ipcRenderer.removeListener(ipcChannels.workflowChanged, handler);
     };
   },
+  subscribeItemActivity: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: Parameters<typeof listener>[0],
+    ) => {
+      listener(payload);
+    };
+
+    ipcRenderer.on(ipcChannels.itemActivityUpdated, handler);
+
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.itemActivityUpdated, handler);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('duneDesktop', Object.freeze(bridge));

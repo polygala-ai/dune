@@ -188,6 +188,8 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
           ? item.primaryAgentId
           : null,
       projectId: item.projectId,
+      scheduledTaskId:
+        typeof item.scheduledTaskId === 'string' ? item.scheduledTaskId : null,
       sortOrder: item.sortOrder,
       status: workflowItemStatuses.includes(item.status as (typeof workflowItemStatuses)[number])
         ? (item.status as WorkflowSnapshot['items'][number]['status'])
@@ -236,6 +238,7 @@ function normalizeWorkflowSnapshot(value: unknown): WorkflowSnapshot | null {
 /** Workflow persistence hook. */
 export function useWorkflowPersistence() {
   const hydrateWorkflow = useAppStore((state) => state.hydrateWorkflow);
+  const setItemActivity = useAppStore((state) => state.setItemActivity);
   const {
     isWorkflowHydrated,
     items,
@@ -282,11 +285,16 @@ export function useWorkflowPersistence() {
       void load();
     });
 
+    const unsubscribeActivity = window.duneDesktop?.subscribeItemActivity?.((payload) => {
+      setItemActivity(payload.itemId, { isWorking: payload.isWorking });
+    });
+
     return () => {
       isDisposed = true;
       unsubscribe?.();
+      unsubscribeActivity?.();
     };
-  }, [hydrateWorkflow]);
+  }, [hydrateWorkflow, setItemActivity]);
 
   useEffect(() => {
     if (!isWorkflowHydrated) {

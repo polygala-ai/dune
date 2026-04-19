@@ -83,9 +83,15 @@ export interface SettingsActions {
 /** Settings slice shape. */
 export type SettingsSlice = SettingsState & SettingsActions;
 
+/** Per-item runtime activity driven by AgentLite task.run.* events. */
+export interface WorkflowItemActivity {
+  isWorking: boolean;
+}
+
 /** Workflow state. */
 export interface WorkflowState extends WorkflowSnapshot {
   isWorkflowHydrated: boolean;
+  itemActivity: Record<string, WorkflowItemActivity>;
   selectedProjectScreen: WorkflowProjectScreen;
 }
 
@@ -135,6 +141,7 @@ export interface WorkflowActions {
     taskId: string,
     input: { notes?: string; status?: WorkflowTaskStatus; title?: string },
   ) => void;
+  setItemActivity: (itemId: string, activity: WorkflowItemActivity) => void;
 }
 
 /** Workflow slice shape. */

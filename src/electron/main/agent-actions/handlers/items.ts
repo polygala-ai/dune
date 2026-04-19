@@ -94,6 +94,7 @@ export const itemTools: RegisteredTool[] = [
         id: itemId,
         primaryAgentId: null,
         projectId,
+        scheduledTaskId: null,
         sortOrder: snapshot.items.filter((item) => item.projectId === projectId && item.status === status).length,
         status,
         tasks: createDefaultTasks(now),

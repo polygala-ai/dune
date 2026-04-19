@@ -1446,35 +1446,4 @@ describe('AppShell', () => {
     });
   });
 
-  it('creates an assignment task message when an item agent is created from the inspector', async () => {
-    const user = userEvent.setup();
-
-    render(<AppShell />);
-
-    expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
-    await user.click(
-      screen.getByRole('button', { name: /^Open Homepage copy rewrite$/i }),
-    );
-    await user.click(
-      within(screen.getByTestId('workflow-item-inspector')).getByRole('button', {
-        name: /^Create agent$/i,
-      }),
-    );
-
-    await waitFor(() => {
-      const agent = agentRuntime.service.getSnapshot().agents.find(
-        (candidate) => candidate.name === 'Homepage copy rewrite agent',
-      );
-
-      expect(
-        agent?.messages.some((message) =>
-          message.role === 'user'
-          && message.content.includes(
-            'You have been assigned as the primary agent for "Homepage copy rewrite".',
-          ),
-        ),
-      ).toBe(true);
-    });
-  });
-
 });
