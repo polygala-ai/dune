@@ -107,6 +107,7 @@ interface MockAgent {
   registerGroup: ReturnType<typeof vi.fn>;
   registeredGroups: Record<string, unknown>;
   removeChannel: ReturnType<typeof vi.fn>;
+  scheduleTask: ReturnType<typeof vi.fn>;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
@@ -118,6 +119,7 @@ function createAgentLiteModuleHarness(
   } = {},
 ) {
   let capturedOptions: AgentLiteOptions | null = null;
+  let taskIdSequence = 0;
   const agents = new Map<string, MockAgent>();
   const stop = vi.fn(async () => {
     agents.clear();
@@ -177,6 +179,25 @@ function createAgentLiteModuleHarness(
       }),
       registeredGroups,
       removeChannel: vi.fn(),
+      scheduleTask: vi.fn(async (options: {
+        jid: string;
+        prompt: string;
+        scheduleType: 'cron' | 'interval' | 'once';
+        scheduleValue: string;
+      }) => ({
+        contextMode: 'isolated' as const,
+        createdAt: new Date().toISOString(),
+        groupFolder: 'main',
+        id: `task-${++taskIdSequence}`,
+        jid: options.jid,
+        lastResult: null,
+        lastRun: null,
+        nextRun: null,
+        prompt: options.prompt,
+        scheduleType: options.scheduleType,
+        scheduleValue: options.scheduleValue,
+        status: 'active' as const,
+      })),
       start: vi.fn(async () => {
         await harnessOptions.start?.();
         const channels = mockAgent._options.channels ?? {};
@@ -1675,7 +1696,7 @@ describe('AgentRuntime', () => {
     expect(telegramHarness.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('appends token usage summaries to outbound Telegram responses and keeps per-session totals', async () => {
+  it('stores token usage structurally for Telegram responses and keeps per-session totals', async () => {
     vi.useFakeTimers();
 
     const homeDir = createTempHome();
@@ -1749,14 +1770,26 @@ describe('AgentRuntime', () => {
 
       expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
         'tg:123',
-        'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
+        'Investigating now.',
       );
       expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
-        content: 'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
+        content: 'Investigating now.',
         role: 'assistant',
       });
 
       await vi.advanceTimersByTimeAsync(400);
+
+      expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
+        content: 'Investigating now.',
+        role: 'assistant',
+        usage: {
+          costUsd: 0.0012,
+          inputTokens: 123,
+          outputTokens: 456,
+          sessionInputTotal: 123,
+          sessionOutputTotal: 456,
+        },
+      });
 
       await host.service.sendMessage(agentId, 'Second pass.');
 
@@ -1782,12 +1815,115 @@ describe('AgentRuntime', () => {
 
       expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
         'tg:123',
-        'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
+        'Fixed.',
       );
+      await vi.advanceTimersByTimeAsync(400);
+
       expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
-        content: 'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
+        content: 'Fixed.',
         role: 'assistant',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 20,
+          sessionInputTotal: 133,
+          sessionOutputTotal: 476,
+        },
       });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps pending token usage separate for queued background runs on the same agent', async () => {
+    vi.useFakeTimers();
+
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    try {
+      const host = new AgentRuntime({
+        agentStore: createMemoryStore(),
+        homeDir,
+        loadAgentLiteModule: harness.loadAgentLiteModule,
+        resolveModelCredentials: async () => ({}),
+      });
+
+      await host.start();
+
+      const agentId = await host.service.createAgent({
+        channelId: 'dune-chat',
+        name: 'Release triage',
+        projectId: 'project-1',
+      });
+
+      const duneChannel = harness.duneChannel('release-triage');
+      const mockAgent = harness.mockAgent('release-triage');
+
+      await host.service.scheduleReadyAssignment(agentId, 'First background pass.');
+      await host.service.scheduleReadyAssignment(agentId, 'Second background pass.');
+
+      mockAgent._emit('run.sdk_message', {
+        agentId,
+        jid: toAgentChatJid(agentId),
+        message: {
+          result: 'Background one.',
+          subtype: 'success',
+          usage: {
+            input_tokens: 7,
+            output_tokens: 11,
+          },
+        },
+        sdkType: 'result',
+        timestamp: new Date('2026-04-17T00:00:00.000Z').toISOString(),
+      });
+      mockAgent._emit('run.sdk_message', {
+        agentId,
+        jid: toAgentChatJid(agentId),
+        message: {
+          result: 'Background two.',
+          subtype: 'success',
+          usage: {
+            input_tokens: 13,
+            output_tokens: 17,
+          },
+        },
+        sdkType: 'result',
+        timestamp: new Date('2026-04-17T00:00:01.000Z').toISOString(),
+      });
+
+      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Background one.');
+      await vi.advanceTimersByTimeAsync(400);
+
+      await duneChannel.sendMessage(toAgentChatJid(agentId), 'Background two.');
+      await vi.advanceTimersByTimeAsync(400);
+
+      const assistantMessages = host
+        .getSnapshot()
+        .agents.find((item) => item.id === agentId)
+        ?.messages.filter((message) => message.role === 'assistant');
+
+      expect(assistantMessages).toMatchObject([
+        {
+          content: 'Background one.',
+          usage: {
+            inputTokens: 7,
+            outputTokens: 11,
+            sessionInputTotal: 7,
+            sessionOutputTotal: 11,
+          },
+        },
+        {
+          content: 'Background two.',
+          usage: {
+            inputTokens: 13,
+            outputTokens: 17,
+            sessionInputTotal: 20,
+            sessionOutputTotal: 28,
+          },
+        },
+      ]);
     } finally {
       vi.useRealTimers();
     }

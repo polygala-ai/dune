@@ -94,7 +94,7 @@ import {
   createRuntimeReadyMessage,
 } from './snapshot';
 import { createGroupFolder, isAgentLiteRuntimeLockError, waitForTimeout } from './utils';
-import { MessageStream, type PendingAssistantMessage } from './message-stream';
+import { MessageStream } from './message-stream';
 import { Lifecycle } from './lifecycle';
 import { AgentRecords } from './agent-records';
 
@@ -164,40 +164,6 @@ function captureAgentTokenUsageSnapshot(
     sessionInputTotal: totals.inputTokens + inputTokens,
     sessionOutputTotal: totals.outputTokens + outputTokens,
   };
-}
-
-function formatTokenCount(count: number) {
-  return count.toLocaleString('en-US');
-}
-
-function formatTokenCost(costUsd: number) {
-  return `$${costUsd.toFixed(costUsd >= 0.01 ? 4 : 6).replace(/0+$/, '').replace(/\.$/, '')}`;
-}
-
-function formatAgentTokenUsageSummary(usage: AgentTokenUsageSnapshot) {
-  const parts = [
-    `📊 ${formatTokenCount(usage.inputTokens)} in / ${formatTokenCount(usage.outputTokens)} out tokens`,
-  ];
-
-  if (typeof usage.costUsd === 'number' && usage.costUsd > 0) {
-    parts.push(`${formatTokenCost(usage.costUsd)} this msg`);
-  }
-
-  parts.push(
-    `${formatTokenCount(usage.sessionInputTotal)} in / ${formatTokenCount(usage.sessionOutputTotal)} out session total`,
-  );
-
-  return parts.join(' • ');
-}
-
-function appendAgentTokenUsageSummary(content: string, summary: string) {
-  const trimmedContent = content.trimEnd();
-
-  if (!trimmedContent) {
-    return summary;
-  }
-
-  return `${trimmedContent}\n\n${summary}`;
 }
 
 import type {
@@ -289,7 +255,7 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly pendingTokenUsage = new Map<string, AgentMessageUsage>();
 
-  private readonly pendingTokenUsageSummaries = new Map<string, string>();
+  private readonly pendingTokenUsageKeys = new Map<string, string[]>();
 
   private readonly sessionTokenTotals = new Map<string, AgentSessionTokenTotals>();
 
@@ -507,7 +473,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       (async () => {
         this.messageStream.clear();
         this.pendingTokenUsage.clear();
-        this.pendingTokenUsageSummaries.clear();
+        this.pendingTokenUsageKeys.clear();
         this.sessionTokenTotals.clear();
         this.runningTaskIds.clear();
         this.telegram.clearAllSetupSessions();
@@ -540,7 +506,7 @@ export class AgentRuntime implements AgentRuntimeContract {
   reset() {
     this.messageStream.clear();
     this.pendingTokenUsage.clear();
-    this.pendingTokenUsageSummaries.clear();
+    this.pendingTokenUsageKeys.clear();
     this.sessionTokenTotals.clear();
     this.runningTaskIds.clear();
     this.telegram.reset();
@@ -977,9 +943,8 @@ export class AgentRuntime implements AgentRuntimeContract {
       return;
     }
 
+    this.clearPendingTokenUsage(agentId);
     this.messageStream.forget(agentId);
-    this.pendingTokenUsage.delete(agentId);
-    this.pendingTokenUsageSummaries.delete(agentId);
     this.sessionTokenTotals.delete(agentId);
     this.runningTaskIds.delete(agentId);
     const deletedRecord = this.records.get(agentId)!;
@@ -1181,8 +1146,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       transcriptText: string;
     },
   ) {
-    this.pendingTokenUsage.delete(agentId);
-    this.pendingTokenUsageSummaries.delete(agentId);
+    this.clearPendingTokenUsage(agentId);
     const persistedRecord = this.records.get(agentId);
 
     if (!persistedRecord) {
@@ -1207,6 +1171,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       idleTimer: null,
       messageId: assistantMessage.id,
       safetyTimer: null,
+      usageKey: assistantMessage.id,
     });
 
     this.snapshot = {
@@ -1301,6 +1266,53 @@ export class AgentRuntime implements AgentRuntimeContract {
     });
   }
 
+  private createPendingTokenUsageKey(agentId: string) {
+    return `usage-${agentId}-${this.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  private enqueuePendingTokenUsageKey(agentId: string, usageKey: string) {
+    const pendingKeys = this.pendingTokenUsageKeys.get(agentId) ?? [];
+
+    pendingKeys.push(usageKey);
+    this.pendingTokenUsageKeys.set(agentId, pendingKeys);
+  }
+
+  private shiftPendingTokenUsageKey(agentId: string) {
+    const pendingKeys = this.pendingTokenUsageKeys.get(agentId);
+
+    if (!pendingKeys || pendingKeys.length === 0) {
+      return null;
+    }
+
+    const usageKey = pendingKeys.shift() ?? null;
+
+    if (pendingKeys.length === 0) {
+      this.pendingTokenUsageKeys.delete(agentId);
+    }
+
+    return usageKey;
+  }
+
+  private clearPendingTokenUsage(agentId: string) {
+    const pending = this.messageStream.get(agentId);
+
+    if (pending) {
+      this.pendingTokenUsage.delete(pending.usageKey);
+    }
+
+    const queuedUsageKeys = this.pendingTokenUsageKeys.get(agentId);
+
+    if (!queuedUsageKeys) {
+      return;
+    }
+
+    for (const usageKey of queuedUsageKeys) {
+      this.pendingTokenUsage.delete(usageKey);
+    }
+
+    this.pendingTokenUsageKeys.delete(agentId);
+  }
+
   private captureTokenUsageSummary(agentId: string, message: unknown) {
     const currentTotals = this.sessionTokenTotals.get(agentId) ?? {
       inputTokens: 0,
@@ -1316,25 +1328,16 @@ export class AgentRuntime implements AgentRuntimeContract {
       inputTokens: usage.sessionInputTotal,
       outputTokens: usage.sessionOutputTotal,
     });
-    this.pendingTokenUsage.set(agentId, usage);
-    this.pendingTokenUsageSummaries.set(agentId, formatAgentTokenUsageSummary(usage));
-  }
+    const usageKey = this.messageStream.get(agentId)?.usageKey
+      // AgentLite does not expose a runId on `run.sdk_message`, so queue a
+      // synthetic key until the next assistant message is created.
+      ?? this.createPendingTokenUsageKey(agentId);
 
-  private decorateOutboundMessage(chatJid: string, text: string) {
-    const agentId = this.resolveAgentIdByChatJid(chatJid);
+    this.pendingTokenUsage.set(usageKey, usage);
 
-    if (!agentId) {
-      return text;
+    if (!this.messageStream.has(agentId)) {
+      this.enqueuePendingTokenUsageKey(agentId, usageKey);
     }
-
-    const summary = this.pendingTokenUsageSummaries.get(agentId);
-
-    if (!summary) {
-      return text;
-    }
-
-    this.pendingTokenUsageSummaries.delete(agentId);
-    return appendAgentTokenUsageSummary(text, summary);
   }
 
   private handleOutboundMessage(chatJid: string, text: string) {
@@ -1358,10 +1361,12 @@ export class AgentRuntime implements AgentRuntimeContract {
           // No pending message — start a new streaming assistant message
           // so subsequent chunks from AgentLite append to it.
           const newMessageId = createMessageId('assistant', now);
+          const usageKey = this.shiftPendingTokenUsageKey(agentId) ?? newMessageId;
           this.messageStream.set(agentId, {
             idleTimer: null,
             messageId: newMessageId,
             safetyTimer: null,
+            usageKey,
           });
 
           return {
@@ -1492,10 +1497,10 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
 
     const now = this.now();
-    const usage = this.pendingTokenUsage.get(agentId);
+    const usage = this.pendingTokenUsage.get(pending.usageKey);
 
     this.messageStream.forget(agentId);
-    this.pendingTokenUsage.delete(agentId);
+    this.pendingTokenUsage.delete(pending.usageKey);
 
     this.snapshot = {
       ...this.snapshot,
@@ -1774,7 +1779,6 @@ export class AgentRuntime implements AgentRuntimeContract {
         agentLite,
         boundExternalJid,
         credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
-        decorateOutboundMessage: (chatJid, text) => this.decorateOutboundMessage(chatJid, text),
         externalChannelFactory,
         groupFolder: record.groupFolder,
         instructions: composeAgentSystemPrompt(record.agent.definition, this.homeDir),
@@ -1846,8 +1850,6 @@ export class AgentRuntime implements AgentRuntimeContract {
         const sdkSubtype = event.sdkSubtype;
 
         if (sdkType === 'result') {
-          this.pendingTokenUsage.delete(agentId);
-          this.pendingTokenUsageSummaries.delete(agentId);
           this.captureTokenUsageSummary(agentId, msg);
         }
 
@@ -1970,8 +1972,7 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private rollbackOptimisticAgent(agentId: string) {
-    this.pendingTokenUsage.delete(agentId);
-    this.pendingTokenUsageSummaries.delete(agentId);
+    this.clearPendingTokenUsage(agentId);
     this.sessionTokenTotals.delete(agentId);
     this.runningTaskIds.delete(agentId);
     this.records.delete(agentId);

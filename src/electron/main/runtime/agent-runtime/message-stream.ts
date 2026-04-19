@@ -2,7 +2,7 @@
  * Per-agent assistant message buffer.
  *
  * While an agent is streaming a reply we hold an entry here with the message
- * id and two cancellable timers:
+ * id, a structured-usage key, and two cancellable timers:
  * - `idleTimer` finalizes the reply if the agent stops emitting chunks
  *   (default ~320ms after the last chunk).
  * - `safetyTimer` finalizes the reply if the agent never emits another chunk
@@ -15,6 +15,8 @@ export interface PendingAssistantMessage {
   idleTimer: ReturnType<typeof globalThis.setTimeout> | null;
   messageId: string;
   safetyTimer: ReturnType<typeof globalThis.setTimeout> | null;
+  /** Unique key used to attach token usage to this reply. */
+  usageKey: string;
 }
 
 /** Tracks message state. */
