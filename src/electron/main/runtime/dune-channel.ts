@@ -136,7 +136,7 @@ export class DuneChannel implements ChannelDriver {
 
   /** Sends message. */
   async sendMessage(jid: string, text: string) {
-    const outboundText = this.decorateOutboundMessage
+    const externalOutboundText = this.decorateOutboundMessage
       ? await this.decorateOutboundMessage(jid, text)
       : text;
     const timestamp = new Date().toISOString();
@@ -152,7 +152,7 @@ export class DuneChannel implements ChannelDriver {
 
     this.config.onMessage(jid, {
       chat_jid: jid,
-      content: outboundText,
+      content: text,
       is_bot_message: true,
       is_from_me: true,
       sender: 'dune-assistant',
@@ -161,10 +161,10 @@ export class DuneChannel implements ChannelDriver {
     });
 
     if (this.externalDriver && this.boundExternalJid) {
-      await this.externalDriver.sendMessage(this.boundExternalJid, outboundText);
+      await this.externalDriver.sendMessage(this.boundExternalJid, externalOutboundText);
     }
 
-    await this.onOutboundMessage(jid, outboundText);
+    await this.onOutboundMessage(jid, text);
   }
 
   /** Pushes inbound message. */

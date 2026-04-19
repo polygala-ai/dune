@@ -1675,7 +1675,7 @@ describe('AgentRuntime', () => {
     expect(telegramHarness.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('appends token usage summaries to outbound Telegram responses and keeps per-session totals', async () => {
+  it('tracks token usage on outbound Telegram responses and keeps per-session totals', async () => {
     vi.useFakeTimers();
 
     const homeDir = createTempHome();
@@ -1752,11 +1752,24 @@ describe('AgentRuntime', () => {
         'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
       );
       expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
-        content: 'Investigating now.\n\n📊 123 in / 456 out tokens • $0.0012 this msg • 123 in / 456 out session total',
+        content: 'Investigating now.',
         role: 'assistant',
       });
 
       await vi.advanceTimersByTimeAsync(400);
+
+      expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
+        content: 'Investigating now.',
+        role: 'assistant',
+        status: 'complete',
+        usage: {
+          costUsd: 0.0012,
+          inputTokens: 123,
+          outputTokens: 456,
+          sessionInputTotal: 123,
+          sessionOutputTotal: 456,
+        },
+      });
 
       await host.service.sendMessage(agentId, 'Second pass.');
 
@@ -1785,8 +1798,22 @@ describe('AgentRuntime', () => {
         'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
       );
       expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
-        content: 'Fixed.\n\n📊 10 in / 20 out tokens • 133 in / 476 out session total',
+        content: 'Fixed.',
         role: 'assistant',
+      });
+
+      await vi.advanceTimersByTimeAsync(400);
+
+      expect(host.getSnapshot().agents.find((item) => item.id === agentId)?.messages.at(-1)).toMatchObject({
+        content: 'Fixed.',
+        role: 'assistant',
+        status: 'complete',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 20,
+          sessionInputTotal: 133,
+          sessionOutputTotal: 476,
+        },
       });
     } finally {
       vi.useRealTimers();
