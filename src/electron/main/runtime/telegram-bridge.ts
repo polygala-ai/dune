@@ -215,6 +215,8 @@ export class TelegramBridge {
 
   private readonly agentFingerprints = new Map<string, string>();
 
+  private readonly observerConnections = new Map<string, Promise<TelegramObserverRecord>>();
+
   private disconnecting = false;
 
   constructor(options: TelegramBridgeOptions) {
@@ -412,50 +414,13 @@ export class TelegramBridge {
     for (const [fingerprint, token] of requiredTokens.entries()) {
       let observer = this.observers.get(fingerprint) ?? null;
 
-      if (!observer) {
-        let driver: ChannelDriver | null = null;
-
-        try {
-          driver = await this.createObserver(token, fingerprint);
-          await connectDriverWithTimeout(driver, TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS);
-          let botUsername: string | null = null;
-
-          try {
-            botUsername = await this.resolveBotUsername(token);
-          } catch (error) {
-            console.warn('Failed to resolve Telegram bot username.', error);
-          }
-
-          observer = {
-            botUsername,
-            driver,
-            errorMessage: null,
-            fingerprint,
-            status: 'connected',
-            token,
-          };
-        } catch (error) {
-          // Disconnect the hung/failed driver so it doesn't keep polling in the
-          // background while we surface the error to the UI.
-          if (driver) {
-            try {
-              await driver.disconnect();
-            } catch (disconnectError) {
-              console.warn('Failed to disconnect a stalled Telegram driver.', disconnectError);
-            }
-          }
-
-          observer = {
-            botUsername: null,
-            driver: null,
-            errorMessage: error instanceof Error ? error.message : String(error),
-            fingerprint,
-            status: 'error',
-            token,
-          };
-        }
-
-        this.observers.set(fingerprint, observer);
+      if (
+        !observer
+        || observer.status === 'disconnected'
+        || observer.status === 'error'
+        || observer.token !== token
+      ) {
+        observer = await this.ensureObserver(token, fingerprint);
       }
 
       const members = requiredObserverMembers.get(fingerprint);
@@ -537,8 +502,12 @@ export class TelegramBridge {
   async disconnectAll() {
     if (this.disconnecting) return;
     this.disconnecting = true;
-    for (const fingerprint of [...this.observers.keys()]) {
-      await this.disconnectObserver(fingerprint);
+    try {
+      for (const fingerprint of [...this.observers.keys()]) {
+        await this.disconnectObserver(fingerprint);
+      }
+    } finally {
+      this.disconnecting = false;
     }
   }
 
@@ -656,6 +625,130 @@ export class TelegramBridge {
     };
 
     return createChannel(config);
+  }
+
+  private async ensureObserver(token: string, fingerprint: string) {
+    const pendingConnection = this.observerConnections.get(fingerprint);
+
+    if (pendingConnection) {
+      return pendingConnection;
+    }
+
+    const existingObserver = this.observers.get(fingerprint) ?? null;
+
+    if (
+      existingObserver
+      && existingObserver.status !== 'disconnected'
+      && existingObserver.status !== 'error'
+      && existingObserver.token === token
+    ) {
+      return existingObserver;
+    }
+
+    const placeholderObserver: TelegramObserverRecord = {
+      botUsername: null,
+      driver: null,
+      errorMessage: null,
+      fingerprint,
+      status: 'connecting',
+      token,
+    };
+    const connectionPromise = this.connectObserver(
+      token,
+      fingerprint,
+      placeholderObserver,
+    );
+
+    this.observerConnections.set(fingerprint, connectionPromise);
+    this.observers.set(fingerprint, placeholderObserver);
+
+    try {
+      return await connectionPromise;
+    } finally {
+      if (this.observerConnections.get(fingerprint) === connectionPromise) {
+        this.observerConnections.delete(fingerprint);
+      }
+    }
+  }
+
+  private async connectObserver(
+    token: string,
+    fingerprint: string,
+    placeholderObserver: TelegramObserverRecord,
+  ) {
+    const existingObserver = this.observers.get(fingerprint) ?? null;
+
+    if (existingObserver && existingObserver !== placeholderObserver) {
+      await this.disconnectObserver(fingerprint);
+      this.observers.set(fingerprint, placeholderObserver);
+    }
+
+    let driver: ChannelDriver | null = null;
+
+    try {
+      driver = await this.createObserver(token, fingerprint);
+      placeholderObserver.driver = driver;
+      await connectDriverWithTimeout(driver, TELEGRAM_DRIVER_CONNECT_TIMEOUT_MS);
+      let botUsername: string | null = null;
+
+      try {
+        botUsername = await this.resolveBotUsername(token);
+      } catch (error) {
+        console.warn('Failed to resolve Telegram bot username.', error);
+      }
+
+      const connectedObserver: TelegramObserverRecord = {
+        botUsername,
+        driver,
+        errorMessage: null,
+        fingerprint,
+        status: 'connected',
+        token,
+      };
+
+      if (this.observers.get(fingerprint) !== placeholderObserver) {
+        try {
+          await driver.disconnect();
+        } catch (disconnectError) {
+          console.warn('Failed to disconnect a replaced Telegram observer.', disconnectError);
+        }
+
+        return this.observers.get(fingerprint) ?? {
+          botUsername: null,
+          driver: null,
+          errorMessage: null,
+          fingerprint,
+          status: 'disconnected',
+          token,
+        };
+      }
+
+      this.observers.set(fingerprint, connectedObserver);
+      return connectedObserver;
+    } catch (error) {
+      if (driver) {
+        try {
+          await driver.disconnect();
+        } catch (disconnectError) {
+          console.warn('Failed to disconnect a stalled Telegram driver.', disconnectError);
+        }
+      }
+
+      const failedObserver: TelegramObserverRecord = {
+        botUsername: null,
+        driver: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        fingerprint,
+        status: 'error',
+        token,
+      };
+
+      if (this.observers.get(fingerprint) === placeholderObserver) {
+        this.observers.set(fingerprint, failedObserver);
+      }
+
+      return this.observers.get(fingerprint) ?? failedObserver;
+    }
   }
 
   private async disconnectObserver(fingerprint: string) {
