@@ -24,9 +24,10 @@ if (app.isPackaged) {
   fixPath();
 }
 
-// Prevent GPU compositor crash / black screen on some macOS configurations.
-app.commandLine.appendSwitch('--disable-gpu-sandbox');
-app.commandLine.appendSwitch('--disable-software-rasterizer');
+// Work around a macOS GPU compositor bug that can cause a black screen.
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('--disable-gpu-sandbox');
+}
 
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
