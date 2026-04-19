@@ -24,9 +24,10 @@ if (app.isPackaged) {
   fixPath();
 }
 
-// Work around a macOS GPU compositor bug that can cause a black screen.
+// macOS: disable the GPU sandbox to prevent startup black screens from GPU
+// compositor crashes. Related Electron issue: https://github.com/electron/electron/issues/22656
 if (process.platform === 'darwin') {
-  app.commandLine.appendSwitch('--disable-gpu-sandbox');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
