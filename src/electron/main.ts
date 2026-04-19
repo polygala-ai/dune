@@ -42,6 +42,7 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
 } from '@/renderer/features/agents/types';
+import type { ConversationExportFormat } from '@/shared/electron/conversation-export';
 import { loadNetworkSettings } from '@/renderer/features/settings/model/network-settings';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
@@ -74,6 +75,10 @@ import {
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
 } from '@/shared/workflow/activity';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
+import {
+  exportAsJson,
+  exportAsMarkdown,
+} from '@/electron/main/export/conversation-exporter';
 
 if (started) {
   app.quit();
@@ -313,6 +318,44 @@ function requireNetworkProxyManager() {
   }
 
   return networkProxyManager;
+}
+
+/** Sanitizes a conversation export filename. */
+function sanitizeConversationExportFileName(name: string) {
+  const sanitized = [...name.trim()]
+    .map((character) => {
+      const codePoint = character.charCodeAt(0);
+
+      if (codePoint < 32 || /[<>:"/\\|?*]/.test(character)) {
+        return '-';
+      }
+
+      return character;
+    })
+    .join('')
+    .replace(/\s+/g, ' ');
+
+  return sanitized || 'conversation';
+}
+
+/** Returns the file extension for a conversation export format. */
+function getConversationExportExtension(format: ConversationExportFormat) {
+  return format === 'json' ? '.json' : '.md';
+}
+
+/** Ensures the export path has the expected extension. */
+function ensureConversationExportPath(
+  filePath: string,
+  format: ConversationExportFormat,
+) {
+  const expectedExtension = getConversationExportExtension(format);
+
+  if (path.extname(filePath).toLowerCase() === expectedExtension) {
+    return filePath;
+  }
+
+  const parsed = path.parse(filePath);
+  return path.join(parsed.dir, `${parsed.name}${expectedExtension}`);
 }
 
 /** Creates window. */
@@ -874,6 +917,59 @@ void app.whenReady().then(async () => {
     async (_event, agentId: string, options?: { beforeMessageId?: string | null; limit?: number }) => {
       await ensureRuntime();
       return requireRuntimeController().getTranscriptPage(agentId, options);
+    },
+  );
+  ipcMain.handle(
+    ipcChannels.exportConversation,
+    async (_event, input: { format: ConversationExportFormat; groupId: string }) => {
+      await ensureRuntime();
+
+      const controller = requireRuntimeController();
+      const conversation = await controller.getConversationMessages(input.groupId);
+      const extension = getConversationExportExtension(input.format);
+      const exportFileName = `${sanitizeConversationExportFileName(conversation.groupName)}-conversation${extension}`;
+      const dialogTarget = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
+      const dialogOptions = {
+        buttonLabel: 'Export',
+        defaultPath: path.join(app.getPath('documents'), exportFileName),
+        filters: [
+          {
+            extensions: [extension.slice(1)],
+            name: input.format === 'json' ? 'JSON' : 'Markdown',
+          },
+        ],
+        title: `Export ${conversation.groupName} conversation`,
+      } satisfies Electron.SaveDialogOptions;
+      const dialogResult = dialogTarget
+        ? await dialog.showSaveDialog(dialogTarget, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions);
+
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return {
+          canceled: true,
+          success: false,
+        };
+      }
+
+      const filePath = ensureConversationExportPath(dialogResult.filePath, input.format);
+      const exportInput = {
+        exportedAt: new Date().toISOString(),
+        filePath,
+        groupId: conversation.groupId,
+        groupName: conversation.groupName,
+        messages: conversation.messages,
+      };
+
+      if (input.format === 'json') {
+        await exportAsJson(exportInput);
+      } else {
+        await exportAsMarkdown(exportInput);
+      }
+
+      return {
+        filePath,
+        success: true,
+      };
     },
   );
   ipcMain.handle(

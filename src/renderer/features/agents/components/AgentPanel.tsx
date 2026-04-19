@@ -1,9 +1,14 @@
 // Agent panel UI.
 
-import { type KeyboardEvent, type RefObject, useState } from 'react';
-import { ArrowUpRight } from 'lucide-react';
-
-import { Wrench, Bot, Info } from 'lucide-react';
+import { type KeyboardEvent, type RefObject, useEffect, useState } from 'react';
+import {
+  ArrowUpRight,
+  Bot,
+  ChevronDown,
+  Download,
+  Info,
+  Wrench,
+} from 'lucide-react';
 
 import { AgentMessageContent } from '@/renderer/features/agents/components/AgentMessageContent';
 import { CodingEngineCard, groupEngineRuns } from '@/renderer/features/agents/components/CodingEngineCard';
@@ -11,6 +16,12 @@ import type { AgentActivityEvent, PresentedAgent } from '@/renderer/features/age
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
+import type { ConversationExportFormat } from '@/shared/electron/conversation-export';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/renderer/shared/ui/popover';
 
 /** Agent panel props. */
 interface AgentPanelProps {
@@ -193,6 +204,14 @@ function formatUsageCost(costUsd: number) {
   return `$${costUsd.toFixed(costUsd >= 0.01 ? 4 : 6).replace(/0+$/, '').replace(/\.$/, '')}`;
 }
 
+function labelExportFormat(format: ConversationExportFormat) {
+  return format === 'json' ? 'JSON' : 'Markdown';
+}
+
+function summarizeExportedFilePath(filePath: string) {
+  return filePath.split(/[\\/]/).pop() ?? filePath;
+}
+
 /** Renders the agent panel UI. */
 export function AgentPanel({
   agent,
@@ -206,6 +225,18 @@ export function AgentPanel({
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
   const composerHint = `${modifierLabel} Enter to send · Shift Enter for a new line`;
+  const canExportConversation = typeof window.duneDesktop?.exportConversation === 'function';
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportedFileName, setExportedFileName] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<ConversationExportFormat | null>(null);
+  const [isExportMenuOpen, setExportMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setExportError(null);
+    setExportedFileName(null);
+    setExportingFormat(null);
+    setExportMenuOpen(false);
+  }, [agent.id]);
 
   /** Handles key down composer. */
   const handleComposerKeyDown = async (
@@ -216,6 +247,35 @@ export function AgentPanel({
     if (event.key === 'Enter' && isPrimaryModifier) {
       event.preventDefault();
       await onSubmit(draft);
+    }
+  };
+
+  /** Handles exporting the current conversation. */
+  const handleConversationExport = async (format: ConversationExportFormat) => {
+    if (!window.duneDesktop?.exportConversation) {
+      return;
+    }
+
+    setExportMenuOpen(false);
+    setExportError(null);
+    setExportedFileName(null);
+    setExportingFormat(format);
+
+    try {
+      const result = await window.duneDesktop.exportConversation(agent.id, format);
+
+      if (!result.success) {
+        if (!result.canceled) {
+          setExportError('Conversation export failed.');
+        }
+        return;
+      }
+
+      setExportedFileName(result.filePath ? summarizeExportedFilePath(result.filePath) : null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Conversation export failed.');
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -243,9 +303,79 @@ export function AgentPanel({
           ) : null}
 
           <div className="agent-panel-header mb-3 border-b border-app-border pb-4">
-            <h2 className="truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
-              {agent.name}
-            </h2>
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="agent-panel-header-title truncate text-[1.35rem] font-semibold tracking-[-0.04em] text-app-text">
+                {agent.name}
+              </h2>
+
+              {canExportConversation ? (
+                <Popover onOpenChange={setExportMenuOpen} open={isExportMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      aria-expanded={isExportMenuOpen}
+                      aria-haspopup="menu"
+                      disabled={Boolean(exportingFormat)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Download className="h-4 w-4" />
+                      {exportingFormat ? `Exporting ${labelExportFormat(exportingFormat)}…` : 'Export'}
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isExportMenuOpen ? 'rotate-180' : 'rotate-0',
+                        )}
+                      />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    align="end"
+                    className="w-52 p-2"
+                    sideOffset={10}
+                  >
+                    <div className="space-y-1">
+                      <button
+                        className="focus-ring-app flex w-full flex-col items-start gap-1 rounded-[14px] px-3 py-3 text-left text-app-text transition-colors hover:bg-app-card focus-visible:outline-none focus-visible:ring-2"
+                        onClick={() => {
+                          void handleConversationExport('markdown');
+                        }}
+                        type="button"
+                      >
+                        <span className="text-sm font-medium">Markdown (.md)</span>
+                        <span className="text-xs leading-5 text-app-muted">
+                          Human-readable transcript export.
+                        </span>
+                      </button>
+                      <button
+                        className="focus-ring-app flex w-full flex-col items-start gap-1 rounded-[14px] px-3 py-3 text-left text-app-text transition-colors hover:bg-app-card focus-visible:outline-none focus-visible:ring-2"
+                        onClick={() => {
+                          void handleConversationExport('json');
+                        }}
+                        type="button"
+                      >
+                        <span className="text-sm font-medium">JSON (.json)</span>
+                        <span className="text-xs leading-5 text-app-muted">
+                          Full metadata export for automation.
+                        </span>
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
+
+            {exportedFileName ? (
+              <p className="mt-2 text-xs leading-5 text-app-muted">
+                Exported to {exportedFileName}
+              </p>
+            ) : null}
+            {exportError ? (
+              <p className="mt-2 text-xs leading-5 text-red-600">
+                Export failed: {exportError}
+              </p>
+            ) : null}
           </div>
 
           {buildTimeline(agent).map((item) => {

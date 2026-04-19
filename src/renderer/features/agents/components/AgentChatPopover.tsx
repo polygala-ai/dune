@@ -135,7 +135,7 @@ export function AgentChatPopover({ agent, onClose, onExpand }: AgentChatPopoverP
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden [&_.agent-panel-scroll]:px-4 [&_.agent-panel-scroll]:pt-4 [&_.agent-panel-header]:hidden [&_form]:px-4 [&_form]:py-3 [&_textarea]:min-h-[48px] [&_textarea]:text-[13px]">
+      <div className="flex-1 min-h-0 overflow-hidden [&_.agent-panel-scroll]:px-4 [&_.agent-panel-scroll]:pt-4 [&_.agent-panel-header]:mb-2 [&_.agent-panel-header]:border-0 [&_.agent-panel-header]:pb-0 [&_.agent-panel-header-title]:hidden [&_form]:px-4 [&_form]:py-3 [&_textarea]:min-h-[48px] [&_textarea]:text-[13px]">
         <AgentPanel
           agent={agent}
           composerRef={composerRef}

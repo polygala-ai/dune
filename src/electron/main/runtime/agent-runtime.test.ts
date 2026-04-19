@@ -95,13 +95,30 @@ async function flushMicrotasks() {
 }
 
 /** Mock agent shape. */
+interface MockTask {
+  contextMode: 'group' | 'isolated';
+  createdAt: string;
+  groupFolder: string;
+  id: string;
+  jid: string;
+  lastResult: string | null;
+  lastRun: string;
+  nextRun: string | null;
+  prompt: string;
+  runs: unknown[];
+  scheduleType: 'once';
+  scheduleValue: string;
+  status: 'active' | 'completed';
+}
+
+/** Mock agent shape. */
 interface MockAgent {
   _emit: <K extends keyof AgentEvents & string>(event: K, ...args: AgentEvents[K]) => void;
   _options: AgentOptions;
   addChannel: ReturnType<typeof vi.fn>;
   channelDrivers: Map<string, ChannelDriver>;
   getGroup: ReturnType<typeof vi.fn>;
-  getTask: ReturnType<typeof vi.fn>;
+  getTask: ReturnType<typeof vi.fn<(taskId: string) => MockTask | undefined>>;
   name: string;
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;

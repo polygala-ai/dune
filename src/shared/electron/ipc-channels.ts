@@ -10,6 +10,7 @@ export const ipcChannels = {
   deleteAgent: 'dune:runtime:delete-agent',
   ensureProjectArtifactFolder: 'dune:runtime:ensure-project-artifact-folder',
   ensureProjectMainAgent: 'dune:runtime:ensure-project-main-agent',
+  exportConversation: 'dune:export:conversation',
   getAgentTranscriptPage: 'dune:runtime:get-agent-transcript-page',
   getProjectActivityPage: 'dune:workflow:get-project-activity-page',
   getRuntimeSnapshot: 'dune:runtime:get-snapshot',

@@ -2,6 +2,10 @@
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
+  ConversationExportFormat,
+  ConversationExportResult,
+} from '@/shared/electron/conversation-export';
+import type {
   AgentDefinition,
   AgentTranscriptPage,
   CreateAgentInput,
@@ -29,6 +33,10 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  exportConversation?: (
+    groupId: string,
+    format: ConversationExportFormat,
+  ) => Promise<ConversationExportResult>;
   getProjectActivityPage?: (
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },

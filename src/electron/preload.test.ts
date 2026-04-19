@@ -79,6 +79,7 @@ describe('preload bridge', () => {
     await desktopBridge?.deleteLocalData?.();
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
+    await desktopBridge?.exportConversation?.('agent-1', 'markdown');
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
@@ -127,6 +128,10 @@ describe('preload bridge', () => {
       ipcChannels.ensureProjectArtifactFolder,
       '/tmp/project-1',
       'homepage-copy-abcd1234',
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.exportConversation,
+      { format: 'markdown', groupId: 'agent-1' },
     );
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getAgentTranscriptPage,
@@ -228,6 +233,7 @@ describe('preload bridge', () => {
       'deleteLocalData',
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
+      'exportConversation',
       'getAgentTranscriptPage',
       'getProjectActivityPage',
       'getRuntimeSnapshot',

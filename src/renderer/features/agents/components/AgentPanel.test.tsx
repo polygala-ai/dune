@@ -1,5 +1,10 @@
 import { createRef } from 'react';
-import { render } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentPanel } from '@/renderer/features/agents/components/AgentPanel';
@@ -171,5 +176,38 @@ describe('AgentPanel', () => {
 
     expect(container.textContent).toContain('42↑ 318↓');
     expect(container.textContent).toContain('$0.0021');
+  });
+
+  it('exports the active conversation from the header action', async () => {
+    const exportConversation = vi.fn(() => Promise.resolve({
+      filePath: '/tmp/exports/Navigator-conversation.md',
+      success: true,
+    }));
+    window.duneDesktop = {
+      ...(window.duneDesktop ?? { platform: 'darwin' as const }),
+      exportConversation,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+    };
+
+    render(
+      <AgentPanel
+        agent={createAgent()}
+        composerRef={createRef<HTMLTextAreaElement>()}
+        draft=""
+        isLoadingOlderMessages={false}
+        onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
+        onSubmit={vi.fn(() => Promise.resolve(undefined))}
+        transcriptRef={createRef<HTMLDivElement>()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(screen.getByRole('button', { name: /markdown/i }));
+
+    await waitFor(() => {
+      expect(exportConversation).toHaveBeenCalledWith('agent-1', 'markdown');
+    });
+    expect(screen.getByText('Exported to Navigator-conversation.md')).toBeInTheDocument();
   });
 });

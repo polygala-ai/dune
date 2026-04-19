@@ -69,6 +69,10 @@ beforeEach(() => {
     ensureProjectArtifactFolder: vi.fn(() => Promise.resolve('/tmp/project/item-123')),
     ensureProjectMainAgent: vi.fn(() => Promise.resolve('agent-project-main')),
     deleteLocalData: vi.fn(() => Promise.resolve(undefined)),
+    exportConversation: vi.fn(() => Promise.resolve({
+      filePath: '/tmp/project/Navigator-conversation.md',
+      success: true,
+    })),
     getRuntimeSnapshot: vi.fn(() => Promise.resolve({
       agents: [],
       codingEngines: [],
