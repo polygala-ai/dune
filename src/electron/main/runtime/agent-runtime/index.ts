@@ -1,6 +1,5 @@
 // AgentLite-backed desktop runtime orchestration.
 
-import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -53,9 +52,7 @@ import {
   toAgentChatJid,
   toAgentPathId,
 } from '@/shared/agents/agent-id';
-import type { AgentActivitySnapshot } from '@/shared/agents/agent-activity';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
-import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 import {
   extractWorkspaceAttachmentPaths,
   summarizeMessagePreview,
@@ -80,17 +77,6 @@ import type { TelegramSecretsStore } from '../telegram-bridge';
 import { detectCodingEngines } from '../coding-engine-detect';
 
 import { createChannelBinding, mapTelegramChannelStatus } from './channels';
-import {
-  compareAgentActivityRecords,
-  createAgentActivityEntry,
-  readAgentActivityStatus,
-  resolveAgentActivityDataDir,
-  type AgentActivityWatchTarget,
-} from '../agent-activity';
-import {
-  summarizeAgentActivityArgs,
-  writeAgentActivityStatus,
-} from '../agent-activity';
 import {
   createAssistantMessage,
   createBuiltInAgentCopy,
@@ -476,24 +462,6 @@ function createCodingEngineAcpConfig(
   return { peers };
 }
 
-interface AgentActivityPendingTool {
-  startedAt: number;
-  toolArgsSummary: string | null;
-  toolName: string;
-}
-
-interface AgentActivityRuntimeState {
-  agentName: string;
-  dataDir: string;
-  lastToolDurationMs: number | null;
-  pendingTools: Map<string, AgentActivityPendingTool>;
-  sessionId: string;
-  sessionStartedAt: string;
-  turnCount: number;
-  workItemId: string | null;
-  workItemTitle: string | null;
-}
-
 /** Implements agent runtime behavior. */
 export class AgentRuntime implements AgentRuntimeContract {
   private readonly listeners = new Set<AgentServiceListener>();
@@ -525,9 +493,6 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   /** Per-item ephemeral run state driven by AgentLite task.run.* events. */
   private readonly itemActivity = new Map<string, { isWorking: boolean; startedAt: number | null }>();
-
-  /** Per-agent status-file state mirrored into data/ipc/status.json. */
-  private readonly activityStates = new Map<string, AgentActivityRuntimeState>();
 
   private readonly runtimeRoot: string;
 
@@ -675,36 +640,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     return cloneSnapshot(this.snapshot);
   }
 
-  /** Returns normalized activity status for every persisted agent session. */
-  async getAgentActivitySnapshot(): Promise<AgentActivitySnapshot> {
-    const workItemTitles = await this.getAgentActivityWorkItemTitles();
-
-    const agents = [...this.records.values()]
-      .map((record) => {
-        const isAlive = this.lifecycle.hasRuntime(record.agent.id);
-        const dataDir = resolveAgentActivityDataDir(this.runtimeRoot, record.groupFolder);
-        const status = readAgentActivityStatus(dataDir);
-        const workItemTitle = status?.workItemId
-          ? workItemTitles.get(status.workItemId) ?? status.workItemTitle ?? null
-          : status?.workItemTitle ?? null;
-
-        return createAgentActivityEntry(record.agent, isAlive, status, workItemTitle);
-      })
-      .sort(compareAgentActivityRecords);
-
-    return { agents };
-  }
-
-  /** Returns runtime-backed watch targets for live agent sessions. */
-  getAgentActivityWatchTargets(): AgentActivityWatchTarget[] {
-    return [...this.records.values()]
-      .filter((record) => this.lifecycle.hasRuntime(record.agent.id))
-      .map((record) => ({
-        agentId: record.agent.id,
-        dataDir: resolveAgentActivityDataDir(this.runtimeRoot, record.groupFolder),
-      }));
-  }
-
   /** Subscribes to agent updates. */
   subscribe(listener: AgentServiceListener) {
     this.listeners.add(listener);
@@ -763,7 +698,6 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.sessionTokenTotals.clear();
         this.runningTaskIds.clear();
         this.telegram.clearAllSetupSessions();
-        this.finishAllAgentActivitySessions('done');
 
         try {
           await this.telegram.disconnectAll();
@@ -791,7 +725,6 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   /** Resets agent. */
   reset() {
-    this.finishAllAgentActivitySessions('done');
     this.messageStream.clear();
     this.pendingTokenUsage.clear();
     this.pendingTokenUsageSummaries.clear();
@@ -815,263 +748,6 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
     void this.telegram.disconnectAll();
-  }
-
-  private async getAgentActivityWorkItemTitles(): Promise<Map<string, string>> {
-    const workflowStore = this.actionServices?.workflowStore;
-
-    if (!workflowStore) {
-      return new Map<string, string>();
-    }
-
-    const snapshot = await workflowStore.get<{
-      items?: Array<{ id?: string; title?: string }>;
-    }>('snapshot');
-    const titles = new Map<string, string>();
-
-    for (const item of snapshot?.items ?? []) {
-      if (typeof item?.id === 'string' && typeof item?.title === 'string') {
-        titles.set(item.id, item.title);
-      }
-    }
-
-    return titles;
-  }
-
-  private createAgentActivityState(record: PersistedAgentRecord): AgentActivityRuntimeState {
-    const state: AgentActivityRuntimeState = {
-      agentName: record.agent.name,
-      dataDir: resolveAgentActivityDataDir(this.runtimeRoot, record.groupFolder),
-      lastToolDurationMs: null,
-      pendingTools: new Map<string, AgentActivityPendingTool>(),
-      sessionId: randomUUID(),
-      sessionStartedAt: new Date(this.now()).toISOString(),
-      turnCount: 0,
-      workItemId: null,
-      workItemTitle: null,
-    };
-
-    fs.mkdirSync(path.join(state.dataDir, 'ipc'), { recursive: true });
-    this.activityStates.set(record.agent.id, state);
-
-    return state;
-  }
-
-  private getAgentActivityState(agentId: string): AgentActivityRuntimeState | null {
-    return this.activityStates.get(agentId) ?? null;
-  }
-
-  private ensureAgentActivityState(record: PersistedAgentRecord): AgentActivityRuntimeState {
-    const existingState = this.getAgentActivityState(record.agent.id);
-
-    if (existingState) {
-      existingState.agentName = record.agent.name;
-      return existingState;
-    }
-
-    return this.createAgentActivityState(record);
-  }
-
-  private writeAgentActivitySnapshot(
-    agentId: string,
-    patch: Pick<
-      AgentActivityStatus,
-      'currentTool' | 'phase' | 'status' | 'toolArgsSummary'
-    > & Partial<Pick<AgentActivityStatus, 'lastToolDurationMs'>>,
-  ): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state) {
-      return;
-    }
-
-    writeAgentActivityStatus(state.dataDir, {
-      agentId,
-      agentName: state.agentName,
-      currentTool: patch.currentTool,
-      lastToolDurationMs: patch.lastToolDurationMs ?? state.lastToolDurationMs,
-      phase: patch.phase,
-      schemaVersion: 1,
-      sessionId: state.sessionId,
-      sessionStartedAt: state.sessionStartedAt,
-      status: patch.status,
-      toolArgsSummary: patch.toolArgsSummary,
-      turnCount: state.turnCount,
-      updatedAt: new Date(this.now()).toISOString(),
-      workItemId: state.workItemId,
-      workItemTitle: state.workItemTitle,
-    });
-  }
-
-  private async refreshAgentActivityWorkItem(
-    agentId: string,
-    taskId?: string,
-  ): Promise<void> {
-    const state = this.getAgentActivityState(agentId);
-    const workflowStore = this.actionServices?.workflowStore;
-
-    if (!state || !workflowStore) {
-      return;
-    }
-
-    const snapshot = await workflowStore.get<{
-      items?: Array<{
-        id?: string;
-        primaryAgentId?: string | null;
-        scheduledTaskId?: string | null;
-        status?: string | null;
-        title?: string;
-      }>;
-    }>('snapshot');
-    const runningTaskIds = taskId
-      ? [taskId]
-      : [...(this.runningTaskIds.get(agentId) ?? new Set<string>())];
-    const matchingTaskItem = snapshot?.items?.find(
-      (item) =>
-        typeof item?.scheduledTaskId === 'string'
-        && runningTaskIds.includes(item.scheduledTaskId),
-    );
-    const assignedItem = snapshot?.items?.find(
-      (item) =>
-        item?.primaryAgentId === agentId
-        && item?.status !== 'done',
-    );
-    const activeItem = matchingTaskItem ?? assignedItem ?? null;
-
-    state.workItemId = typeof activeItem?.id === 'string' ? activeItem.id : null;
-    state.workItemTitle = typeof activeItem?.title === 'string' ? activeItem.title : null;
-  }
-
-  private initializeAgentActivitySession(record: PersistedAgentRecord): void {
-    this.ensureAgentActivityState(record);
-    this.writeAgentActivitySnapshot(record.agent.id, {
-      currentTool: null,
-      phase: 'idle',
-      status: 'idle',
-      toolArgsSummary: null,
-    });
-    void this.refreshAgentActivityWorkItem(record.agent.id).then(() => {
-      this.writeAgentActivitySnapshot(record.agent.id, {
-        currentTool: null,
-        phase: 'idle',
-        status: 'idle',
-        toolArgsSummary: null,
-      });
-    });
-  }
-
-  private recordAgentToolStart(
-    agentId: string,
-    toolUseId: string,
-    toolName: string,
-    payload: unknown,
-  ): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state) {
-      return;
-    }
-
-    const toolArgsSummary = summarizeAgentActivityArgs(toolName, payload);
-
-    state.pendingTools.set(toolUseId, {
-      startedAt: this.now(),
-      toolArgsSummary,
-      toolName,
-    });
-    state.turnCount += 1;
-    this.writeAgentActivitySnapshot(agentId, {
-      currentTool: toolName,
-      phase: 'tool_call_start',
-      status: 'working',
-      toolArgsSummary,
-    });
-  }
-
-  private recordAgentToolFinish(agentId: string, toolUseId: string): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state) {
-      return;
-    }
-
-    const pendingTool = state.pendingTools.get(toolUseId);
-
-    if (!pendingTool) {
-      return;
-    }
-
-    state.pendingTools.delete(toolUseId);
-    state.lastToolDurationMs = Math.max(0, this.now() - pendingTool.startedAt);
-
-    const nextPendingTool = [...state.pendingTools.values()].at(-1) ?? null;
-
-    this.writeAgentActivitySnapshot(agentId, {
-      currentTool: nextPendingTool?.toolName ?? null,
-      lastToolDurationMs: state.lastToolDurationMs,
-      phase: 'tool_call_done',
-      status: 'working',
-      toolArgsSummary: nextPendingTool?.toolArgsSummary ?? pendingTool.toolArgsSummary,
-    });
-  }
-
-  private markAgentIdle(agentId: string): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state || state.pendingTools.size > 0) {
-      return;
-    }
-
-    this.writeAgentActivitySnapshot(agentId, {
-      currentTool: null,
-      phase: 'idle',
-      status: 'idle',
-      toolArgsSummary: null,
-    });
-  }
-
-  private markAgentError(agentId: string): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state) {
-      return;
-    }
-
-    state.pendingTools.clear();
-    this.writeAgentActivitySnapshot(agentId, {
-      currentTool: null,
-      phase: 'error',
-      status: 'error',
-      toolArgsSummary: null,
-    });
-  }
-
-  private finishAgentActivitySession(
-    agentId: string,
-    status: Extract<AgentActivityStatus['status'], 'done' | 'error'>,
-  ): void {
-    const state = this.getAgentActivityState(agentId);
-
-    if (!state) {
-      return;
-    }
-
-    state.pendingTools.clear();
-    this.writeAgentActivitySnapshot(agentId, {
-      currentTool: null,
-      phase: status,
-      status,
-      toolArgsSummary: null,
-    });
-    this.activityStates.delete(agentId);
-  }
-
-  private finishAllAgentActivitySessions(
-    status: Extract<AgentActivityStatus['status'], 'done' | 'error'>,
-  ): void {
-    for (const agentId of [...this.activityStates.keys()]) {
-      this.finishAgentActivitySession(agentId, status);
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -2712,12 +2388,9 @@ export class AgentRuntime implements AgentRuntimeContract {
           : [this.duneSkillDir],
       });
 
-      this.initializeAgentActivitySession(record);
-
       try {
         await duneAgent.start();
       } catch (error) {
-        this.finishAgentActivitySession(agentId, 'error');
         await this.cleanupFailedAgentRuntime(record);
         throw error;
       }
@@ -2733,7 +2406,6 @@ export class AgentRuntime implements AgentRuntimeContract {
           detail: event.input,
           timestamp: Date.now(),
         });
-        this.recordAgentToolStart(agentId, event.toolUseId, event.toolName, event.input);
       });
 
       alAgent.on('run.subagent', (event) => {
@@ -2764,7 +2436,6 @@ export class AgentRuntime implements AgentRuntimeContract {
           this.pendingTokenUsage.delete(agentId);
           this.pendingTokenUsageSummaries.delete(agentId);
           this.captureTokenUsageSummary(agentId, msg);
-          this.markAgentIdle(agentId);
         }
 
         // Tool result feedback (user messages contain tool results)
@@ -2788,8 +2459,6 @@ export class AgentRuntime implements AgentRuntimeContract {
                   timestamp: Date.now(),
                 });
               }
-
-              this.recordAgentToolFinish(agentId, String(block.tool_use_id));
             }
           }
         }
@@ -2825,23 +2494,14 @@ export class AgentRuntime implements AgentRuntimeContract {
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
         void this.updateItemActivityForTask(event.taskId, true);
-        void this.refreshAgentActivityWorkItem(agentId, event.taskId).then(() => {
-          this.markAgentIdle(agentId);
-        });
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         void this.updateItemActivityForTask(event.taskId, false);
-        void this.refreshAgentActivityWorkItem(agentId).then(() => {
-          this.markAgentIdle(agentId);
-        });
       });
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         void this.updateItemActivityForTask(event.taskId, false);
-        void this.refreshAgentActivityWorkItem(agentId).then(() => {
-          this.markAgentError(agentId);
-        });
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);

@@ -20,7 +20,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/renderer/shared/ui/tooltip';
-import { AgentActivityPanel } from '@/renderer/features/agents/components/AgentActivityPanel';
 
 /** Workflow sidebar state. */
 interface WorkflowSidebarState {
@@ -165,10 +164,6 @@ export function AppSidebar({
           </div>
         </ScrollArea>
       </div>
-
-      <Separator />
-
-      <AgentActivityPanel />
 
       <Separator />
 

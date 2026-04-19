@@ -1,123 +1,109 @@
-// Agent activity panel tests.
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
-import {
-  afterEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
+import { createSeedWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
+import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 
-import type { AgentActivityUpdatePayload } from '@/shared/agents/agent-activity';
-import { AgentActivityPanel } from '@/renderer/features/agents/components/AgentActivityPanel';
+import { AgentActivityPanel } from './AgentActivityPanel';
+
+const PANEL_OPEN_STORAGE_KEY = 'dune.agent-activity-panel.open';
+
+function createActivityStatus(
+  overrides: Partial<AgentActivityStatus> = {},
+): AgentActivityStatus {
+  return {
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    agentId: 'agent-1',
+    agentName: 'Navigator',
+    status: 'working',
+    phase: 'tool_call_start',
+    currentTool: 'Read',
+    toolArgsSummary: 'file: status.json',
+    lastToolDurationMs: null,
+    turnCount: 3,
+    workItemId: null,
+    workItemTitle: null,
+    sessionId: 'session-1',
+    sessionStartedAt: '2026-04-19T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 describe('AgentActivityPanel', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    window.localStorage.clear();
+  beforeEach(() => {
+    resetAppStore();
+    window.localStorage.removeItem(PANEL_OPEN_STORAGE_KEY);
   });
 
-  it('renders the initial activity snapshot with relative timing', async () => {
-    const now = Date.now();
+  it('renders initial activity and resolves work item titles from the workflow store', async () => {
+    const workflowSnapshot = createSeedWorkflowSnapshot(1_700_000_000_000);
+    const [firstItem] = workflowSnapshot.items;
 
+    useAppStore.getState().hydrateWorkflow(workflowSnapshot);
     window.duneDesktop = {
-      ...(window.duneDesktop ?? { platform: 'darwin' as const }),
-      getAgentActivity: vi.fn().mockResolvedValue({
-        agents: [
-          {
-            agentId: 'agent-1',
-            agentName: 'Navigator',
-            isAlive: true,
-            status: {
-              schemaVersion: 1,
-              updatedAt: new Date(now - 2_000).toISOString(),
-              agentId: 'agent-1',
-              agentName: 'Navigator',
-              status: 'working',
-              phase: 'tool_call_start',
-              currentTool: 'search_query',
-              toolArgsSummary: 'Searching the docs',
-              lastToolDurationMs: 120,
-              turnCount: 3,
-              workItemId: 'item-1',
-              workItemTitle: 'Ship observability panel',
-              sessionId: 'session-1',
-              sessionStartedAt: new Date(now - 300_000).toISOString(),
-            },
-          },
-        ],
-      }),
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      getAgentActivity: vi.fn(async () => [
+        createActivityStatus({ workItemId: firstItem?.id ?? null }),
+      ]),
+      subscribeAgentActivity: vi.fn(() => () => undefined),
     };
 
     render(<AgentActivityPanel />);
 
     expect(await screen.findByText('Navigator')).toBeInTheDocument();
-    expect(screen.getByText('search_query')).toBeInTheDocument();
-    expect(screen.getByText('Ship observability panel')).toBeInTheDocument();
-    expect(screen.getByText(/\ds ago/i)).toBeInTheDocument();
+    expect(screen.getByText('Read · file: status.json')).toBeInTheDocument();
+    expect(screen.getByText(firstItem?.title ?? '')).toBeInTheDocument();
   });
 
-  it('applies live activity updates and persists the collapsed state', async () => {
-    let listener: ((payload: AgentActivityUpdatePayload) => void) | null = null;
-    const subscribeAgentActivity = vi.fn((nextListener: (payload: AgentActivityUpdatePayload) => void) => {
-      listener = nextListener;
-      return () => {
-        listener = null;
-      };
-    });
+  it('persists the open and closed state in local storage', async () => {
+    const user = userEvent.setup();
 
     window.duneDesktop = {
-      ...(window.duneDesktop ?? { platform: 'darwin' as const }),
-      getAgentActivity: vi.fn().mockResolvedValue({ agents: [] }),
-      subscribeAgentActivity,
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      getAgentActivity: vi.fn(async () => [createActivityStatus()]),
+      subscribeAgentActivity: vi.fn(() => () => undefined),
     };
 
     render(<AgentActivityPanel />);
 
-    await waitFor(() => {
-      expect(subscribeAgentActivity).toHaveBeenCalledTimes(1);
+    const toggle = await screen.findByRole('button', {
+      name: 'Hide agent activity',
     });
+    await user.click(toggle);
 
-    const toggle = screen.getByRole('button', { name: /activity/i });
-    fireEvent.click(toggle);
-    expect(window.localStorage.getItem('dune.agent-activity-panel.open')).toBe('false');
+    expect(window.localStorage.getItem(PANEL_OPEN_STORAGE_KEY)).toBe('false');
+    expect(screen.queryByText('Read · file: status.json')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Show agent activity' }),
+    ).toBeInTheDocument();
+  });
 
-    fireEvent.click(toggle);
+  it('applies live updates from the desktop bridge subscription', async () => {
+    let listener: ((statuses: AgentActivityStatus[]) => void) | null = null;
+
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      getAgentActivity: vi.fn(async () => []),
+      subscribeAgentActivity: vi.fn((nextListener) => {
+        listener = nextListener;
+        return () => undefined;
+      }),
+    };
+
+    render(<AgentActivityPanel />);
+
+    expect(await screen.findByText('No live agent activity yet.')).toBeInTheDocument();
 
     act(() => {
-      listener?.({
-        agentId: 'agent-2',
-        agentName: 'Researcher',
-        isAlive: true,
-        status: {
-          schemaVersion: 1,
-          updatedAt: new Date().toISOString(),
-          agentId: 'agent-2',
-          agentName: 'Researcher',
-          status: 'idle',
-          phase: 'tool_call_done',
-          currentTool: 'read_file',
-          toolArgsSummary: 'Read the latest status file',
-          lastToolDurationMs: 88,
-          turnCount: 1,
-          workItemId: null,
-          workItemTitle: null,
-          sessionId: 'session-2',
-          sessionStartedAt: new Date().toISOString(),
-        },
-      });
+      listener?.([createActivityStatus()]);
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Researcher')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Read the latest status file')).toBeInTheDocument();
+    expect(await screen.findByText('Navigator')).toBeInTheDocument();
   });
 });
