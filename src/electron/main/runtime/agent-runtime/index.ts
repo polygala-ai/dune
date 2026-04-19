@@ -1167,18 +1167,29 @@ export class AgentRuntime implements AgentRuntimeContract {
     );
   }
 
-  private handleExternalInboundMessage(agentId: string, text: string, senderName: string, attachmentSources: string[] = []) {
+  private handleExternalInboundMessage(
+    agentId: string,
+    text: string,
+    senderName: string,
+    attachmentInputs: unknown[] = [],
+  ) {
     const now = this.now();
     const { content: strippedContent } = extractWorkspaceAttachmentPaths(text);
     const agent = this.snapshot.agents.find((a) => a.id === agentId);
-    const chatTargetName = agent?.channel?.target?.name ?? '';
+    const channelTarget = agent?.channel?.target;
+    const chatTargetName = channelTarget?.name ?? '';
+    const isDirectMessage =
+      channelTarget?.kind === 'dm' || agent?.telegram?.boundChat?.kind === 'dm';
     const transcriptText =
-      senderName !== 'External' && senderName !== chatTargetName
+      !isDirectMessage && senderName !== 'External' && senderName !== chatTargetName
         ? `${senderName}: ${strippedContent}`
         : strippedContent;
     const record = this.records.get(agentId);
     const attachments = record
-      ? normalizeAgentAttachments(attachmentSources, { groupFolder: record.groupFolder, runtimeRoot: this.runtimeRoot })
+      ? normalizeAgentAttachments(attachmentInputs, {
+        groupFolder: record.groupFolder,
+        runtimeRoot: this.runtimeRoot,
+      })
       : [];
     const userMessage = {
       ...createUserMessage(transcriptText, now),

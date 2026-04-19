@@ -415,7 +415,7 @@ function createTelegramChannelFactoryHarness(
         senderName,
         timestamp = new Date().toISOString(),
       }: {
-        attachments?: string[];
+        attachments?: unknown[];
         content: string;
         isBotMessage?: boolean;
         isFromMe?: boolean;
@@ -438,7 +438,45 @@ function createTelegramChannelFactoryHarness(
         is_from_me: isFromMe,
         sender,
         timestamp,
-        ...(attachments?.length ? { attachments } : {}),
+        ...(attachments?.length ? { attachments: attachments as string[] } : {}),
+        ...(senderName ? { sender_name: senderName } : {}),
+      });
+    },
+    emitAttachedIncomingMessage: (
+      chatJid: string,
+      {
+        attachments,
+        content,
+        isBotMessage = false,
+        isFromMe = false,
+        sender = 'telegram-user',
+        senderName,
+        timestamp = new Date().toISOString(),
+      }: {
+        attachments?: unknown[];
+        content: string;
+        isBotMessage?: boolean;
+        isFromMe?: boolean;
+        sender?: string;
+        senderName?: string;
+        timestamp?: string;
+      },
+      token?: string,
+    ) => {
+      const currentConfig = resolveConfig(token, 'attached');
+
+      if (!currentConfig) {
+        throw new Error('Telegram attached channel has not been created yet.');
+      }
+
+      currentConfig.onMessage(chatJid, {
+        chat_jid: chatJid,
+        content,
+        is_bot_message: isBotMessage,
+        is_from_me: isFromMe,
+        sender,
+        timestamp,
+        ...(attachments?.length ? { attachments: attachments as string[] } : {}),
         ...(senderName ? { sender_name: senderName } : {}),
       });
     },
@@ -1858,6 +1896,80 @@ describe('AgentRuntime', () => {
     });
     expect(new URL(message?.attachments[0]?.url ?? '').pathname).toMatch(
       /\/\.dune\/agentlite\/groups\/release-triage-[^/]+\/attachments\/photo_100\.png$/,
+    );
+  });
+
+  it('suppresses DM sender prefixes while normalizing object-based Telegram media attachments', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'agentlite_test_bot',
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({
+      token: 'telegram-bot-token',
+    });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode;
+
+    telegramHarness.emitChatMetadata('tg:456', {
+      isGroup: false,
+      name: 'Alice Private Chat',
+    });
+    telegramHarness.emitIncomingMessage('tg:456', {
+      content: `/pair ${pairCode}`,
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Direct triage',
+      projectId: 'project-1',
+      telegramSetupSessionId: sessionId,
+    });
+
+    telegramHarness.emitAttachedIncomingMessage('tg:456', {
+      attachments: [
+        {
+          mimeType: 'image/png',
+          name: 'photo_101.png',
+          url: '/workspace/group/attachments/photo_101.png',
+        },
+      ],
+      content: '[Photo] (/workspace/group/attachments/photo_101.png) Private note',
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    const agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+    const message = agent?.messages[0];
+
+    expect(message).toMatchObject({
+      content: '[Photo] Private note',
+      format: 'plain',
+      role: 'user',
+    });
+    expect(message?.attachments).toHaveLength(1);
+    expect(message?.attachments[0]).toMatchObject({
+      kind: 'image',
+      name: 'photo_101.png',
+    });
+    expect(new URL(message?.attachments[0]?.url ?? '').pathname).toMatch(
+      /\/\.dune\/agentlite\/groups\/direct-triage-[^/]+\/attachments\/photo_101\.png$/,
     );
   });
 
