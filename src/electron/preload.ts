@@ -26,6 +26,7 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  getAgentActivity: () => ipcRenderer.invoke(ipcChannels.getAgentActivity),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
@@ -91,6 +92,20 @@ const bridge: DesktopBridge = {
 
     return () => {
       ipcRenderer.removeListener(ipcChannels.itemActivityUpdated, handler);
+    };
+  },
+  subscribeAgentActivity: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: Parameters<typeof listener>[0],
+    ) => {
+      listener(payload);
+    };
+
+    ipcRenderer.on(ipcChannels.agentActivityUpdated, handler);
+
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.agentActivityUpdated, handler);
     };
   },
 };

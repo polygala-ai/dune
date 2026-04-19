@@ -19,6 +19,7 @@ describe('DesktopBridge', () => {
     const copyText = () => Promise.resolve(undefined);
     const createAgent = () => Promise.resolve('agent-1');
     const deleteLocalData = () => Promise.resolve(undefined);
+    const getAgentActivity = () => Promise.resolve({ agents: [] });
     const openExternal = () => Promise.resolve(undefined);
     const reloadExternalChannels = () => Promise.resolve(undefined);
     const restartApp = () => Promise.resolve(undefined);
@@ -31,6 +32,7 @@ describe('DesktopBridge', () => {
       copyText,
       createAgent,
       deleteLocalData,
+      getAgentActivity,
       openExternal,
       reloadExternalChannels,
       restartApp,
@@ -42,6 +44,7 @@ describe('DesktopBridge', () => {
     await expect(bridge.copyText?.('@agentlite_test_bot')).resolves.toBeUndefined();
     expect(await bridge.createAgent?.({ channelId: 'dune-chat', name: 'test' })).toBe('agent-1');
     await expect(bridge.deleteLocalData?.()).resolves.toBeUndefined();
+    await expect(bridge.getAgentActivity?.()).resolves.toEqual({ agents: [] });
     await expect(bridge.openExternal?.('https://t.me/BotFather')).resolves.toBeUndefined();
     await expect(bridge.reloadExternalChannels?.()).resolves.toBeUndefined();
     await expect(bridge.restartApp?.()).resolves.toBeUndefined();

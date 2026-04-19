@@ -205,6 +205,7 @@ export function registerDuneActions(
   });
   // ---- Runtime ------------------------------------------------------------
   reg('runtime.get_snapshot', {});
+  reg('runtime.get_agent_activity', {});
   reg('runtime.run_isolated_research', {
     maxConcurrency: z.number().optional().describe('Maximum number of isolated target runs to execute in parallel.'),
     reducerPrompt: z.string().describe('Instructions for the final reducer that merges per-target outputs.'),

@@ -79,6 +79,7 @@ describe('preload bridge', () => {
     await desktopBridge?.deleteLocalData?.();
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
+    await desktopBridge?.getAgentActivity?.();
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
@@ -128,6 +129,7 @@ describe('preload bridge', () => {
       '/tmp/project-1',
       'homepage-copy-abcd1234',
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getAgentActivity);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getAgentTranscriptPage,
       'agent-1',
@@ -189,6 +191,21 @@ describe('preload bridge', () => {
       ipcChannels.runtimeSnapshotUpdated,
       expect.any(Function),
     );
+
+    const activityListener = vi.fn();
+    const unsubscribeActivity = desktopBridge?.subscribeAgentActivity?.(activityListener);
+
+    expect(on).toHaveBeenCalledWith(
+      ipcChannels.agentActivityUpdated,
+      expect.any(Function),
+    );
+
+    unsubscribeActivity?.();
+
+    expect(removeListener).toHaveBeenCalledWith(
+      ipcChannels.agentActivityUpdated,
+      expect.any(Function),
+    );
   });
 
   it('proxies storage calls through ipcRenderer', async () => {
@@ -228,6 +245,7 @@ describe('preload bridge', () => {
       'deleteLocalData',
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
+      'getAgentActivity',
       'getAgentTranscriptPage',
       'getProjectActivityPage',
       'getRuntimeSnapshot',
@@ -250,6 +268,7 @@ describe('preload bridge', () => {
       'storageKeys',
       'storageSet',
       'subscribe',
+      'subscribeAgentActivity',
     ];
 
     for (const method of expectedMethods) {
