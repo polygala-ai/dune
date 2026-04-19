@@ -17,7 +17,6 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 
 import { AgentChatPopover } from '@/renderer/features/agents/components/AgentChatPopover';
-import { AgentActivityPanel } from '@/renderer/features/agents/components/AgentActivityPanel';
 import { CreateAgentDialog } from '@/renderer/features/agents/components/CreateAgentDialog';
 import { selectAgentById, presentAgent } from '@/renderer/features/agents/model/agent-presenters';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
@@ -494,67 +493,63 @@ export default function AppShell() {
           ) : null}
 
           <main className="panel-reveal flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1">
-              {route === 'agent' ? (
-                <AgentWorkspace
-                  agent={activeAgent}
-                  composerRef={composerRef}
-                  draft={draft}
-                  isCompactShell={isCompactShell}
-                  isContextPanelOpen={isContextPanelOpen}
-                  isSidebarOpen={controller.isSidebarDrawerOpen}
-                  onCreateAgent={controller.handleOpenCreateAgent}
-                  onDraftChange={commands.setDraft}
-                  onLoadOlderMessages={handleLoadOlderMessages}
-                  onSubmit={handleSubmit}
-                  onToggleInspector={controller.handleToggleContextPanel}
-                  onToggleSidebar={controller.handleToggleSidebar}
-                  runtimeInfo={runtimeInfo}
-                  showCompactInspectorToggle={!showNativeTitlebarInspectorToggle}
-                  showCompactSidebarToggle={showCompactSidebarToggle}
-                  isLoadingOlderMessages={loadingTranscriptAgentId === activeAgent?.id}
-                  transcriptRef={transcriptRef}
-                />
-              ) : route === 'workflow' ? (
-                <WorkflowWorkspace
-                  isCompactShell={isCompactShell}
-                  isCreateProjectOpen={isCreateProjectOpen}
-                  isCreateWorkItemOpen={isCreateWorkItemOpen}
-                  isSidebarOpen={controller.isSidebarDrawerOpen}
-                  onCreateProjectOpenChange={setCreateProjectOpen}
-                  onCreateWorkItemOpenChange={setCreateWorkItemOpen}
-                  onOpenCreateAgent={controller.handleOpenCreateAgent}
-                  onToggleSidebar={controller.handleToggleSidebar}
-                  runtimeInfo={runtimeInfo}
-                  showCompactSidebarToggle={showCompactSidebarToggle}
-                  showTitlebarProjectCreateAction={showNativeTitlebarProjectCreateAction}
-                  showTitlebarProjectActions={showNativeTitlebarProjectActions}
-                />
-              ) : route === 'plugins' ? (
-                <PluginsWorkspace
-                  isCompactShell={isCompactShell}
-                  isSidebarOpen={controller.isSidebarDrawerOpen}
-                  onToggleSidebar={controller.handleToggleSidebar}
-                  showCompactSidebarToggle={showCompactSidebarToggle}
-                />
-              ) : (
-                <SettingsWorkspace
-                  agents={agents}
-                  externalChannels={externalChannels}
-                  isCompactShell={isCompactShell}
-                  isSidebarOpen={controller.isSidebarDrawerOpen}
-                  onSelectRoute={commands.setSettingsRoute}
-                  onThemeChange={commands.setThemePreference}
-                  onToggleSidebar={controller.handleToggleSidebar}
-                  runtimeInfo={settingsRuntimeInfo}
-                  settingsRoute={settingsRoute}
-                  showCompactSidebarToggle={showCompactSidebarToggle}
-                  themePreference={themePreference}
-                />
-              )}
-            </div>
-
-            <AgentActivityPanel />
+            {route === 'agent' ? (
+              <AgentWorkspace
+                agent={activeAgent}
+                composerRef={composerRef}
+                draft={draft}
+                isCompactShell={isCompactShell}
+                isContextPanelOpen={isContextPanelOpen}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onCreateAgent={controller.handleOpenCreateAgent}
+                onDraftChange={commands.setDraft}
+                onLoadOlderMessages={handleLoadOlderMessages}
+                onSubmit={handleSubmit}
+                onToggleInspector={controller.handleToggleContextPanel}
+                onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={runtimeInfo}
+                showCompactInspectorToggle={!showNativeTitlebarInspectorToggle}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+                isLoadingOlderMessages={loadingTranscriptAgentId === activeAgent?.id}
+                transcriptRef={transcriptRef}
+              />
+            ) : route === 'workflow' ? (
+              <WorkflowWorkspace
+                isCompactShell={isCompactShell}
+                isCreateProjectOpen={isCreateProjectOpen}
+                isCreateWorkItemOpen={isCreateWorkItemOpen}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onCreateProjectOpenChange={setCreateProjectOpen}
+                onCreateWorkItemOpenChange={setCreateWorkItemOpen}
+                onOpenCreateAgent={controller.handleOpenCreateAgent}
+                onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={runtimeInfo}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+                showTitlebarProjectCreateAction={showNativeTitlebarProjectCreateAction}
+                showTitlebarProjectActions={showNativeTitlebarProjectActions}
+              />
+            ) : route === 'plugins' ? (
+              <PluginsWorkspace
+                isCompactShell={isCompactShell}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onToggleSidebar={controller.handleToggleSidebar}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+              />
+            ) : (
+              <SettingsWorkspace
+                agents={agents}
+                externalChannels={externalChannels}
+                isCompactShell={isCompactShell}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onSelectRoute={commands.setSettingsRoute}
+                onThemeChange={commands.setThemePreference}
+                onToggleSidebar={controller.handleToggleSidebar}
+                runtimeInfo={settingsRuntimeInfo}
+                settingsRoute={settingsRoute}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+                themePreference={themePreference}
+              />
+            )}
           </main>
 
           <ContextPanelHost
