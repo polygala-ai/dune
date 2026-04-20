@@ -30,9 +30,13 @@ The main product surfaces are:
   - `src/electron/preload.ts` exposes a flat `DesktopBridge`.
   - Each bridge method maps to one IPC capability or subscription.
 - Main process
-  - Creates the window.
-  - Registers IPC handlers.
-  - Owns storage, proxy configuration, runtime bootstrap, reset, and shutdown.
+  - `src/electron/main.ts` is the composition root.
+  - It delegates window creation to `window/create-main-window.ts`.
+  - It delegates IPC registration to `ipc/register-main-ipc-handlers.ts`.
+  - It delegates lazy runtime startup to `runtime/runtime-bootstrap.ts`.
+  - It delegates workflow reconciliation and timers to `workflow/workflow-coordinator.ts`.
+  - It delegates Telegram/macOS power handling to `lifecycle/telegram-power-coordinator.ts`.
+  - It still owns storage, proxy configuration, reset, and shutdown wiring.
 - Runtime controller
   - `DesktopRuntimeController` is the main-process facade for runtime actions.
   - It starts in mock mode, then swaps to `AgentRuntime` when available.
@@ -156,7 +160,7 @@ User
 
 ## Runtime Boot And Lifecycle
 
-Startup begins in `app.whenReady()` in `src/electron/main.ts`.
+Startup begins in `app.whenReady()` in `src/electron/main.ts`, which now acts as a thin composition root for the main-process modules.
 
 1. Resolve the runtime home and Electron `userData` paths.
    - `DUNE_AGENTLITE_HOME_DIR` overrides the home used for AgentLite data and project IPC trees.
@@ -167,13 +171,18 @@ Startup begins in `app.whenReady()` in `src/electron/main.ts`.
 3. Create `NetworkProxyManager` and apply saved network settings before showing the window.
    - Electron traffic uses `session.setProxy(...)`.
    - Node traffic uses `global-agent` with the `DUNE_PROXY_` namespace.
-4. Register IPC handlers for runtime actions, storage access, reset/restart, clipboard, and external links.
-5. Create the main window with a sandboxed preload script, `contextIsolation: true`, and `nodeIntegration: false`.
-6. Bootstrap the runtime lazily.
+4. Create the main-process coordinators.
+   - `createWorkflowCoordinator(...)` wraps workflow persistence, assignment reconciliation, activity compaction, and nudge/sweep timers.
+   - `createTelegramPowerCoordinator(...)` wraps Telegram activity detection, App Nap blocking, and wake/unlock reconnects.
+   - `createRuntimeBootstrap(...)` wraps lazy runtime creation and shutdown.
+5. Register IPC handlers through `registerMainIpcHandlers(...)`.
+   - Runtime actions, workflow access, storage access, reset/restart, clipboard, shell, and dialog flows all register there.
+6. Create the main window through `createMainWindow(...)` with a sandboxed preload script, `contextIsolation: true`, and `nodeIntegration: false`.
+7. Bootstrap the runtime lazily.
    - `scheduleRuntimeBootstrap(250)` starts it shortly after launch.
    - Any earlier runtime call also forces bootstrap through `ensureRuntime()`.
-7. Real bootstrap imports the runtime modules on demand, migrates model provider settings, creates `AgentIpcManager`, installs `tools-handler`, creates `DesktopRuntimeController`, subscribes snapshot fanout, and starts the runtime and IPC manager.
-8. When the renderer finishes loading, the latest runtime snapshot is pushed immediately if the controller already exists.
+8. Real bootstrap imports the runtime modules on demand, migrates model provider settings, creates `AgentIpcManager`, installs `tools-handler`, creates `DesktopRuntimeController`, subscribes snapshot fanout, and starts the runtime and IPC manager.
+9. When the renderer finishes loading, the latest runtime snapshot is pushed immediately if the controller already exists.
 
 ### Runtime States
 

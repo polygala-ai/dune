@@ -8,9 +8,16 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    },
+    alias: [
+      {
+        find: '@build',
+        replacement: path.resolve(__dirname, 'build'),
+      },
+      {
+        find: '@',
+        replacement: path.resolve(__dirname, 'src'),
+      },
+    ],
   },
   test: {
     environment: 'jsdom',
@@ -18,7 +25,7 @@ export default defineConfig({
     setupFiles: ['src/renderer/app/testing/setup.ts'],
     testTimeout: 15_000,
     exclude: ['tests/e2e/**'],
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'build/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

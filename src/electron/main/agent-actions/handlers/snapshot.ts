@@ -96,6 +96,15 @@ export function recordWorkflowItemEvents(
   const nextUpdatedAt = Math.max(item.updatedAt, updatedAt);
 
   prependWorkflowEvents(item, events);
+  item.activity = createWorkflowItemActivitySummary({
+    archivedEventCount: item.activity.archivedEventCount,
+    hasOlderEvents: item.activity.hasOlderEvents,
+    rollingSummary: item.activity.rollingSummary,
+    totalEventCount: Math.max(
+      item.activity.totalEventCount + events.length,
+      item.activity.archivedEventCount + item.workflowEvents.length,
+    ),
+  });
   item.updatedAt = nextUpdatedAt;
   touchProject(snapshot, item.projectId, nextUpdatedAt);
 }

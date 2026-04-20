@@ -72,6 +72,14 @@ import {
   registerDuneActions,
   type ActionHostServices,
 } from '@/electron/main/agent-actions/register-actions';
+import {
+  createWorkflowEvent,
+  readWorkflowSnapshot,
+  recordWorkflowItemEvents,
+  type WorkflowItem,
+  type WorkflowSnapshot,
+  writeWorkflowSnapshot,
+} from '@/electron/main/agent-actions/handlers/snapshot';
 import { TelegramBridge } from '../telegram-bridge';
 import type { TelegramSecretsStore } from '../telegram-bridge';
 import { detectCodingEngines } from '../coding-engine-detect';
@@ -1706,31 +1714,62 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
   }
 
-  private async updateItemActivityForTask(taskId: string, isWorking: boolean): Promise<void> {
+  private async recordItemTaskStartedActivity(
+    snapshot: WorkflowSnapshot,
+    item: WorkflowItem,
+    startedAt: number,
+    actor?: string,
+  ): Promise<void> {
+    const actionServices = this.actionServices;
+
+    if (!actionServices) {
+      return;
+    }
+
+    recordWorkflowItemEvents(
+      snapshot,
+      item,
+      [createWorkflowEvent('item', 'Started working on this item.', startedAt, actor)],
+      startedAt,
+    );
+    await writeWorkflowSnapshot(actionServices.workflowStore, snapshot, actionServices.onWorkflowChanged);
+  }
+
+  private async updateItemActivityForTask(
+    taskId: string,
+    isWorking: boolean,
+    actor?: string,
+  ): Promise<void> {
     const workflowStore = this.actionServices?.workflowStore;
 
     if (!workflowStore) {
       return;
     }
 
-    const snapshot = await workflowStore.get<{ items?: Array<{ id?: string; scheduledTaskId?: string | null }> }>('snapshot');
-    const itemId = snapshot?.items?.find((item) => item?.scheduledTaskId === taskId)?.id ?? null;
+    const snapshot = await readWorkflowSnapshot(workflowStore);
+    const item = snapshot.items.find((candidate) => candidate.scheduledTaskId === taskId) ?? null;
 
-    if (!itemId) {
+    if (!item) {
       return;
     }
 
-    const current = this.itemActivity.get(itemId);
+    const current = this.itemActivity.get(item.id);
 
     if (current?.isWorking === isWorking) {
       return;
     }
 
-    this.itemActivity.set(itemId, {
+    const startedAt = isWorking ? this.now() : null;
+
+    this.itemActivity.set(item.id, {
       isWorking,
-      startedAt: isWorking ? this.now() : null,
+      startedAt,
     });
-    this.onItemActivityChanged?.({ itemId, isWorking });
+    this.onItemActivityChanged?.({ itemId: item.id, isWorking });
+
+    if (isWorking && startedAt !== null) {
+      await this.recordItemTaskStartedActivity(snapshot, item, startedAt, actor);
+    }
   }
 
   private async dispatchAgentInput(
@@ -2493,7 +2532,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       // per-item green-light activity for items whose scheduledTaskId matches.
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
-        void this.updateItemActivityForTask(event.taskId, true);
+        void this.updateItemActivityForTask(event.taskId, true, record.agent.name);
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
