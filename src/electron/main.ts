@@ -30,9 +30,11 @@ if (app.isPackaged) {
   fixPath();
 }
 
-// Prevent GPU compositor crash / black screen on some macOS configurations.
-app.commandLine.appendSwitch('--disable-gpu-sandbox');
-app.commandLine.appendSwitch('--disable-software-rasterizer');
+// macOS: disable the GPU sandbox to prevent startup black screens from GPU
+// compositor crashes. Related Electron issue: https://github.com/electron/electron/issues/22656
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
 
 if (started) {
   app.quit();
