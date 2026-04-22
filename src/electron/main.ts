@@ -47,6 +47,7 @@ import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
 import { isPlainObject } from '@/shared/is-record';
+import { pollPrs } from '@/electron/main/pr-reviewer';
 import type {
   WorkflowEvent as StoredWorkflowEvent,
   WorkflowSnapshot as StoredWorkflowSnapshot,
@@ -89,6 +90,8 @@ let powerBlockerId: number | null = null;
 let telegramReconnectPromise: Promise<void> | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 const TASK_SWEEP_INTERVAL_MS = 120_000;
+const PR_POLL_INTERVAL_MS = 5 * 60_000;
+let prPollIntervalHandle: ReturnType<typeof setInterval> | null = null;
 
 /** Returns whether Telegram polling or setup observers should stay alive. */
 function hasActiveTelegramChannels(snapshot: AgentServiceSnapshot) {
@@ -291,6 +294,10 @@ const quitCoordinator = createQuitCoordinator({
     if (taskSweepIntervalHandle) {
       clearInterval(taskSweepIntervalHandle);
       taskSweepIntervalHandle = null;
+    }
+    if (prPollIntervalHandle) {
+      clearInterval(prPollIntervalHandle);
+      prPollIntervalHandle = null;
     }
     stopPowerBlocker();
     await runtimeController?.shutdown();
@@ -843,6 +850,27 @@ void app.whenReady().then(async () => {
         void sweepItemAssignmentTasks();
       }, TASK_SWEEP_INTERVAL_MS);
       void sweepItemAssignmentTasks();
+
+      // Periodic poll: detect new PRs in watched repos and create review items.
+      const prPollConfig = {
+        repos: [
+          { owner: 'polygala-ai', repo: 'dune', reviewerAgentId: 'Mg_8MMfk' },
+          { owner: 'boxlite-ai', repo: 'agentlite', reviewerAgentId: 'IaAuvT2t' },
+        ],
+        githubToken: process.env.GITHUB_TOKEN ?? '',
+        stateFilePath: path.join(userDataDir, 'pr-reviewer-state.json'),
+      };
+      const runPrPoll = () => {
+        void pollPrs(prPollConfig, workflowStore, () => {
+          for (const window of BrowserWindow.getAllWindows()) {
+            window.webContents.send(ipcChannels.workflowChanged);
+          }
+        }).catch((error) => {
+          console.error('[pr-reviewer] Poll cycle failed:', error);
+        });
+      };
+      prPollIntervalHandle = setInterval(runPrPoll, PR_POLL_INTERVAL_MS);
+      void runPrPoll();
     }).catch((error) => {
       console.error('Failed to bootstrap the Dune runtime.', error);
       throw error;
