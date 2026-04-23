@@ -14,7 +14,7 @@ export interface DuneChannelOptions {
   config: ChannelDriverConfig;
   decorateOutboundMessage?: ((chatJid: string, text: string) => Promise<string> | string) | undefined;
   externalChannelFactory?: ChannelDriverFactory | undefined;
-  onExternalInbound?: ((text: string, senderName: string, attachments?: string[]) => Promise<void> | void) | undefined;
+  onExternalInbound?: ((text: string, senderName: string, attachments?: string[], reply?: (text: string) => Promise<void>) => Promise<void> | void) | undefined;
   onOutboundMessage: (chatJid: string, text: string) => Promise<void> | void;
   primaryJid: string;
 }
@@ -94,7 +94,14 @@ export class DuneChannel implements ChannelDriver {
         if (!msg.is_from_me && !msg.is_bot_message && this.onExternalInbound) {
           const senderName = msg.sender_name?.trim() || msg.sender?.trim() || 'External';
           const attachments = Array.isArray(msg.attachments) ? (msg.attachments as string[]) : [];
-          void this.onExternalInbound(msg.content, senderName, attachments);
+          const externalDriver = this.externalDriver;
+          const boundExternalJid = this.boundExternalJid;
+          const reply = async (text: string) => {
+            if (externalDriver && boundExternalJid) {
+              await externalDriver.sendMessage(boundExternalJid, text);
+            }
+          };
+          void this.onExternalInbound(msg.content, senderName, attachments, reply);
         }
 
         this.config.onMessage(this.primaryJid, {

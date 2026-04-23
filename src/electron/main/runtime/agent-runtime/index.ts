@@ -77,6 +77,7 @@ import type { TelegramSecretsStore } from '../telegram-bridge';
 import { detectCodingEngines } from '../coding-engine-detect';
 
 import { createChannelBinding, mapTelegramChannelStatus } from './channels';
+import { handleTelegramSlashCommand } from './telegram-commands';
 import {
   createAssistantMessage,
   createBuiltInAgentCopy,
@@ -1799,6 +1800,18 @@ export class AgentRuntime implements AgentRuntimeContract {
     );
   }
 
+  private async getSlashCommandWorkItems(): Promise<Array<{ id: string; title: string; status: string }>> {
+    const workflowStore = this.actionServices?.workflowStore;
+    if (!workflowStore) return [];
+    const snapshot = await workflowStore.get<{
+      items?: Array<{ id?: string; title?: string; status?: string }>;
+    }>('snapshot');
+    return (snapshot?.items ?? [])
+      .filter((i): i is { id: string; title: string; status: string } =>
+        typeof i.id === 'string' && typeof i.title === 'string' && typeof i.status === 'string',
+      );
+  }
+
   private handleExternalInboundMessage(agentId: string, text: string, senderName: string, attachmentSources: string[] = []) {
     const now = this.now();
     const { content: strippedContent } = extractWorkspaceAttachmentPaths(text);
@@ -2367,8 +2380,18 @@ export class AgentRuntime implements AgentRuntimeContract {
         instructions: this.buildAgentInstructions(record),
         ...(mounts.length > 0 ? { mounts } : {}),
         name: record.agent.name,
-        onExternalInbound: (text, senderName, attachments) => {
-          this.handleExternalInboundMessage(agentId, text, senderName, attachments);
+        onExternalInbound: (text, senderName, attachments, reply) => {
+          if (text.trimStart().startsWith('/') && reply) {
+            void (async () => {
+              const items = await this.getSlashCommandWorkItems();
+              const handled = await handleTelegramSlashCommand(text, () => items, reply);
+              if (!handled) {
+                this.handleExternalInboundMessage(agentId, text, senderName, attachments);
+              }
+            })();
+          } else {
+            this.handleExternalInboundMessage(agentId, text, senderName, attachments);
+          }
         },
         onOutboundMessage: (chatJid, text) => {
           this.handleOutboundMessage(chatJid, text);

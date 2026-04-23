@@ -41,7 +41,7 @@ export interface DuneAgentOptions {
     readonly?: boolean;
   }>;
   name: string;
-  onExternalInbound?: (text: string, senderName: string, attachments?: string[]) => void;
+  onExternalInbound?: (text: string, senderName: string, attachments?: string[], reply?: (text: string) => Promise<void>) => void;
   onOutboundMessage: (chatJid: string, text: string) => void;
   primaryChatJid: string;
   /**
