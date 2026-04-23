@@ -55,6 +55,7 @@ import {
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 import {
   extractWorkspaceAttachmentPaths,
+  inferAttachmentKind,
   summarizeMessagePreview,
 } from '@/shared/agents/message-content';
 import { normalizeProjectRootPath } from '@/shared/workflow/project-artifacts';
@@ -432,6 +433,14 @@ export interface AgentRuntimeOptions {
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
   resolveModelCredentials?: () => Promise<Record<string, string>>;
   resolveTelegramBotUsername?: (token: string) => Promise<string | null>;
+  sendTelegramMedia?: (
+    token: string,
+    chatId: string,
+    localPath: string,
+    filename: string,
+    kind: 'image' | 'file',
+    caption: string | undefined,
+  ) => Promise<void>;
   telegramSecretsStore?: TelegramSecretsStore;
 }
 
@@ -440,6 +449,161 @@ import {
   resolveBundledAgentDir,
   seedArtifacts,
 } from '../artifacts';
+
+const WORKSPACE_GROUP_ATTACHMENTS_PREFIX = '/workspace/group/attachments/';
+
+/**
+ * Sends a local file to Telegram via the Bot API using multipart form data.
+ * This is the default production implementation; tests may substitute their own.
+ */
+async function defaultSendTelegramMedia(
+  token: string,
+  chatId: string,
+  localPath: string,
+  filename: string,
+  kind: 'image' | 'file',
+  caption: string | undefined,
+): Promise<void> {
+  const fileBuffer = fs.readFileSync(localPath);
+  const form = new FormData();
+  form.append('chat_id', chatId);
+  const fieldName = kind === 'image' ? 'photo' : 'document';
+  form.append(fieldName, new Blob([fileBuffer]), filename);
+
+  if (caption) {
+    form.append('caption', caption);
+  }
+
+  const endpoint = kind === 'image' ? 'sendPhoto' : 'sendDocument';
+  const response = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Telegram ${endpoint} failed: ${response.status}`);
+  }
+}
+
+/**
+ * Wraps a Telegram ChannelDriverFactory to intercept outbound sendMessage calls
+ * and route workspace attachment paths to sendPhoto/sendDocument via the Bot API.
+ *
+ * Security:
+ * - Extracted paths are already free of '..' components (extractWorkspaceAttachmentPaths filters them).
+ * - After resolving the local path, a containment check ensures the resolved path stays
+ *   inside <runtimeRoot>/groups/<groupFolder>/attachments/ to prevent escapes via symlinks
+ *   or other means.
+ *
+ * Partial-delivery:
+ * - Per-attachment failures are tracked; after the loop a visible ⚠️ notice is sent for any failures.
+ * - Long-caption follow-up failures also produce a visible notice.
+ */
+function wrapTelegramDriverForMedia(
+  baseFactory: ChannelDriverFactory,
+  token: string,
+  runtimeRoot: string,
+  groupFolder: string,
+  sendMedia: typeof defaultSendTelegramMedia,
+): ChannelDriverFactory {
+  return (config) => {
+    const base = baseFactory(config);
+    return {
+      connect: () => base.connect(),
+      disconnect: () => base.disconnect(),
+      isConnected: () => base.isConnected(),
+      ownsJid: (jid: string) => base.ownsJid(jid),
+      sendMessage: async (jid: string, text: string) => {
+        const { content: strippedText, paths } = extractWorkspaceAttachmentPaths(text);
+
+        if (paths.length === 0) {
+          // No attachment paths — pass through as plain text.
+          return base.sendMessage(jid, text);
+        }
+
+        const chatId = jid.startsWith('tg:') ? jid.slice(3) : jid;
+        const safeBase = path.resolve(path.join(runtimeRoot, 'groups', groupFolder, 'attachments'));
+
+        let didSendMedia = false;
+        const failedFilenames: string[] = [];
+
+        const caption = strippedText.trim().length > 0 && strippedText.trim().length <= 1024
+          ? strippedText.trim()
+          : undefined;
+
+        for (const attachmentPath of paths) {
+          // Only accept paths that start with the expected workspace attachment prefix.
+          if (!attachmentPath.startsWith(WORKSPACE_GROUP_ATTACHMENTS_PREFIX)) {
+            console.warn('[TelegramMedia] Rejected non-attachment path:', attachmentPath);
+            failedFilenames.push(path.basename(attachmentPath));
+            continue;
+          }
+
+          const relativePath = attachmentPath.slice('/workspace/group/'.length);
+          const localPath = path.resolve(path.join(runtimeRoot, 'groups', groupFolder, relativePath));
+
+          // Containment check — must stay inside attachments/.
+          if (!localPath.startsWith(safeBase + path.sep) && localPath !== safeBase) {
+            console.warn('[TelegramMedia] Path traversal blocked:', attachmentPath, '->', localPath);
+            failedFilenames.push(path.basename(attachmentPath));
+            continue;
+          }
+
+          if (!fs.existsSync(localPath)) {
+            console.warn('[TelegramMedia] Attachment not found:', localPath);
+            failedFilenames.push(path.basename(attachmentPath));
+            continue;
+          }
+
+          const filename = path.basename(localPath) || 'attachment';
+          const kind = inferAttachmentKind({ name: filename });
+          const mediaKind: 'image' | 'file' = kind === 'image' ? 'image' : 'file';
+
+          try {
+            await sendMedia(token, chatId, localPath, filename, mediaKind, caption);
+            didSendMedia = true;
+          } catch (err) {
+            console.warn('[TelegramMedia] Failed to send attachment:', filename, err);
+            failedFilenames.push(filename);
+          }
+        }
+
+        // Report partial failures with a visible user-facing notice.
+        if (failedFilenames.length > 0) {
+          try {
+            await base.sendMessage(
+              jid,
+              `⚠️ Failed to deliver ${failedFilenames.length} attachment(s): ${failedFilenames.join(', ')}`,
+            );
+          } catch (e) {
+            console.error('[TelegramMedia] Could not send partial-failure notice:', e);
+          }
+        }
+
+        if (!didSendMedia) {
+          // All attachments failed — fall back to plain text so the user sees something.
+          await base.sendMessage(jid, text);
+          return;
+        }
+
+        // If caption was too long to inline, send it as a follow-up.
+        const trimmedText = strippedText.trim();
+        if (trimmedText && trimmedText.length > 1024) {
+          try {
+            await base.sendMessage(jid, trimmedText);
+          } catch (err) {
+            console.warn('[TelegramMedia] Long-caption follow-up failed:', err);
+            try {
+              await base.sendMessage(jid, '⚠️ Failed to deliver caption text.');
+            } catch (e2) {
+              console.error('[TelegramMedia] Could not send caption-failure notice:', e2);
+            }
+          }
+        }
+      },
+    };
+  };
+}
 
 /**
  * Builds ACP peer config using AgentLite's built-in auto-discovery.
@@ -519,6 +683,8 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly createTelegramChannelFactory: (token: string) => ChannelDriverFactory | Promise<ChannelDriverFactory>;
 
+  private readonly sendTelegramMedia: typeof defaultSendTelegramMedia;
+
   private startupModelCredentials: Record<string, string> = {};
 
   private snapshot: AgentServiceSnapshot;
@@ -556,6 +722,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         );
         return telegram({ token });
       });
+    this.sendTelegramMedia = options.sendTelegramMedia ?? defaultSendTelegramMedia;
     this.telegram = new TelegramBridge({
       callbacks: {
         getAgents: () => this.snapshot.agents,
@@ -2317,7 +2484,17 @@ export class AgentRuntime implements AgentRuntimeContract {
     switch (channelId) {
       case 'telegram': {
         const token = await this.telegram.readAgentToken(agentId);
-        return token ? await this.createTelegramChannelFactory(token) : null;
+        if (!token) return null;
+        const baseFactory = await this.createTelegramChannelFactory(token);
+        const record = this.records.get(agentId);
+        const groupFolder = record?.groupFolder ?? '';
+        return wrapTelegramDriverForMedia(
+          baseFactory,
+          token,
+          this.runtimeRoot,
+          groupFolder,
+          this.sendTelegramMedia,
+        );
       }
       // Future channels: add cases here
       // case 'slack': { ... }

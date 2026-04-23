@@ -113,11 +113,16 @@ export function inferAttachmentKind(input: {
   return 'file' as const;
 }
 
-/** Extracts workspace attachment paths. */
+/** Extracts workspace attachment paths. Rejects any path containing '..' traversal components. */
 export function extractWorkspaceAttachmentPaths(content: string) {
   const paths: string[] = [];
-  const nextContent = content.replace(WORKSPACE_ATTACHMENT_PATTERN, (_match, attachmentPath) => {
-    paths.push(String(attachmentPath));
+  const nextContent = content.replace(WORKSPACE_ATTACHMENT_PATTERN, (match, attachmentPath) => {
+    const p = String(attachmentPath);
+    // Reject path traversal: any segment that is '..' is a security violation
+    if (p.split('/').some((seg) => seg === '..')) {
+      return match; // leave traversal paths in text, do not extract
+    }
+    paths.push(p);
     return '';
   });
 
