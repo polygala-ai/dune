@@ -1234,7 +1234,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
     expect(screen.getByText('Homepage copy rewrite')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^New project$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^New project$/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^New project$/i }));
     expect(screen.queryByText('Accent')).not.toBeInTheDocument();
