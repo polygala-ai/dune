@@ -2,6 +2,7 @@
 
 import {
   Blocks,
+  BarChart3,
   Command,
   Plus,
   Settings2,
@@ -24,6 +25,7 @@ import {
 /** Workflow sidebar state. */
 interface WorkflowSidebarState {
   onCreateProject: () => void;
+  onOpenAnalytics: () => void;
   onOpenPlugins: () => void;
   onOpenSettings: () => void;
   onSelectProject: (projectId: string) => void;
@@ -95,6 +97,21 @@ export function AppSidebar({
         </div>
 
         <div className="mt-5 space-y-1">
+          <button
+            aria-current={route === 'analytics' ? 'page' : undefined}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-sm font-medium transition-colors',
+              route === 'analytics'
+                ? 'bg-app-accent-soft text-app-text'
+                : 'text-app-text hover:bg-app-card',
+            )}
+            onClick={workflow.onOpenAnalytics}
+            type="button"
+          >
+            <BarChart3 className="h-4 w-4 shrink-0 text-app-muted" />
+            <span>Tool Analytics</span>
+          </button>
+
           <button
             aria-current={route === 'plugins' ? 'page' : undefined}
             className={cn(

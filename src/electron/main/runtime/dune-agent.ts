@@ -9,6 +9,7 @@ import type {
 } from '@boxlite-ai/agentlite';
 
 import { DuneChannel } from './dune-channel';
+import type { ToolUsageSummaryRow } from '@/shared/agents/tool-analytics';
 
 /** ACP peer config understood by newer AgentLite runtimes. */
 export interface DuneAcpPeerConfig {
@@ -149,6 +150,29 @@ export class DuneAgent {
   /** The underlying AgentLite agent instance for event subscriptions. */
   get agentLiteAgent(): AgentLiteAgent {
     return this.agent;
+  }
+
+  /** Calls AgentLite's built-in tool_usage_summary action for this agent. */
+  async getToolUsageSummary(): Promise<ToolUsageSummaryRow[]> {
+    const agentWithActions = this.agent as unknown as {
+      actions?: Map<string, {
+        handler: (payload: Record<string, unknown>) => Promise<unknown> | unknown;
+      }>;
+    };
+    const action = agentWithActions.actions?.get('tool_usage_summary');
+
+    if (!action) {
+      throw new Error('AgentLite action "tool_usage_summary" is unavailable.');
+    }
+
+    const result = await action.handler({});
+    const summary = (result as { summary?: unknown }).summary;
+
+    if (!Array.isArray(summary)) {
+      throw new Error('AgentLite action "tool_usage_summary" returned an invalid summary.');
+    }
+
+    return summary as ToolUsageSummaryRow[];
   }
 
   /** Pushes user message. */
