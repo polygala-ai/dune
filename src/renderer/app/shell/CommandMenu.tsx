@@ -2,6 +2,7 @@
 
 import { startTransition } from 'react';
 import {
+  BarChart3,
   Bot,
   PanelRight,
   Plus,
@@ -58,6 +59,7 @@ interface CommandMenuProps {
   onOpenBoard: () => void;
   onOpenChange: (open: boolean) => void;
   onOpenSettings: () => void;
+  onOpenToolAnalytics: () => void;
   onSelectAgent: (agentId: string) => void;
   onSelectItem: (itemId: string) => void;
   onSelectProject: (projectId: string) => void;
@@ -77,6 +79,7 @@ export function CommandMenu({
   onOpenBoard,
   onOpenChange,
   onOpenSettings,
+  onOpenToolAnalytics,
   onSelectAgent,
   onSelectItem,
   onSelectProject,
@@ -118,6 +121,11 @@ export function CommandMenu({
           <CommandItem onSelect={() => closeAndRun(onOpenBoard)}>
             <Sparkles className="h-4 w-4 text-app-muted" />
             <span className="flex-1 truncate">Project board</span>
+          </CommandItem>
+
+          <CommandItem onSelect={() => closeAndRun(onOpenToolAnalytics)}>
+            <BarChart3 className="h-4 w-4 text-app-muted" />
+            <span className="flex-1 truncate">Tool Analytics</span>
           </CommandItem>
 
           <CommandItem onSelect={() => closeAndRun(onOpenSettings)}>

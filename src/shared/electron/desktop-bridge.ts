@@ -1,6 +1,7 @@
 // Shared Electron desktop bridge contract.
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
+import type { ToolUsageSummaryResult } from '@/shared/agents/tool-analytics';
 import type {
   AgentDefinition,
   AgentTranscriptPage,
@@ -39,6 +40,7 @@ export interface DesktopBridge {
   ) => Promise<AgentTranscriptPage>;
   getRuntimeSnapshot?: () => Promise<AgentServiceSnapshot>;
   getTelegramSetupSession?: (sessionId: string) => Promise<TelegramSetupSession | null>;
+  getToolUsageSummary?: () => Promise<ToolUsageSummaryResult>;
   listProjectArtifactEntries?: (
     rootPath: string,
     artifactFolderName: string,

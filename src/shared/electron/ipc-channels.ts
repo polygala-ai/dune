@@ -14,6 +14,7 @@ export const ipcChannels = {
   getProjectActivityPage: 'dune:workflow:get-project-activity-page',
   getRuntimeSnapshot: 'dune:runtime:get-snapshot',
   getTelegramSetupSession: 'dune:runtime:get-telegram-setup-session',
+  getToolUsageSummary: 'dune:runtime:get-tool-usage-summary',
   listProjectArtifactEntries: 'dune:runtime:list-project-artifact-entries',
   openExternal: 'dune:runtime:open-external',
   openPath: 'dune:runtime:open-path',

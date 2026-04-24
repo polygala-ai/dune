@@ -32,7 +32,7 @@ import type {
 } from '@/renderer/features/workflow/types';
 
 /** App route shape. */
-export type AppRoute = 'agent' | 'plugins' | 'settings' | 'workflow';
+export type AppRoute = 'agent' | 'analytics' | 'plugins' | 'settings' | 'workflow';
 
 /** Navigation snapshot. */
 export interface NavigationSnapshot {

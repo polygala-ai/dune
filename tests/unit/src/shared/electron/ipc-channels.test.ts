@@ -29,6 +29,7 @@ describe('ipcChannels', () => {
       'ensureProjectMainAgent',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
+      'getToolUsageSummary',
       'openExternal',
       'reloadExternalChannels',
       'resetRuntime',

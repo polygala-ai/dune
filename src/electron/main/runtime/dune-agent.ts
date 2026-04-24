@@ -8,6 +8,8 @@ import type {
   RegisterGroupOptions,
 } from '@boxlite-ai/agentlite';
 
+import type { ToolUsageSummaryRow } from '@/shared/agents/tool-analytics';
+
 import { DuneChannel } from './dune-channel';
 
 /** ACP peer config understood by newer AgentLite runtimes. */
@@ -151,8 +153,43 @@ export class DuneAgent {
     return this.agent;
   }
 
+  /** Calls AgentLite's built-in tool_usage_summary action for this agent. */
+  async getToolUsageSummary(since: Date): Promise<ToolUsageSummaryRow[]> {
+    const agentWithActions = this.agent as unknown as {
+      actions?: Map<string, {
+        handler: (payload: Record<string, unknown>) => Promise<unknown> | unknown;
+      }>;
+      db?: {
+        getToolUsageSummary?: (opts?: {
+          since?: Date;
+          toolName?: string;
+        }) => Promise<ToolUsageSummaryRow[]>;
+      };
+    };
+    const action = agentWithActions.actions?.get('tool_usage_summary');
+
+    if (action) {
+      const result = await action.handler({ since: since.toISOString() });
+      const summary = (result as { summary?: unknown }).summary;
+
+      if (!Array.isArray(summary)) {
+        throw new Error('AgentLite action "tool_usage_summary" returned an invalid summary.');
+      }
+
+      return summary as ToolUsageSummaryRow[];
+    }
+
+    const fallback = agentWithActions.db?.getToolUsageSummary;
+
+    if (!fallback) {
+      throw new Error('AgentLite action "tool_usage_summary" is unavailable.');
+    }
+
+    return fallback.call(agentWithActions.db, { since });
+  }
+
   /** Pushes user message. */
-  async pushUserMessage(chatJid: string, text: string, senderName: string = 'You') {
+  async pushUserMessage(chatJid: string, text: string, senderName = 'You') {
     await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
   }
 
@@ -160,7 +197,7 @@ export class DuneAgent {
   async pushControlMessage(
     chatJid: string,
     text: string,
-    senderName: string = 'Dune Control',
+    senderName = 'Dune Control',
   ) {
     await this.duneChannel.pushInboundMessage(chatJid, text, senderName);
   }

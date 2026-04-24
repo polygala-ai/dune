@@ -51,6 +51,7 @@ function createHarness() {
     deleteAgent: vi.fn(async () => 'deleted'),
     ensureProjectMainAgent: vi.fn(async () => 'ensured'),
     getTelegramSetupSession: vi.fn(async () => 'session'),
+    getToolUsageSummary: vi.fn(async () => 'tool-summary'),
     getTranscriptPage: vi.fn(async () => 'transcript'),
     reloadExternalChannels: vi.fn(async () => 'reloaded'),
     reset: vi.fn(async () => 'reset'),
@@ -137,7 +138,7 @@ describe('registerMainIpcHandlers', () => {
   it('registers the full main-process handler surface', () => {
     const { handlers } = createHarness();
 
-    expect(handlers.size).toBe(30);
+    expect(handlers.size).toBe(31);
     expect([...handlers.keys()]).toEqual(expect.arrayContaining([
       ipcChannels.getRuntimeSnapshot,
       ipcChannels.getAgentTranscriptPage,
@@ -149,6 +150,7 @@ describe('registerMainIpcHandlers', () => {
       ipcChannels.openPath,
       ipcChannels.reloadExternalChannels,
       ipcChannels.getTelegramSetupSession,
+      ipcChannels.getToolUsageSummary,
       ipcChannels.createAgent,
       ipcChannels.deleteLocalData,
       ipcChannels.ensureProjectMainAgent,
@@ -198,6 +200,17 @@ describe('registerMainIpcHandlers', () => {
     expect(
       applyPersistedNetworkSettings.mock.invocationCallOrder[0] ?? -1,
     ).toBeLessThan(ensureRuntime.mock.invocationCallOrder[0] ?? -1);
+  });
+
+  it('forwards tool usage summary requests through the runtime controller', async () => {
+    const { ensureRuntime, handlers, runtimeController } = createHarness();
+
+    await expect(handlers.get(ipcChannels.getToolUsageSummary)?.()).resolves.toBe(
+      'tool-summary',
+    );
+
+    expect(ensureRuntime).toHaveBeenCalledTimes(1);
+    expect(runtimeController.getToolUsageSummary).toHaveBeenCalledTimes(1);
   });
 
   it('forwards representative storage, dialog, shell, and app handlers', async () => {
