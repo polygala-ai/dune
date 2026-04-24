@@ -308,7 +308,7 @@ describe('AppShell', () => {
       screen.getByPlaceholderText('Search titles, briefs, and work products…'),
     ).toBeInTheDocument();
     expect(
-      within(commandDialog).getAllByText('Research Platform', { exact: true }).length,
+      within(commandDialog).getAllByText('Homepage copy rewrite', { exact: true }).length,
     ).toBeGreaterThan(0);
   });
 
@@ -671,6 +671,7 @@ describe('AppShell', () => {
 
     await user.click(await screen.findByRole('tab', { name: /^Agents$/i }));
     await user.click(getOpenAgentButton('Navigator'));
+    await user.click(screen.getByRole('button', { name: /^Open full window$/i }));
 
     expect(await screen.findByLabelText('Agent composer')).toBeInTheDocument();
     expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
@@ -793,8 +794,9 @@ describe('AppShell', () => {
     }
 
     await user.click(firstOpenAgentButton);
+    await user.click(screen.getByRole('button', { name: /^Open full window$/i }));
 
-    const composer = screen.getByLabelText('Agent composer');
+    const composer = await screen.findByLabelText('Agent composer');
 
     expect(composer).toBeInTheDocument();
     expect(screen.getByTestId('compact-shell-toolbar')).toBeInTheDocument();
@@ -854,7 +856,7 @@ describe('AppShell', () => {
     });
   });
 
-  it('disables local input for externally attached mock agents', async () => {
+  it('keeps local input available for externally attached mock agents', async () => {
     const user = userEvent.setup();
 
     render(<AppShell />);
@@ -874,15 +876,13 @@ describe('AppShell', () => {
 
     await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
     await user.click(getOpenAgentButton('QA triage'));
+    await user.click(screen.getByRole('button', { name: /^Open full window$/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'QA triage' })).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText('Agent composer')).toBeDisabled();
-    expect(
-      screen.getByText(/This agent is attached to QA Inbox\. Reply in the source channel\./i),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Agent composer')).toBeEnabled();
   });
 
   it('deletes a custom agent from the inspector and clears its work item assignments', async () => {
@@ -1236,7 +1236,7 @@ describe('AppShell', () => {
     expect(screen.getByText('Homepage copy rewrite')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^New project$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /^New project$/i }));
+    await user.click(screen.getByRole('button', { name: /create project/i }));
     expect(screen.queryByText('Accent')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Project name'), 'Studio Ops');
     await user.type(
@@ -1463,6 +1463,7 @@ describe('AppShell', () => {
         name: /^Open agent$/i,
       }),
     );
+    await user.click(screen.getByRole('button', { name: /^Open full window$/i }));
 
     await waitFor(() => {
       expect(
