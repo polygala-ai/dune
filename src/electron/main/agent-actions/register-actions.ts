@@ -16,6 +16,7 @@ import type { Agent as AgentLiteAgent } from '@boxlite-ai/agentlite';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
+import type { AuditLog } from '@/electron/main/audit/audit-log';
 
 import { agentTools } from '@/electron/main/agent-actions/handlers/agents';
 import { itemTools } from '@/electron/main/agent-actions/handlers/items';
@@ -31,6 +32,7 @@ import type {
 
 /** Services captured by every action handler closure. */
 export interface ActionHostServices {
+  auditLog?: AuditLog;
   getRuntimeController: () => DesktopRuntimeController;
   onWorkflowChanged: () => void;
   workflowStore: AppStorage;
@@ -172,6 +174,11 @@ export function registerDuneActions(
     notes: z.string().optional().describe('Task notes'),
     status: z.enum(['todo', 'doing', 'blocked', 'review', 'done']).optional().describe('Task status'),
   });
+  reg('workflow.tasks.delete', {
+    itemId: z.string().describe('Work item ID'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this task deletion.'),
+    taskId: z.string().describe('Task ID'),
+  });
 
   // ---- Work products ------------------------------------------------------
   reg('workflow.work_products.add', {
@@ -179,6 +186,11 @@ export function registerDuneActions(
     note: z.string().optional().describe('Optional note to add to workflow history with this output.'),
     title: z.string().describe('Work product title'),
     body: z.string().describe('Work product content'),
+  });
+  reg('workflow.work_products.delete', {
+    itemId: z.string().describe('Work item ID'),
+    note: z.string().optional().describe('Optional note to add to workflow history with this deletion.'),
+    workProductId: z.string().describe('Work product ID'),
   });
 
   // ---- Agents -------------------------------------------------------------

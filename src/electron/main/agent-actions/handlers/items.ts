@@ -40,6 +40,11 @@ import {
 } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Returns the actor label for audit events emitted by agent actions. */
+function auditActor(agentContext: { agentId?: string; agentName?: string }) {
+  return agentContext.agentName || agentContext.agentId || 'user';
+}
+
 /** Lists item tools. */
 export const itemTools: RegisteredTool[] = [
   {
@@ -76,7 +81,7 @@ export const itemTools: RegisteredTool[] = [
       ),
       name: 'workflow.items.create',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const projectId = resolveProjectId(args.projectId, agentContext.projectId);
       const title = requireString(args.title, 'title');
@@ -124,6 +129,16 @@ export const itemTools: RegisteredTool[] = [
 
       touchProject(snapshot, projectId, now);
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'item.created',
+        itemId,
+        itemTitle: title,
+        projectId,
+        summary: `Created work item "${title}".`,
+        details: { status },
+      });
       return { item: presentItem(snapshot, item), itemId };
     },
   },
@@ -142,12 +157,14 @@ export const itemTools: RegisteredTool[] = [
       ),
       name: 'workflow.items.update',
     },
-    handler: async ({ agentContext, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const note = optionalString(args.note);
       const title = optionalString(args.title);
       const now = Date.now();
+      const previousTitle = item.title;
+      const previousBrief = item.brief;
 
       const touchesDetails = args.title !== undefined || args.brief !== undefined;
       const touchesAssignment = args.primaryAgentId !== undefined;
@@ -209,6 +226,36 @@ export const itemTools: RegisteredTool[] = [
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      if (touchesDetails) {
+        auditLog?.record({
+          actor: auditActor(agentContext),
+          actorType: 'agent',
+          eventType: 'item.updated',
+          itemId: item.id,
+          itemTitle: item.title,
+          projectId: item.projectId,
+          summary: `Updated work item "${item.title}".`,
+          details: {
+            briefChanged: previousBrief !== item.brief,
+            titleChanged: previousTitle !== item.title,
+          },
+        });
+      }
+
+      if (touchesAssignment) {
+        auditLog?.record({
+          actor: auditActor(agentContext),
+          actorType: 'agent',
+          eventType: 'agent.assigned',
+          itemId: item.id,
+          itemTitle: item.title,
+          projectId: item.projectId,
+          summary: item.primaryAgentId
+            ? `Assigned primary agent to "${item.title}".`
+            : `Cleared primary agent for "${item.title}".`,
+          details: { primaryAgentId: item.primaryAgentId },
+        });
+      }
       return { item: presentItem(snapshot, item) };
     },
   },
@@ -226,7 +273,7 @@ export const itemTools: RegisteredTool[] = [
       ),
       name: 'workflow.items.move',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const note = optionalString(args.note);
@@ -281,6 +328,19 @@ export const itemTools: RegisteredTool[] = [
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'item.moved',
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        summary: `Moved "${item.title}" from ${previousStatus} to ${status}.`,
+        details: {
+          fromStatus: previousStatus,
+          toStatus: status,
+        },
+      });
       return { item: presentItem(snapshot, item) };
     },
   },
@@ -296,7 +356,7 @@ export const itemTools: RegisteredTool[] = [
       ),
       name: 'workflow.items.add_feedback',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const feedback = requireString(args.feedback, 'feedback');
@@ -307,6 +367,16 @@ export const itemTools: RegisteredTool[] = [
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'feedback.added',
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        summary: `Added feedback to "${item.title}".`,
+        details: { feedback },
+      });
       return { item: presentItem(snapshot, item) };
     },
   },

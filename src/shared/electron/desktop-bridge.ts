@@ -2,6 +2,11 @@
 
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import type {
+  AuditEvent,
+  AuditEventRow,
+  QueryAuditParams,
+} from '@/shared/audit-log';
+import type {
   AgentDefinition,
   AgentTranscriptPage,
   CreateAgentInput,
@@ -29,10 +34,12 @@ export interface DesktopBridge {
     projectName: string,
     projectRootPath?: string | null,
   ) => Promise<string>;
+  exportAuditCsv?: (params: QueryAuditParams) => Promise<string>;
   getProjectActivityPage?: (
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },
   ) => Promise<WorkflowProjectActivityPage>;
+  getAuditLog?: (params: QueryAuditParams) => Promise<{ rows: AuditEventRow[]; total: number }>;
   getAgentTranscriptPage?: (
     agentId: string,
     options?: { beforeMessageId?: string | null; limit?: number },
@@ -46,6 +53,7 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   openPath?: (targetPath: string) => Promise<void>;
   prepareProjectRootPath?: (rootPath: string, artifactFolderNames: string[]) => Promise<string>;
+  recordAuditEvent?: (event: AuditEvent) => Promise<void>;
   reloadExternalChannels?: () => Promise<void>;
   resetRuntime?: () => Promise<void>;
   restartApp?: () => Promise<void>;

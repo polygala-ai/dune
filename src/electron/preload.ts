@@ -26,8 +26,10 @@ const bridge: DesktopBridge = {
       projectName,
       projectRootPath,
     ),
+  exportAuditCsv: (params) => ipcRenderer.invoke(ipcChannels.exportAuditCsv, params),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
+  getAuditLog: (params) => ipcRenderer.invoke(ipcChannels.getAuditLog, params),
   getAgentTranscriptPage: (agentId, options) =>
     ipcRenderer.invoke(ipcChannels.getAgentTranscriptPage, agentId, options),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
@@ -39,6 +41,7 @@ const bridge: DesktopBridge = {
   openPath: (targetPath) => ipcRenderer.invoke(ipcChannels.openPath, targetPath),
   prepareProjectRootPath: (rootPath, artifactFolderNames) =>
     ipcRenderer.invoke(ipcChannels.prepareProjectRootPath, rootPath, artifactFolderNames),
+  recordAuditEvent: (event) => ipcRenderer.invoke(ipcChannels.recordAuditEvent, event),
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),

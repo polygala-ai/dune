@@ -10,7 +10,7 @@ export const networkProxyModes = ['direct', 'manual', 'system'] as const;
 export const workflowEventKinds = ['assignment', 'feedback', 'item', 'note', 'task'] as const;
 export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;
 export const workflowProjectFilters = ['all', 'assigned', 'blocked', 'review'] as const;
-export const workflowProjectViews = ['board', 'agents', 'activity'] as const;
+export const workflowProjectViews = ['board', 'agents', 'activity', 'audit-log'] as const;
 export const workflowTaskStatuses = ['todo', 'doing', 'blocked', 'review', 'done'] as const;
 
 /** Singleton row id used for app-level UI state tables. */

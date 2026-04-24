@@ -262,6 +262,11 @@ export function openProjectActivity(projectId?: string | null) {
   openProjectView('activity', projectId);
 }
 
+/** Opens project audit log. */
+export function openAuditLog(projectId?: string | null) {
+  openProjectView('audit-log', projectId);
+}
+
 /** Opens project settings. */
 export function openProjectSettings() {
   withNavigationChange(() => {
@@ -365,6 +370,7 @@ export function useAppCommands() {
     cycleAgent,
     goBack,
     goForward,
+    openAuditLog,
     openAgent,
     openAgents,
     openItem,

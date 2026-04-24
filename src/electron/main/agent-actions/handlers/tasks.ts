@@ -15,6 +15,11 @@ import { objectSchema, optionalStringSchema, stringSchema } from './schemas';
 import { assertAgentCanMutateTasks } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
 
+/** Returns the actor label for audit events emitted by agent actions. */
+function auditActor(agentContext: { agentId?: string; agentName?: string }) {
+  return agentContext.agentName || agentContext.agentId || 'user';
+}
+
 /** Lists task tools. */
 export const taskTools: RegisteredTool[] = [
   {
@@ -30,7 +35,7 @@ export const taskTools: RegisteredTool[] = [
       ),
       name: 'workflow.tasks.add',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const note = optionalString(args.note);
@@ -56,6 +61,16 @@ export const taskTools: RegisteredTool[] = [
       touchProject(snapshot, item.projectId, now);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'task.created',
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        summary: `Added task "${title}" to "${item.title}".`,
+        details: { taskId, taskTitle: title },
+      });
       return { taskId };
     },
   },
@@ -75,7 +90,7 @@ export const taskTools: RegisteredTool[] = [
       ),
       name: 'workflow.tasks.update',
     },
-    handler: async ({ agentContext, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const note = optionalString(args.note);
@@ -114,7 +129,74 @@ export const taskTools: RegisteredTool[] = [
       touchProject(snapshot, item.projectId, task.updatedAt);
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'task.updated',
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        summary: `Updated task "${task.title}" on "${item.title}".`,
+        details: {
+          status: task.status,
+          taskId: task.id,
+          taskTitle: task.title,
+        },
+      });
       return { task };
+    },
+  },
+  {
+    definition: {
+      description: 'Delete a task from a Dune work item.',
+      inputSchema: objectSchema(
+        {
+          itemId: stringSchema,
+          note: optionalStringSchema,
+          taskId: stringSchema,
+        },
+        ['itemId', 'taskId'],
+      ),
+      name: 'workflow.tasks.delete',
+    },
+    handler: async ({ agentContext, auditLog, onWorkflowChanged, workflowStore }, args) => {
+      const snapshot = await readWorkflowSnapshot(workflowStore);
+      const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
+      const note = optionalString(args.note);
+      const taskId = requireString(args.taskId, 'taskId');
+      const task = item.tasks.find((candidate) => candidate.id === taskId) ?? null;
+
+      assertAgentCanMutateTasks(agentContext.agentId, item);
+
+      if (!task) {
+        throw new ToolHandlerError('not-found', `Task ${taskId} not found.`);
+      }
+
+      const now = Date.now();
+
+      item.tasks = item.tasks.filter((candidate) => candidate.id !== taskId);
+      item.updatedAt = now;
+      prependWorkflowEvents(item, [
+        ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+        createWorkflowEvent('task', `Task "${task.title}" was deleted.`, now, agentContext.agentName),
+      ]);
+      touchProject(snapshot, item.projectId, now);
+
+      await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+      auditLog?.record({
+        actor: auditActor(agentContext),
+        actorType: 'agent',
+        eventType: 'task.deleted',
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        summary: `Deleted task "${task.title}" from "${item.title}".`,
+        details: {
+          taskId,
+          taskTitle: task.title,
+        },
+      });
+      return { taskId };
     },
   },
 ];
