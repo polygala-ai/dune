@@ -33,6 +33,7 @@ const bridge: DesktopBridge = {
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
+  getToolUsageSummary: () => ipcRenderer.invoke(ipcChannels.getToolUsageSummary),
   listProjectArtifactEntries: (rootPath, artifactFolderName) =>
     ipcRenderer.invoke(ipcChannels.listProjectArtifactEntries, rootPath, artifactFolderName),
   openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),

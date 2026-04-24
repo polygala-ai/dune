@@ -240,6 +240,16 @@ export function openPlugins() {
   });
 }
 
+/** Opens tool analytics. */
+export function openToolAnalytics() {
+  withNavigationChange(() => {
+    const state = useAppStore.getState();
+
+    state.setCommandOpen(false);
+    state.setRoute('analytics');
+  });
+}
+
 /** Opens workflow. */
 export function openWorkflow(projectId?: string | null) {
   openProjectView('board', projectId);
@@ -372,6 +382,7 @@ export function useAppCommands() {
     openProjectActivity,
     openProjectSettings,
     openSettings,
+    openToolAnalytics,
     openWorkflow,
     setCommandOpen,
     setDraft,

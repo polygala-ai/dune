@@ -74,7 +74,7 @@
     "vitest": "^4.1.1"
   },
   "dependencies": {
-    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#ee83e63",
+    "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#182f3bcdf7857344c55adcf3bac2e4e4b02ceccc",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -107,7 +107,7 @@
   "pnpm": {
     "overrides": {
       "better-sqlite3": "^12.8.0",
-      "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#ee83e63"
+      "@boxlite-ai/agentlite": "github:boxlite-ai/agentlite#182f3bcdf7857344c55adcf3bac2e4e4b02ceccc"
     }
   }
 }

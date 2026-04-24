@@ -117,6 +117,10 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
       withRuntime((runtimeController) => runtimeController.getTelegramSetupSession(sessionId)),
   );
   ipcMain.handle(
+    ipcChannels.getToolUsageSummary,
+    async () => withRuntime((runtimeController) => runtimeController.getToolUsageSummary()),
+  );
+  ipcMain.handle(
     ipcChannels.createAgent,
     async (_event, input: CreateAgentInput) =>
       withRuntime((runtimeController) => runtimeController.createAgent(input)),

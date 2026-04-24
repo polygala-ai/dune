@@ -51,6 +51,11 @@ function createHarness() {
     deleteAgent: vi.fn(async () => 'deleted'),
     ensureProjectMainAgent: vi.fn(async () => 'ensured'),
     getTelegramSetupSession: vi.fn(async () => 'session'),
+    getToolUsageSummary: vi.fn(async () => ({
+      generatedAt: '2026-04-25T00:00:00.000Z',
+      rows: [],
+      windowHours: 1,
+    })),
     getTranscriptPage: vi.fn(async () => 'transcript'),
     reloadExternalChannels: vi.fn(async () => 'reloaded'),
     reset: vi.fn(async () => 'reset'),
@@ -137,7 +142,7 @@ describe('registerMainIpcHandlers', () => {
   it('registers the full main-process handler surface', () => {
     const { handlers } = createHarness();
 
-    expect(handlers.size).toBe(30);
+    expect(handlers.size).toBe(31);
     expect([...handlers.keys()]).toEqual(expect.arrayContaining([
       ipcChannels.getRuntimeSnapshot,
       ipcChannels.getAgentTranscriptPage,
@@ -149,6 +154,7 @@ describe('registerMainIpcHandlers', () => {
       ipcChannels.openPath,
       ipcChannels.reloadExternalChannels,
       ipcChannels.getTelegramSetupSession,
+      ipcChannels.getToolUsageSummary,
       ipcChannels.createAgent,
       ipcChannels.deleteLocalData,
       ipcChannels.ensureProjectMainAgent,

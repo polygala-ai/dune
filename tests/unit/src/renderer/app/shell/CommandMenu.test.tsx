@@ -28,6 +28,7 @@ describe('CommandMenu', () => {
         onOpenBoard={vi.fn()}
         onOpenChange={vi.fn()}
         onOpenSettings={vi.fn()}
+        onOpenToolAnalytics={vi.fn()}
         onSelectAgent={vi.fn()}
         onSelectItem={vi.fn()}
         onSelectProject={vi.fn()}

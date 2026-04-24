@@ -5,6 +5,7 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
+import type { ToolUsageSummaryResult } from '@/shared/agents/tool-analytics';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
@@ -21,6 +22,7 @@ import {
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
+  getToolUsageSummary?: () => Promise<ToolUsageSummaryResult>;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -137,6 +139,15 @@ export class DesktopRuntimeController {
     options?: { beforeMessageId?: string | null; limit?: number },
   ) {
     return this.activeRuntime.service.getTranscriptPage(agentId, options);
+  }
+
+  /** Returns AgentLite tool usage analytics. */
+  async getToolUsageSummary() {
+    return this.activeRuntime.getToolUsageSummary?.() ?? {
+      generatedAt: new Date().toISOString(),
+      rows: [],
+      windowHours: 1,
+    };
   }
 
   /** Reloads external channels. */

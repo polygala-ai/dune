@@ -47,6 +47,7 @@ import { AgentWorkspace } from '@/renderer/app/workspaces/AgentWorkspace';
 import { SettingsWorkspace } from '@/renderer/app/workspaces/SettingsWorkspace';
 import { WorkflowWorkspace } from '@/renderer/app/workspaces/WorkflowWorkspace';
 import { PluginsWorkspace } from '@/renderer/app/workspaces/PluginsWorkspace';
+import { ToolAnalyticsWorkspace } from '@/renderer/app/workspaces/ToolAnalyticsWorkspace';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -213,6 +214,10 @@ export default function AppShell() {
       onCreateProject: () => {
         controller.handleSidebarDrawerOpenChange(false);
         setCreateProjectOpen(true);
+      },
+      onOpenAnalytics: () => {
+        controller.handleSidebarDrawerOpenChange(false);
+        commands.openToolAnalytics();
       },
       onOpenPlugins: () => {
         controller.handleSidebarDrawerOpenChange(false);
@@ -535,6 +540,13 @@ export default function AppShell() {
                 onToggleSidebar={controller.handleToggleSidebar}
                 showCompactSidebarToggle={showCompactSidebarToggle}
               />
+            ) : route === 'analytics' ? (
+              <ToolAnalyticsWorkspace
+                isCompactShell={isCompactShell}
+                isSidebarOpen={controller.isSidebarDrawerOpen}
+                onToggleSidebar={controller.handleToggleSidebar}
+                showCompactSidebarToggle={showCompactSidebarToggle}
+              />
             ) : (
               <SettingsWorkspace
                 agents={agents}
@@ -594,6 +606,7 @@ export default function AppShell() {
           onOpenChange={commands.setCommandOpen}
           onOpenBoard={commands.openWorkflow}
           onOpenSettings={controller.handleOpenSettings}
+          onOpenToolAnalytics={commands.openToolAnalytics}
           onSelectAgent={controller.handleSelectAgent}
           onSelectItem={commands.openItem}
           onSelectProject={(projectId) => {
