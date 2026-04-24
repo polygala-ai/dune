@@ -142,6 +142,23 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     async (_event, agentId: string) =>
       withRuntime((runtimeController) => runtimeController.selectAgent(agentId)),
   );
+  ipcMain.handle(ipcChannels.getBudget, async (_event, agentId: string) => {
+    try {
+      return await withRuntime((runtimeController) => runtimeController.getBudget(agentId));
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle(
+    ipcChannels.setBudget,
+    async (_event, agentId: string, config: Record<string, unknown>) =>
+      withRuntime((runtimeController) => runtimeController.setBudget(agentId, config)),
+  );
+  ipcMain.handle(
+    ipcChannels.resumeBudget,
+    async (_event, agentId: string) =>
+      withRuntime((runtimeController) => runtimeController.resumeBudget(agentId)),
+  );
   ipcMain.handle(
     ipcChannels.updateAgentChannel,
     async (_event, input) =>

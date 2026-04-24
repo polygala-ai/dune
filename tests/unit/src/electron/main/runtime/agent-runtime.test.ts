@@ -104,7 +104,7 @@ interface MockAgent {
   addChannel: ReturnType<typeof vi.fn>;
   channelDrivers: Map<string, ChannelDriver>;
   getGroup: ReturnType<typeof vi.fn>;
-  getTask: ReturnType<typeof vi.fn>;
+  getTask: (taskId: string) => { status: string } | undefined;
   name: string;
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
