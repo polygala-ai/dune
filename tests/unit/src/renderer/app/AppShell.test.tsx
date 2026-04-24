@@ -1234,9 +1234,9 @@ describe('AppShell', () => {
 
     expect(await screen.findByTestId('workflow-board')).toBeInTheDocument();
     expect(screen.getByText('Homepage copy rewrite')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^New project$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^New project$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /^New project$/i }));
+    await user.click(within(screen.getByTestId('app-sidebar')).getByRole('button', { name: /Create project/ }));
     expect(screen.queryByText('Accent')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Project name'), 'Studio Ops');
     await user.type(
