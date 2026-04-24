@@ -1,23 +1,42 @@
-// Search index tests.
-
 import { describe, expect, it } from 'vitest';
 
 import type { Agent } from '@/renderer/features/agents/types';
-import { createDefaultWorkItemFilters, filterWorkflowItems, SearchIndex } from '@/renderer/utils/SearchIndex';
 import type {
   WorkflowItem,
   WorkflowItemStatus,
+  WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
+import {
+  filterWorkflowItems,
+  SearchIndex,
+  unassignedAgentFilterId,
+  type WorkItemFilters,
+} from '@/renderer/utils/SearchIndex';
 
-const baseTime = new Date('2026-04-20T12:00:00Z').getTime();
+const baseFilters: WorkItemFilters = {
+  agentIds: [],
+  dateFrom: '',
+  dateTo: '',
+  reviewer: 'all',
+  statuses: [],
+};
 
 const agents = [
-  { id: 'agent-1', name: 'Dune Repo Lead' },
-  { id: 'agent-2', name: 'Other Agent' },
+  { id: 'agent-dune', name: 'Dune Repo Lead' },
+  { id: 'agent-review', name: 'Code Reviewer' },
 ] as Agent[];
 
-function item(input: Partial<WorkflowItem> & Pick<WorkflowItem, 'id' | 'title'>): WorkflowItem {
-  const status: WorkflowItemStatus = input.status ?? 'ready';
+function createItem(input: {
+  brief?: string;
+  createdAt?: number;
+  id: string;
+  primaryAgentId?: string | null;
+  status?: WorkflowItemStatus;
+  taskStatus?: WorkflowTaskStatus;
+  title: string;
+  workProductBody?: string;
+}): WorkflowItem {
+  const createdAt = input.createdAt ?? Date.parse('2026-04-20T12:00:00Z');
 
   return {
     activity: {
@@ -26,116 +45,144 @@ function item(input: Partial<WorkflowItem> & Pick<WorkflowItem, 'id' | 'title'>)
       rollingSummary: null,
       totalEventCount: 0,
     },
-    artifactFolderName: `${input.id}-artifacts`,
+    artifactFolderName: input.id,
     brief: input.brief ?? '',
-    createdAt: input.createdAt ?? baseTime,
+    createdAt,
     id: input.id,
     primaryAgentId: input.primaryAgentId ?? null,
-    projectId: input.projectId ?? 'project-1',
+    projectId: 'project-1',
     scheduledTaskId: null,
     sortOrder: 0,
-    status,
-    tasks: input.tasks ?? [],
+    status: input.status ?? 'inbox',
+    tasks: input.taskStatus
+      ? [{
+          createdAt,
+          id: `${input.id}-task`,
+          notes: '',
+          status: input.taskStatus,
+          title: 'Review implementation',
+          updatedAt: createdAt,
+        }]
+      : [],
     title: input.title,
-    updatedAt: input.updatedAt ?? baseTime,
-    workProducts: input.workProducts ?? [],
-    workflowEvents: input.workflowEvents ?? [],
+    updatedAt: createdAt,
+    workProducts: input.workProductBody
+      ? [{
+          body: input.workProductBody,
+          createdAt,
+          id: `${input.id}-work-product`,
+          title: 'Implementation notes',
+        }]
+      : [],
+    workflowEvents: [],
   };
 }
 
 describe('SearchIndex', () => {
-  it('searches titles, briefs, and work product bodies with snippets', () => {
-    const index = new SearchIndex([
-      item({
-        brief: 'No relevant prose here.',
+  it('searches titles, briefs, and work product content with result metadata', () => {
+    const items = [
+      createItem({
         id: 'item-1',
-        title: 'Landing page polish',
+        primaryAgentId: 'agent-dune',
+        status: 'active',
+        title: 'Ship notifications',
+        workProductBody: 'The webhook transport handles retry backoff.',
       }),
-      item({
-        brief: 'Summarize rollout risks.',
+      createItem({
+        brief: 'Improve project setup',
         id: 'item-2',
-        title: 'Release report',
-        workProducts: [
-          {
-            body: 'The audit log migration requires a manual checkpoint before release.',
-            createdAt: baseTime,
-            id: 'product-1',
-            title: 'Review notes',
-          },
-        ],
+        title: 'Project templates',
       }),
-    ], agents);
+    ];
 
-    const results = index.search('manual checkpoint');
+    const results = new SearchIndex(items, agents).search('retry backoff', baseFilters);
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.id).toBe('item-2');
-    expect(results[0]?.snippet).toContain('manual checkpoint');
+    expect(results[0]).toMatchObject({
+      assignee: 'Dune Repo Lead',
+      id: 'item-1',
+      status: 'active',
+      statusLabel: 'Active',
+      title: 'Ship notifications',
+    });
+    expect(results[0]?.snippet).toContain('retry backoff');
   });
 
-  it('combines text search with status, assignee, reviewer, and date filters', () => {
-    const index = new SearchIndex([
-      item({
-        brief: 'Review the command palette implementation.',
-        createdAt: new Date('2026-04-19T12:00:00Z').getTime(),
-        id: 'item-1',
-        primaryAgentId: 'agent-1',
+  it('combines status, agent, date, and reviewer filters', () => {
+    const items = [
+      createItem({
+        createdAt: Date.parse('2026-04-19T10:00:00Z'),
+        id: 'matching',
+        primaryAgentId: 'agent-dune',
         status: 'review',
-        title: 'Search and filter',
-        tasks: [
-          {
-            createdAt: baseTime,
-            id: 'task-1',
-            notes: '',
-            status: 'review',
-            title: 'Reviewer pass',
-            updatedAt: baseTime,
-          },
-        ],
+        title: 'Search filters',
+        workProductBody: 'Palette search implementation details.',
       }),
-      item({
-        brief: 'Review the unrelated dashboard.',
-        createdAt: new Date('2026-04-23T12:00:00Z').getTime(),
-        id: 'item-2',
-        primaryAgentId: 'agent-2',
+      createItem({
+        createdAt: Date.parse('2026-04-19T10:00:00Z'),
+        id: 'wrong-agent',
+        primaryAgentId: 'agent-review',
         status: 'review',
-        title: 'Dashboard cleanup',
+        title: 'Search filters',
+        workProductBody: 'Palette search implementation details.',
       }),
-    ], agents);
+      createItem({
+        createdAt: Date.parse('2026-04-22T10:00:00Z'),
+        id: 'wrong-date',
+        primaryAgentId: 'agent-dune',
+        status: 'review',
+        title: 'Search filters',
+        workProductBody: 'Palette search implementation details.',
+      }),
+      createItem({
+        createdAt: Date.parse('2026-04-19T10:00:00Z'),
+        id: 'wrong-status',
+        primaryAgentId: 'agent-dune',
+        status: 'active',
+        title: 'Search filters',
+        workProductBody: 'Palette search implementation details.',
+      }),
+    ];
 
-    const results = index.search('review', {
-      ...createDefaultWorkItemFilters(),
-      agentIds: ['agent-1'],
+    const results = new SearchIndex(items, agents).search('palette', {
+      ...baseFilters,
+      agentIds: ['agent-dune'],
       dateFrom: '2026-04-18',
       dateTo: '2026-04-20',
       reviewer: 'has',
       statuses: ['review'],
     });
 
-    expect(results.map((result) => result.id)).toEqual(['item-1']);
+    expect(results.map((result) => result.id)).toEqual(['matching']);
   });
 
-  it('returns filtered items when no query is entered', () => {
-    const first = item({
-      id: 'item-1',
-      primaryAgentId: 'agent-1',
-      status: 'active',
-      title: 'Active item',
-    });
-    const hidden = item({
-      id: 'item-2',
-      primaryAgentId: 'agent-2',
-      status: 'done',
-      title: 'Done item',
-    });
-    const filters = {
-      ...createDefaultWorkItemFilters(),
-      agentIds: ['agent-1'],
-      statuses: ['active' as const],
-    };
-    const index = new SearchIndex([first, hidden], agents);
+  it('filters unassigned items and items without reviewer signal', () => {
+    const items = [
+      createItem({
+        id: 'unassigned-ready',
+        status: 'ready',
+        title: 'Ready without reviewer',
+      }),
+      createItem({
+        id: 'assigned-ready',
+        primaryAgentId: 'agent-dune',
+        status: 'ready',
+        title: 'Assigned without reviewer',
+      }),
+      createItem({
+        id: 'unassigned-task-review',
+        status: 'active',
+        taskStatus: 'review',
+        title: 'Task-level review',
+      }),
+    ];
 
-    expect(filterWorkflowItems([first, hidden], filters).map((result) => result.id)).toEqual(['item-1']);
-    expect(index.search('', filters).map((result) => result.id)).toEqual(['item-1']);
+    const results = filterWorkflowItems(items, {
+      ...baseFilters,
+      agentIds: [unassignedAgentFilterId],
+      reviewer: 'none',
+    });
+
+    expect(results.map((item) => item.id)).toEqual(['unassigned-ready']);
   });
 });
