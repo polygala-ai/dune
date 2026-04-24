@@ -35,6 +35,7 @@ import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
 import { CommandPalette } from '@/renderer/components/CommandPalette';
+import { createDefaultWorkItemFilters } from '@/renderer/utils/SearchIndex';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
   useAgentSession,
@@ -71,6 +72,7 @@ export default function AppShell() {
   const [isCreateWorkItemOpen, setCreateWorkItemOpen] = useState(false);
   const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
   const [loadingTranscriptAgentId, setLoadingTranscriptAgentId] = useState<string | null>(null);
+  const [workItemFilters, setWorkItemFilters] = useState(createDefaultWorkItemFilters);
   const { composerRef, focusComposer } = useComposerFocus();
   const { isMac } = useDesktopPlatform();
   const commands = useAppCommands();
@@ -515,9 +517,11 @@ export default function AppShell() {
               />
             ) : route === 'workflow' ? (
               <WorkflowWorkspace
+                filters={workItemFilters}
                 isCompactShell={isCompactShell}
                 isCreateProjectOpen={isCreateProjectOpen}
                 isCreateWorkItemOpen={isCreateWorkItemOpen}
+                onFiltersChange={setWorkItemFilters}
                 isSidebarOpen={controller.isSidebarDrawerOpen}
                 onCreateProjectOpenChange={setCreateProjectOpen}
                 onCreateWorkItemOpenChange={setCreateWorkItemOpen}
@@ -579,6 +583,7 @@ export default function AppShell() {
 
         <CommandPalette
           agents={agents}
+          filters={workItemFilters}
           items={items}
           onOpenChange={commands.setCommandOpen}
           onSelectItem={(itemId, projectId) => {

@@ -106,11 +106,11 @@ function matchesFilters(item: WorkflowItem, filters: WorkItemFilters) {
   const fromTimestamp = getDateTimestamp(filters.dateFrom, false);
   const toTimestamp = getDateTimestamp(filters.dateTo, true);
 
-  if (fromTimestamp !== null && item.updatedAt < fromTimestamp) {
+  if (fromTimestamp !== null && item.createdAt < fromTimestamp) {
     return false;
   }
 
-  if (toTimestamp !== null && item.updatedAt > toTimestamp) {
+  if (toTimestamp !== null && item.createdAt > toTimestamp) {
     return false;
   }
 

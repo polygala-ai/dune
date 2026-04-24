@@ -14,6 +14,7 @@ import {
   createDefaultWorkItemFilters,
   SearchIndex,
   type WorkItemSearchResult,
+  type WorkItemFilters,
 } from '@/renderer/utils/SearchIndex';
 import type { Agent } from '@/renderer/features/agents/types';
 import type { WorkflowItem } from '@/renderer/features/workflow/types';
@@ -29,18 +30,55 @@ import { cn } from '@/renderer/shared/lib/utils';
 /** Command palette props. */
 interface CommandPaletteProps {
   agents: Agent[];
+  filters?: WorkItemFilters;
   items: WorkflowItem[];
   onOpenChange: (open: boolean) => void;
   onSelectItem: (itemId: string, projectId: string) => void;
   open: boolean;
 }
 
+function HighlightedSnippet({
+  query,
+  snippet,
+}: {
+  query: string;
+  snippet: string;
+}) {
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    return <>{snippet}</>;
+  }
+
+  const matchIndex = snippet.toLocaleLowerCase().indexOf(trimmedQuery.toLocaleLowerCase());
+
+  if (matchIndex === -1) {
+    return <>{snippet}</>;
+  }
+
+  const before = snippet.slice(0, matchIndex);
+  const match = snippet.slice(matchIndex, matchIndex + trimmedQuery.length);
+  const after = snippet.slice(matchIndex + trimmedQuery.length);
+
+  return (
+    <>
+      {before}
+      <mark className="rounded bg-app-accent-soft px-0.5 text-app-text">
+        {match}
+      </mark>
+      {after}
+    </>
+  );
+}
+
 function ResultRow({
   active,
+  query,
   result,
   onSelect,
 }: {
   active: boolean;
+  query: string;
   result: WorkItemSearchResult;
   onSelect: () => void;
 }) {
@@ -58,7 +96,7 @@ function ResultRow({
           {result.title}
         </span>
         <span className="mt-1 block line-clamp-2 text-xs leading-5 text-app-muted">
-          {result.snippet}
+          <HighlightedSnippet query={query} snippet={result.snippet} />
         </span>
       </span>
       <span className="flex min-w-[132px] flex-col items-end gap-1 text-right">
@@ -76,6 +114,7 @@ function ResultRow({
 /** Renders a global work item search palette. */
 export function CommandPalette({
   agents,
+  filters = createDefaultWorkItemFilters(),
   items,
   onOpenChange,
   onSelectItem,
@@ -85,8 +124,8 @@ export function CommandPalette({
   const [activeIndex, setActiveIndex] = useState(0);
   const index = useMemo(() => new SearchIndex(items, agents), [agents, items]);
   const results = useMemo(
-    () => index.search(query, createDefaultWorkItemFilters()).slice(0, 12),
-    [index, query],
+    () => index.search(query, filters).slice(0, 12),
+    [filters, index, query],
   );
 
   useEffect(() => {
@@ -160,6 +199,7 @@ export function CommandPalette({
                     active={index === activeIndex}
                     key={result.id}
                     onSelect={() => selectResult(result)}
+                    query={query}
                     result={result}
                   />
                 ))}

@@ -12,8 +12,8 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { FilterPanel } from '@/renderer/components/FilterPanel';
 import {
-  createDefaultWorkItemFilters,
   filterWorkflowItems,
+  type WorkItemFilters,
 } from '@/renderer/utils/SearchIndex';
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
@@ -48,12 +48,14 @@ const projectHeaderTabs = [
 
 /** Workflow workspace props. */
 interface WorkflowWorkspaceProps {
+  filters: WorkItemFilters;
   isCompactShell: boolean;
   isCreateProjectOpen: boolean;
   isCreateWorkItemOpen: boolean;
   isSidebarOpen: boolean;
   onCreateProjectOpenChange: (open: boolean) => void;
   onCreateWorkItemOpenChange: (open: boolean) => void;
+  onFiltersChange: (filters: WorkItemFilters) => void;
   onOpenCreateAgent: () => void;
   onToggleSidebar: () => void;
   runtimeInfo: AgentRuntimeInfo;
@@ -64,12 +66,14 @@ interface WorkflowWorkspaceProps {
 
 /** Renders the workflow workspace UI. */
 export function WorkflowWorkspace({
+  filters,
   isCompactShell,
   isCreateProjectOpen,
   isCreateWorkItemOpen,
   isSidebarOpen,
   onCreateProjectOpenChange,
   onCreateWorkItemOpenChange,
+  onFiltersChange,
   onOpenCreateAgent,
   onToggleSidebar,
   runtimeInfo,
@@ -78,7 +82,6 @@ export function WorkflowWorkspace({
   showTitlebarProjectActions,
 }: WorkflowWorkspaceProps) {
   const commands = useAppCommands();
-  const [filters, setFilters] = useState(createDefaultWorkItemFilters);
   const [isFilterPanelOpen, setFilterPanelOpen] = useState(false);
   const [isDeleteProjectOpen, setDeleteProjectOpen] = useState(false);
   const [cachedActivityEntriesByProjectId, setCachedActivityEntriesByProjectId] = useState<Record<string, Array<
@@ -147,9 +150,13 @@ export function WorkflowWorkspace({
     ...activitySummary,
     hasOlderEntries: mergedActivityEntries.length < activitySummary.totalEntryCount,
   };
+  const projectItems = useMemo(
+    () => items.filter((item) => item.projectId === selectedProjectId),
+    [items, selectedProjectId],
+  );
   const filteredItemIds = useMemo(
-    () => new Set(filterWorkflowItems(items, filters).map((item) => item.id)),
-    [filters, items],
+    () => new Set(filterWorkflowItems(projectItems, filters).map((item) => item.id)),
+    [filters, projectItems],
   );
   const boardItemSummaries = filteredItemSummaries.filter((item) => filteredItemIds.has(item.id));
   const filterPanel = (
@@ -161,9 +168,9 @@ export function WorkflowWorkspace({
       filters={filters}
       isOpen={isFilterPanelOpen}
       matchCount={boardItemSummaries.length}
-      onChange={setFilters}
+      onChange={onFiltersChange}
       onToggleOpen={() => setFilterPanelOpen((open) => !open)}
-      totalCount={items.length}
+      totalCount={projectItems.length}
     />
   );
 

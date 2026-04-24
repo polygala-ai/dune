@@ -198,11 +198,11 @@ export function FilterPanel({
 
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-              Updated
+              Created
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Input
-                aria-label="Updated from"
+                aria-label="Created from"
                 onChange={(event) => {
                   onChange({
                     ...filters,
@@ -213,7 +213,7 @@ export function FilterPanel({
                 value={filters.dateFrom}
               />
               <Input
-                aria-label="Updated to"
+                aria-label="Created to"
                 onChange={(event) => {
                   onChange({
                     ...filters,
