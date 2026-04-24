@@ -585,6 +585,7 @@ export default function AppShell() {
           agents={agents}
           filters={workItemFilters}
           items={items}
+          onFiltersChange={setWorkItemFilters}
           onOpenChange={commands.setCommandOpen}
           onSelectItem={(itemId, projectId) => {
             commands.openWorkflow(projectId);
