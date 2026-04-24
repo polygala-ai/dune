@@ -25,6 +25,8 @@ import {
 import {
   modelProviders,
   networkSettings,
+  appState,
+  projectSettings,
   secretEntries,
 } from './settings';
 import {
@@ -47,9 +49,11 @@ export const duneSchema = {
   agents,
   agentTranscriptArchives,
   agentUiState,
+  appState,
   codingEngines,
   modelProviders,
   networkSettings,
+  projectSettings,
   runtimeState,
   secretEntries,
   telegramSetupSessions,

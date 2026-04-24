@@ -39,6 +39,14 @@ const bridge: DesktopBridge = {
   openPath: (targetPath) => ipcRenderer.invoke(ipcChannels.openPath, targetPath),
   prepareProjectRootPath: (rootPath, artifactFolderNames) =>
     ipcRenderer.invoke(ipcChannels.prepareProjectRootPath, rootPath, artifactFolderNames),
+  projectsArchive: (projectId) => ipcRenderer.invoke(ipcChannels.projectsArchive, projectId),
+  projectsCreate: (input) => ipcRenderer.invoke(ipcChannels.projectsCreate, input),
+  projectsDelete: (projectId) => ipcRenderer.invoke(ipcChannels.projectsDelete, projectId),
+  projectsGetSettings: (projectId) => ipcRenderer.invoke(ipcChannels.projectsGetSettings, projectId),
+  projectsList: () => ipcRenderer.invoke(ipcChannels.projectsList),
+  projectsSwitch: (projectId) => ipcRenderer.invoke(ipcChannels.projectsSwitch, projectId),
+  projectsUpdateSettings: (projectId, patch) =>
+    ipcRenderer.invoke(ipcChannels.projectsUpdateSettings, projectId, patch),
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),

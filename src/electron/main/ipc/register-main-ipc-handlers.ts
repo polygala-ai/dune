@@ -10,6 +10,7 @@ import {
 import type { OpenDialogOptions } from 'electron';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import type { ProjectRegistry } from '@/electron/main/project-registry';
 import type { AppStorage } from '@/electron/main/storage';
 import {
   assertEmptyProjectRootDirectory,
@@ -56,6 +57,7 @@ interface RegisterMainIpcHandlersOptions {
     options?: { beforeEntryId?: string | null; limit?: number },
   ) => Promise<unknown>;
   getRuntimeController: () => DesktopRuntimeController | null;
+  projectRegistry?: ProjectRegistry;
   ipcMain?: IpcMainLike;
   requireRuntimeController: () => DesktopRuntimeController;
   resolveStore: (name: string) => AppStorage;
@@ -183,6 +185,38 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     async (_event, rootPath: string, artifactFolderNames: string[]) =>
       prepareProjectRootPath(rootPath, artifactFolderNames),
   );
+  if (options.projectRegistry) {
+    ipcMain.handle(
+      ipcChannels.projectsList,
+      async () => options.projectRegistry!.listProjects(),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsCreate,
+      async (_event, input: { description?: string; name: string }) =>
+        options.projectRegistry!.createProject(input.name, input.description ?? ''),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsSwitch,
+      async (_event, projectId: string) => options.projectRegistry!.switchProject(projectId),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsArchive,
+      async (_event, projectId: string) => options.projectRegistry!.archiveProject(projectId),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsDelete,
+      async (_event, projectId: string) => options.projectRegistry!.deleteProject(projectId),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsGetSettings,
+      async (_event, projectId: string) => options.projectRegistry!.getProjectSettings(projectId),
+    );
+    ipcMain.handle(
+      ipcChannels.projectsUpdateSettings,
+      async (_event, projectId: string, patch) =>
+        options.projectRegistry!.updateProjectSettings(projectId, patch),
+    );
+  }
   ipcMain.handle(
     ipcChannels.listProjectArtifactEntries,
     async (_event, rootPath: string, artifactFolderName: string) =>

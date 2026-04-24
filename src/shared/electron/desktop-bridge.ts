@@ -13,6 +13,7 @@ import type {
 } from '@/renderer/features/agents/types';
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
+import type { ProjectDescriptor, ProjectSettings, ProjectSettingsPatch } from '@/shared/electron/ipc-types';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
@@ -46,6 +47,13 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   openPath?: (targetPath: string) => Promise<void>;
   prepareProjectRootPath?: (rootPath: string, artifactFolderNames: string[]) => Promise<string>;
+  projectsArchive?: (projectId: string) => Promise<void>;
+  projectsCreate?: (input: { description?: string; name: string }) => Promise<ProjectDescriptor>;
+  projectsDelete?: (projectId: string) => Promise<void>;
+  projectsGetSettings?: (projectId: string) => Promise<ProjectSettings>;
+  projectsList?: () => Promise<ProjectDescriptor[]>;
+  projectsSwitch?: (projectId: string) => Promise<void>;
+  projectsUpdateSettings?: (projectId: string, patch: ProjectSettingsPatch) => Promise<ProjectSettings>;
   reloadExternalChannels?: () => Promise<void>;
   resetRuntime?: () => Promise<void>;
   restartApp?: () => Promise<void>;
