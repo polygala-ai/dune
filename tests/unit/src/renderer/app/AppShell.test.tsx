@@ -305,7 +305,7 @@ describe('AppShell', () => {
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     const commandDialog = screen.getByRole('dialog');
     expect(
-      screen.getByPlaceholderText('Jump to a project, work item, agent, or action…'),
+      screen.getByPlaceholderText('Search titles, briefs, and work products…'),
     ).toBeInTheDocument();
     expect(within(commandDialog).getByText('New project', { exact: true })).toBeInTheDocument();
     expect(

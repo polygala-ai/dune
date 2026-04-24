@@ -61,7 +61,7 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
 
     await dispatchPrimaryShortcut(page, 'k');
     await expect(
-      page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
+      page.getByPlaceholder('Search titles, briefs, and work products…'),
     ).toBeVisible();
     await page.getByText('New agent', { exact: true }).click();
     await expect(page.getByRole('button', { name: /Channel: Dune chat/i })).toBeVisible();
@@ -193,7 +193,7 @@ test('launches the built app, creates an agent, reflows responsively, and keeps 
     await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
     await dispatchPrimaryShortcut(page, 'k');
     await expect(
-      page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
+      page.getByPlaceholder('Search titles, briefs, and work products…'),
     ).toBeVisible();
   } finally {
     await closeElectronApp(app);
