@@ -307,7 +307,6 @@ describe('AppShell', () => {
     expect(
       screen.getByPlaceholderText('Search titles, briefs, and work products…'),
     ).toBeInTheDocument();
-    expect(within(commandDialog).getByText('New project', { exact: true })).toBeInTheDocument();
     expect(
       within(commandDialog).getAllByText('Research Platform', { exact: true }).length,
     ).toBeGreaterThan(0);
@@ -1237,10 +1236,7 @@ describe('AppShell', () => {
     expect(screen.getByText('Homepage copy rewrite')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^New project$/i })).not.toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: 'k', metaKey: true });
-    await user.click(
-      within(screen.getByRole('dialog')).getByText('New project', { exact: true }),
-    );
+    await user.click(screen.getByRole('button', { name: /^New project$/i }));
     expect(screen.queryByText('Accent')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Project name'), 'Studio Ops');
     await user.type(
