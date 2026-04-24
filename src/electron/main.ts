@@ -46,6 +46,7 @@ import { loadNetworkSettings } from '@/renderer/features/settings/model/network-
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
+import { startPRReviewer } from '@/electron/main/pr-reviewer';
 import { isPlainObject } from '@/shared/is-record';
 import type {
   WorkflowEvent as StoredWorkflowEvent,
@@ -85,10 +86,16 @@ let runtimeController: DesktopRuntimeController | null = null;
 let nudgeScheduled = false;
 let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let taskSweepIntervalHandle: ReturnType<typeof setInterval> | null = null;
+let stopPRReviewer: (() => void) | null = null;
 let powerBlockerId: number | null = null;
 let telegramReconnectPromise: Promise<void> | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 const TASK_SWEEP_INTERVAL_MS = 120_000;
+const PR_REVIEWER_POLL_INTERVAL_MS = 5 * 60_000;
+const PR_REVIEW_REPO_CONFIGS = [
+  { owner: 'polygala-ai', repo: 'dune', reviewerAgentId: 'Mg_8MMfk' },
+  { owner: 'boxlite-ai', repo: 'agentlite', reviewerAgentId: 'IaAuvT2t' },
+];
 
 /** Returns whether Telegram polling or setup observers should stay alive. */
 function hasActiveTelegramChannels(snapshot: AgentServiceSnapshot) {
@@ -291,6 +298,10 @@ const quitCoordinator = createQuitCoordinator({
     if (taskSweepIntervalHandle) {
       clearInterval(taskSweepIntervalHandle);
       taskSweepIntervalHandle = null;
+    }
+    if (stopPRReviewer) {
+      stopPRReviewer();
+      stopPRReviewer = null;
     }
     stopPowerBlocker();
     await runtimeController?.shutdown();
@@ -843,6 +854,28 @@ void app.whenReady().then(async () => {
         void sweepItemAssignmentTasks();
       }, TASK_SWEEP_INTERVAL_MS);
       void sweepItemAssignmentTasks();
+
+      if (process.env.GITHUB_TOKEN) {
+        stopPRReviewer = startPRReviewer(
+          {
+            githubToken: process.env.GITHUB_TOKEN,
+            pollIntervalMs: PR_REVIEWER_POLL_INTERVAL_MS,
+            repos: PR_REVIEW_REPO_CONFIGS,
+            stateFilePath: path.join(userDataDir, 'pr-reviewer-state.json'),
+          },
+          {
+            getRuntimeController: requireRuntimeController,
+            onWorkflowChanged: () => {
+              for (const window of BrowserWindow.getAllWindows()) {
+                window.webContents.send(ipcChannels.workflowChanged);
+              }
+            },
+            workflowStore,
+          },
+        );
+      } else {
+        console.info('Automated PR reviewer poller disabled: GITHUB_TOKEN is not set.');
+      }
     }).catch((error) => {
       console.error('Failed to bootstrap the Dune runtime.', error);
       throw error;
