@@ -40,7 +40,7 @@ interface WorkflowItemInspectorProps {
   onAssignPrimaryAgent: (itemId: string, input: { agentId: string | null; agentName?: string | null }) => void;
   onCreateAgent: (itemId: string) => void;
   onOpenAgent: (agentId: string) => void;
-  onUpdateItem: (itemId: string, input: { brief?: string; title?: string }) => void;
+  onUpdateItem: (itemId: string, input: { brief?: string; priority?: WorkflowItem['priority']; slaDeadlineMs?: number | null; title?: string }) => void;
   onUpdateItemStatus: (itemId: string, status: WorkflowItemStatus) => void;
   onUpdateTask: (
     itemId: string,
@@ -107,6 +107,17 @@ function formatArtifactSize(size: number | null) {
   }
 
   return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+/** Formats a datetime-local input value. */
+function formatDatetimeLocal(timestamp: number | undefined) {
+  if (!timestamp) {
+    return '';
+  }
+
+  const date = new Date(timestamp);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 /** Renders the workflow item inspector UI. */
@@ -359,6 +370,54 @@ export function WorkflowItemInspector({
                       ? `${item.primaryAgentName} is working this item.`
                       : 'Assign an owner when the work is ready.'}
                   </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[20px] border border-app-border bg-app-panel/60 p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                    htmlFor={`workflow-priority-${item.id}`}
+                  >
+                    Priority
+                  </label>
+                  <select
+                    className="focus-ring-app mt-3 h-10 w-full rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+                    id={`workflow-priority-${item.id}`}
+                    onChange={(event) =>
+                      onUpdateItem(item.id, {
+                        priority: event.target.value as WorkflowItem['priority'],
+                      })
+                    }
+                    value={item.priority}
+                  >
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted"
+                    htmlFor={`workflow-sla-${item.id}`}
+                  >
+                    SLA deadline
+                  </label>
+                  <input
+                    className="focus-ring-app mt-3 h-10 w-full rounded-[14px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+                    id={`workflow-sla-${item.id}`}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      onUpdateItem(item.id, {
+                        slaDeadlineMs: value ? new Date(value).getTime() : null,
+                      });
+                    }}
+                    type="datetime-local"
+                    value={formatDatetimeLocal(item.slaDeadlineMs)}
+                  />
                 </div>
               </div>
             </div>

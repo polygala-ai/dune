@@ -18,6 +18,7 @@ function createSnapshot(status: string = 'active'): WorkflowSnapshot {
         createdAt: 1,
         id: 'item-1',
         primaryAgentId: 'agent-1',
+        priority: 'medium',
         projectId: 'project-1',
         scheduledTaskId: null,
         sortOrder: 0,
@@ -123,6 +124,37 @@ describe('mutation notes', () => {
     item = services.getSnapshot().items[0]!;
     expect(item.workflowEvents[0]?.description).toBe('Sending this back for another implementation pass.');
     expect(item.workflowEvents[1]?.description).toBe('Work item moved to active.');
+  });
+
+  it('persists priority and SLA updates with activity history', async () => {
+    const services = createServices(createSnapshot('active'));
+    const updateHandler = itemTools.find((tool) => tool.definition.name === 'workflow.items.update')!.handler;
+    const deadline = Date.now() + 86_400_000;
+
+    await updateHandler(services, {
+      itemId: 'item-1',
+      priority: 'critical',
+      slaDeadlineMs: deadline,
+    });
+
+    let item = services.getSnapshot().items[0]!;
+    expect(item.priority).toBe('critical');
+    expect(item.slaDeadlineMs).toBe(deadline);
+    expect(item.workflowEvents.map((event) => event.description)).toContain(
+      'Priority changed from medium to critical.',
+    );
+    expect(item.workflowEvents.map((event) => event.description)).toContain(
+      `SLA deadline set to ${new Date(deadline).toISOString()}.`,
+    );
+
+    await updateHandler(services, {
+      itemId: 'item-1',
+      slaDeadlineMs: null,
+    });
+
+    item = services.getSnapshot().items[0]!;
+    expect(item.slaDeadlineMs).toBeUndefined();
+    expect(item.workflowEvents[0]?.description).toBe('SLA deadline cleared.');
   });
 
   it('records notes for task updates', async () => {

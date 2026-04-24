@@ -27,6 +27,10 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
+import {
+  normalizeItemPriority,
+  normalizeSlaDeadlineMs,
+} from '@/shared/workflow/priority-sla';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -490,6 +494,7 @@ export function createWorkflowSlice(
             createdAt: updatedAt,
             id: itemId,
             primaryAgentId: null,
+            priority: 'medium',
             projectId: input.projectId,
             scheduledTaskId: null,
             sortOrder: getProjectItems(
@@ -794,14 +799,50 @@ export function createWorkflowSlice(
 
                 const title = input.title?.trim();
                 const brief = input.brief?.trim();
+                const nextPriority =
+                  input.priority === undefined
+                    ? item.priority
+                    : normalizeItemPriority(input.priority);
+                const nextSlaDeadlineMs =
+                  input.slaDeadlineMs === undefined
+                    ? item.slaDeadlineMs
+                    : normalizeSlaDeadlineMs(input.slaDeadlineMs);
+                const nextEvents: Array<{ description: string; kind: WorkflowEventKind }> = [];
+
+                if (title !== undefined || brief !== undefined) {
+                  nextEvents.push({ description: 'Work item details were updated.', kind: 'item' });
+                }
+
+                if (input.priority !== undefined && nextPriority !== item.priority) {
+                  nextEvents.push({
+                    description: `Priority changed from ${item.priority} to ${nextPriority}.`,
+                    kind: 'item',
+                  });
+                }
+
+                if (input.slaDeadlineMs !== undefined && nextSlaDeadlineMs !== item.slaDeadlineMs) {
+                  nextEvents.push({
+                    description: nextSlaDeadlineMs
+                      ? `SLA deadline set to ${new Date(nextSlaDeadlineMs).toLocaleString()}.`
+                      : 'SLA deadline cleared.',
+                    kind: 'item',
+                  });
+                }
+
                 const nextItem = {
                   ...item,
                   ...(title ? { title } : {}),
                   ...(brief !== undefined ? { brief } : {}),
+                  priority: nextPriority,
+                  ...(nextSlaDeadlineMs ? { slaDeadlineMs: nextSlaDeadlineMs } : {}),
+                  ...(nextSlaDeadlineMs ? {} : { slaDeadlineMs: undefined }),
+                  ...(input.slaDeadlineMs !== undefined
+                    ? { slaBreachedAt: null, slaWarnedAt: null }
+                    : {}),
                   updatedAt,
                 };
 
-                if (title === undefined && brief === undefined) {
+                if (nextEvents.length === 0) {
                   return item;
                 }
 
@@ -809,7 +850,7 @@ export function createWorkflowSlice(
                   nextItem,
                   [
                     ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
-                    { description: 'Work item details were updated.', kind: 'item' as const },
+                    ...nextEvents,
                   ],
                   updatedAt,
                 );

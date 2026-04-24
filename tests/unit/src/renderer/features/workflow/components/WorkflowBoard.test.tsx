@@ -20,6 +20,7 @@ const baseItem = (
   isAgentWorking: false,
   primaryAgentId: null,
   primaryAgentName: null,
+  priority: 'medium',
   specialStateLabel:
     status === 'review'
       ? 'Review'
@@ -30,6 +31,7 @@ const baseItem = (
   statusLabel: status,
   title,
   totalTaskCount: 1,
+  updatedAt: Date.now(),
   updatedLabel: 'just now',
 });
 
@@ -92,5 +94,53 @@ describe('WorkflowBoard', () => {
         'Drop a work item here or create a new one for this stage.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('sorts cards by priority inside each lane and renders SLA alerts', () => {
+    const now = new Date('2026-04-24T12:00:00.000Z').getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    render(
+      <WorkflowBoard
+        items={[
+          {
+            ...baseItem('low', 'Low priority', 'active'),
+            priority: 'low',
+            updatedLabel: '3m ago',
+          },
+          {
+            ...baseItem('critical', 'Critical priority', 'active'),
+            priority: 'critical',
+            slaDeadlineMs: now - 60_000,
+            updatedLabel: '1m ago',
+          },
+          {
+            ...baseItem('high', 'High priority', 'active'),
+            priority: 'high',
+            slaDeadlineMs: now + 60 * 60_000,
+            updatedLabel: '2m ago',
+          },
+        ]}
+        onMoveItem={vi.fn()}
+        onSelectItem={vi.fn()}
+        selectedItemId={null}
+      />,
+    );
+
+    const activeColumn = screen.getByTestId('workflow-column-body-active');
+    const titles = within(activeColumn)
+      .getAllByRole('button', { name: /^Open / })
+      .map((button) => button.textContent);
+
+    expect(titles[0]).toContain('critical');
+    expect(titles[0]).toContain('Critical priority');
+    expect(titles[1]).toContain('high');
+    expect(titles[1]).toContain('High priority');
+    expect(titles[2]).toContain('Low priority');
+    expect(within(activeColumn).getByText('SLA breached')).toBeInTheDocument();
+    expect(within(activeColumn).getByText('SLA: 1h 0m')).toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });

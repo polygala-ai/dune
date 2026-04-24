@@ -23,6 +23,7 @@ import {
   getWorkflowItemActivityArchiveItemId,
 } from '@/shared/workflow/activity';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
+import { createSlaMonitor } from '@/electron/main/sla/sla-monitor';
 
 type WorkflowRuntimeController = Pick<
   DesktopRuntimeController,
@@ -36,6 +37,7 @@ interface WorkflowCoordinatorOptions {
   clearInterval?: typeof globalThis.clearInterval;
   clearTimeout?: typeof globalThis.clearTimeout;
   getRuntimeController: () => WorkflowRuntimeController | null;
+  notifySla?: Parameters<typeof createSlaMonitor>[0]['notifySla'];
   notifyWorkflowChanged: () => void;
   setInterval?: typeof globalThis.setInterval;
   setTimeout?: typeof globalThis.setTimeout;
@@ -431,6 +433,7 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
             createdAt: now,
             id: `item-auto-${now}`,
             primaryAgentId: agent.id,
+            priority: 'medium',
             projectId: agent.projectId,
             scheduledTaskId: null,
             sortOrder: 0,
@@ -510,6 +513,14 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
     },
   } satisfies AppStorage;
 
+  const slaMonitor = createSlaMonitor({
+    notifyWorkflowChanged: options.notifyWorkflowChanged,
+    ...(options.notifySla ? { notifySla: options.notifySla } : {}),
+    setInterval: setIntervalFn,
+    clearInterval: clearIntervalFn,
+    workflowStore,
+  });
+
   function onWorkflowChanged() {
     options.notifyWorkflowChanged();
     if (nudgeScheduled) {
@@ -540,7 +551,9 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
     taskSweepIntervalHandle = setIntervalFn(() => {
       void sweepItemAssignmentTasks();
     }, 120_000);
+    slaMonitor.start();
     void sweepItemAssignmentTasks();
+    void slaMonitor.checkNow();
   }
 
   function stop() {
@@ -561,6 +574,8 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
       clearIntervalFn(taskSweepIntervalHandle);
       taskSweepIntervalHandle = null;
     }
+
+    slaMonitor.stop();
   }
 
   return {

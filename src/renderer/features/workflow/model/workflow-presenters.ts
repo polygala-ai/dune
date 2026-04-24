@@ -13,6 +13,7 @@ import type {
   WorkflowSnapshot,
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
+import { compareWorkflowPriority } from '@/shared/workflow/priority-sla';
 
 /** Defines workflow item status labels. */
 export const workflowItemStatusLabels: Record<WorkflowItemStatus, string> = {
@@ -35,6 +36,12 @@ export const workflowTaskStatusLabels: Record<WorkflowTaskStatus, string> = {
 
 /** Compares items. */
 function compareItems(left: WorkflowItem, right: WorkflowItem) {
+  const priorityDelta = compareWorkflowPriority(left, right);
+
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
   if (left.sortOrder !== right.sortOrder) {
     return left.sortOrder - right.sortOrder;
   }
@@ -154,11 +161,14 @@ export function presentWorkflowItemSummary(
     isAgentWorking,
     primaryAgentId: item.primaryAgentId,
     primaryAgentName: primaryAgent?.name ?? null,
+    priority: item.priority,
+    ...(item.slaDeadlineMs ? { slaDeadlineMs: item.slaDeadlineMs } : {}),
     specialStateLabel,
     status: item.status,
     statusLabel: formatWorkflowItemStatus(item.status),
     title: item.title,
     totalTaskCount,
+    updatedAt: item.updatedAt,
     updatedLabel: formatAgentTimestamp(item.updatedAt, now),
   };
 }

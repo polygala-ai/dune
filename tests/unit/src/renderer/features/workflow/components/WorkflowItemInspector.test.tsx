@@ -32,6 +32,7 @@ const item: WorkflowItem & {
   id: 'item-1',
   primaryAgentId: null,
   primaryAgentName: null,
+  priority: 'medium',
   projectId: project.id,
   scheduledTaskId: null,
   sortOrder: 0,

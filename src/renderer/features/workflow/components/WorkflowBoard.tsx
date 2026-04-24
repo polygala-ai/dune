@@ -22,14 +22,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
+import { useSlaCountdown } from '@/renderer/features/workflow/hooks/use-sla-countdown';
 import {
   workflowItemStatusLabels,
 } from '@/renderer/features/workflow/model/workflow-presenters';
 import type {
+  ItemPriority,
   WorkflowItemStatus,
   WorkflowItemSummary,
 } from '@/renderer/features/workflow/types';
 import { cn } from '@/renderer/shared/lib/utils';
+import { compareWorkflowPriority } from '@/shared/workflow/priority-sla';
 
 const workflowColumns: WorkflowItemStatus[] = [
   'inbox',
@@ -53,7 +56,29 @@ function getColumnItems(
   items: WorkflowItemSummary[],
   status: WorkflowItemStatus,
 ) {
-  return items.filter((item) => item.status === status);
+  return items
+    .filter((item) => item.status === status)
+    .sort(compareWorkflowPriority);
+}
+
+const priorityBadgeClasses: Record<ItemPriority, string> = {
+  critical: 'border-red-500/25 bg-red-500/10 text-red-500',
+  high: 'border-orange-500/25 bg-orange-500/10 text-orange-500',
+  medium: 'border-blue-500/25 bg-blue-500/10 text-blue-500',
+  low: 'border-gray-500/25 bg-gray-500/10 text-gray-500',
+};
+
+/** Formats SLA time remaining. */
+function formatSlaTime(msLeft: number) {
+  const absoluteMs = Math.max(0, msLeft);
+  const hours = Math.floor(absoluteMs / (60 * 60 * 1000));
+  const minutes = Math.ceil((absoluteMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  if (hours <= 0) {
+    return `${minutes}m`;
+  }
+
+  return `${hours}h ${minutes}m`;
 }
 
 /** Renders the item card UI. */
@@ -68,6 +93,10 @@ function ItemCard({
   listeners?: Record<string, unknown>;
   onSelect: () => void;
 }) {
+  const sla = useSlaCountdown(item.slaDeadlineMs, item.status);
+  const showPriorityBadge =
+    item.priority === 'critical' || item.priority === 'high' || Boolean(item.slaDeadlineMs);
+
   return (
     <article
       className={cn(
@@ -82,9 +111,41 @@ function ItemCard({
           onClick={onSelect}
           type="button"
         >
+          {showPriorityBadge ? (
+            <span
+              className={cn(
+                'mb-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase',
+                priorityBadgeClasses[item.priority],
+              )}
+            >
+              {item.priority}
+            </span>
+          ) : null}
           <p className="text-[15px] font-semibold tracking-[-0.03em] text-app-text">
             {item.title}
           </p>
+          {sla ? (
+            <div className="mt-2">
+              <span
+                className={cn(
+                  'inline-flex rounded-full px-2 py-1 text-[11px] font-medium',
+                  sla.isMet
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : sla.isBreached
+                      ? 'bg-red-500/10 text-red-500'
+                      : sla.isWarning
+                        ? 'bg-yellow-500/15 text-yellow-600'
+                        : 'bg-app-card text-app-muted',
+                )}
+              >
+                {sla.isMet
+                  ? 'SLA met'
+                  : sla.isBreached
+                    ? 'SLA breached'
+                    : `SLA: ${formatSlaTime(sla.msLeft)}`}
+              </span>
+            </div>
+          ) : null}
           <p className="mt-2 truncate text-sm leading-6 text-app-muted">
             {item.brief || 'No brief yet.'}
           </p>

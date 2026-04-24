@@ -15,6 +15,7 @@ function createItem(overrides: Partial<WorkflowItem> = {}): WorkflowItem {
     createdAt: 1,
     id: 'item-1',
     primaryAgentId: null,
+    priority: 'medium',
     projectId: 'project-1',
     scheduledTaskId: null,
     sortOrder: 0,
