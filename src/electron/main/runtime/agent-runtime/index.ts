@@ -397,6 +397,10 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
+import type {
+  ToolUsageSummaryResult,
+  ToolUsageSummaryRow,
+} from '@/shared/agents/tool-analytics';
 
 export { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 export type {
@@ -653,6 +657,54 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /** Returns aggregated AgentLite tool usage analytics for active Dune agents. */
+  async getToolUsageSummary(): Promise<ToolUsageSummaryResult> {
+    await this.ensureAgentLiteReady();
+    const since = new Date(Date.now() - 3600_000);
+
+    const byTool = new Map<string, {
+      callCount: number;
+      durationTotalMs: number;
+      successCount: number;
+      toolName: string;
+    }>();
+
+    for (const [, runtime] of this.lifecycle.allRuntimes()) {
+      const rows = await runtime.getToolUsageSummary(since);
+
+      for (const row of rows) {
+        const existing = byTool.get(row.toolName) ?? {
+          callCount: 0,
+          durationTotalMs: 0,
+          successCount: 0,
+          toolName: row.toolName,
+        };
+
+        existing.callCount += row.callCount;
+        existing.successCount += row.successCount;
+        existing.durationTotalMs += row.avgDurationMs * row.callCount;
+        byTool.set(row.toolName, existing);
+      }
+    }
+
+    const rows: ToolUsageSummaryRow[] = [...byTool.values()]
+      .map((row) => ({
+        avgDurationMs: row.callCount > 0 ? row.durationTotalMs / row.callCount : 0,
+        callCount: row.callCount,
+        successCount: row.successCount,
+        successRate: row.callCount > 0 ? row.successCount / row.callCount : 0,
+        toolName: row.toolName,
+      }))
+      .sort((left, right) =>
+        right.callCount - left.callCount || left.toolName.localeCompare(right.toolName));
+
+    return {
+      generatedAt: new Date().toISOString(),
+      rows,
+      windowHours: 1,
     };
   }
 

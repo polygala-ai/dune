@@ -81,6 +81,7 @@ describe('preload bridge', () => {
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
+    await desktopBridge?.getToolUsageSummary?.();
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.copyText?.('@agentlite_test_bot');
     await desktopBridge?.openExternal?.('https://t.me/BotFather');
@@ -138,6 +139,7 @@ describe('preload bridge', () => {
       'project-1',
       { beforeEntryId: 'event-1', limit: 20 },
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getToolUsageSummary);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.listProjectArtifactEntries,
       '/tmp/project-1',
