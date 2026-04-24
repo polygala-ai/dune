@@ -4,7 +4,10 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import {
+  useMemo,
+  useState,
+} from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
@@ -13,6 +16,7 @@ import { useWorkflowSession } from '@/renderer/app/store/selectors';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { CreateProjectDialog } from '@/renderer/features/workflow/components/CreateProjectDialog';
 import { CreateWorkItemDialog } from '@/renderer/features/workflow/components/CreateWorkItemDialog';
+import { FilterPanel } from '@/renderer/features/workflow/components/FilterPanel';
 import { WorkflowBoard } from '@/renderer/features/workflow/components/WorkflowBoard';
 import { WorkflowItemInspector } from '@/renderer/features/workflow/components/WorkflowItemInspector';
 import { WorkflowProjectActivity } from '@/renderer/features/workflow/components/WorkflowProjectActivity';
@@ -20,6 +24,10 @@ import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/compone
 import { WorkflowProjectAgents } from '@/renderer/features/workflow/components/WorkflowProjectAgents';
 import { WorkflowProjectSettings } from '@/renderer/features/workflow/components/WorkflowProjectSettings';
 import { presentWorkflowEventTimestamp } from '@/renderer/features/workflow/model/workflow-presenters';
+import {
+  defaultWorkflowItemFilters,
+  filterWorkflowItems,
+} from '@/renderer/features/workflow/model/workflow-filters';
 import { agentRuntime } from '@/renderer/features/agents/runtime/agent-runtime';
 import {
   Dialog,
@@ -71,6 +79,7 @@ export function WorkflowWorkspace({
 }: WorkflowWorkspaceProps) {
   const commands = useAppCommands();
   const [isDeleteProjectOpen, setDeleteProjectOpen] = useState(false);
+  const [workflowItemFilters, setWorkflowItemFilters] = useState(defaultWorkflowItemFilters);
   const [cachedActivityEntriesByProjectId, setCachedActivityEntriesByProjectId] = useState<Record<string, Array<
     WorkflowProjectActivityEntry & { createdAtLabel: string }
   >>>({});
@@ -108,6 +117,7 @@ export function WorkflowWorkspace({
     activityEntries,
     activitySummary,
     filteredItemSummaries,
+    items,
     isWorkflowHydrated,
     projectAgents,
     projects,
@@ -136,6 +146,29 @@ export function WorkflowWorkspace({
     ...activitySummary,
     hasOlderEntries: mergedActivityEntries.length < activitySummary.totalEntryCount,
   };
+  const boardItemSummaries = useMemo(() => {
+    const baseFilteredItemIds = new Set(filteredItemSummaries.map((item) => item.id));
+    const advancedFilteredItemIds = new Set(
+      filterWorkflowItems(
+        items.filter((item) => baseFilteredItemIds.has(item.id)),
+        workflowItemFilters,
+      ).map((item) => item.id),
+    );
+
+    return filteredItemSummaries.filter((item) => advancedFilteredItemIds.has(item.id));
+  }, [filteredItemSummaries, items, workflowItemFilters]);
+  const boardFilterPanel = (
+    <FilterPanel
+      agents={projectAgents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+      }))}
+      filters={workflowItemFilters}
+      matchCount={boardItemSummaries.length}
+      onChange={setWorkflowItemFilters}
+      totalCount={filteredItemSummaries.length}
+    />
+  );
 
   if (!isWorkflowHydrated) {
     return (
@@ -155,7 +188,7 @@ export function WorkflowWorkspace({
   }
 
   /** Handles primary agent assignment. Persisting the snapshot triggers the main-process scheduler. */
-  const handleAssignPrimaryAgent = async (
+  const handleAssignPrimaryAgent = (
     itemId: string,
     input: { agentId: string | null; agentName?: string | null },
   ) => {
@@ -184,7 +217,7 @@ export function WorkflowWorkspace({
       { openRoute: false },
     );
 
-    await handleAssignPrimaryAgent(itemId, {
+    handleAssignPrimaryAgent(itemId, {
       agentId,
       agentName: suggestedName,
     });
@@ -279,9 +312,10 @@ export function WorkflowWorkspace({
   const boardView = (
     <>
       {isCompactShell ? (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+          {boardFilterPanel}
           <WorkflowBoard
-            items={filteredItemSummaries}
+            items={boardItemSummaries}
             onMoveItem={moveItem}
             onSelectItem={(itemId) => {
               selectItem(itemId);
@@ -291,9 +325,10 @@ export function WorkflowWorkspace({
         </div>
       ) : (
         <div className="grid h-full min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-h-0 overflow-hidden rounded-[28px] border border-app-border bg-app-panel/70 px-4 py-4">
+          <div className="flex min-h-0 flex-col gap-4 overflow-hidden rounded-[28px] border border-app-border bg-app-panel/70 px-4 py-4">
+            {boardFilterPanel}
             <WorkflowBoard
-              items={filteredItemSummaries}
+              items={boardItemSummaries}
               onMoveItem={moveItem}
               onSelectItem={(itemId) => {
                 selectItem(itemId);
@@ -312,7 +347,7 @@ export function WorkflowWorkspace({
                   addTask(itemId, title);
                 }}
                 onAssignPrimaryAgent={(itemId, input) => {
-                  void handleAssignPrimaryAgent(itemId, input);
+                  handleAssignPrimaryAgent(itemId, input);
                 }}
                 onCreateAgent={(itemId) => {
                   void handleCreateAgentForItem(itemId);
@@ -343,7 +378,7 @@ export function WorkflowWorkspace({
         addTask(itemId, title);
       }}
       onAssignPrimaryAgent={(itemId, input) => {
-        void handleAssignPrimaryAgent(itemId, input);
+        handleAssignPrimaryAgent(itemId, input);
       }}
       onCreateAgent={(itemId) => {
         void handleCreateAgentForItem(itemId);

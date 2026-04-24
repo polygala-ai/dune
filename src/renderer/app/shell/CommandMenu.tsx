@@ -1,14 +1,20 @@
 // Command menu UI.
 
-import { startTransition } from 'react';
+import {
+  startTransition,
+  useMemo,
+  useState,
+} from 'react';
 import {
   Bot,
+  FileText,
   PanelRight,
   Plus,
   Settings2,
   Sparkles,
 } from 'lucide-react';
 
+import type { SearchIndex } from '@/renderer/features/workflow/model/search-index';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import {
   CommandDialog,
@@ -64,6 +70,7 @@ interface CommandMenuProps {
   onToggleContextPanel: () => void;
   open: boolean;
   projects: CommandProject[];
+  searchIndex: SearchIndex;
 }
 
 /** Renders the command menu UI. */
@@ -83,21 +90,69 @@ export function CommandMenu({
   onToggleContextPanel,
   open,
   projects,
+  searchIndex,
 }: CommandMenuProps) {
   const { modifierLabel } = useDesktopPlatform();
+  const [query, setQuery] = useState('');
+  const searchResults = useMemo(
+    () => searchIndex.search(query, 10),
+    [query, searchIndex],
+  );
+  const isSearching = query.trim().length > 0;
 
   const closeAndRun = (handler: () => void) => {
     onOpenChange(false);
+    setQuery('');
     startTransition(() => {
       handler();
     });
   };
 
   return (
-    <CommandDialog onOpenChange={onOpenChange} open={open}>
-      <CommandInput placeholder="Jump to a project, work item, agent, or action…" />
+    <CommandDialog
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setQuery('');
+        }
+
+        onOpenChange(nextOpen);
+      }}
+      open={open}
+    >
+      <CommandInput
+        onValueChange={setQuery}
+        placeholder="Search work items, projects, agents, or actions..."
+        value={query}
+      />
       <CommandList className="thin-scrollbar">
         <CommandEmpty>No matching projects, work items, or actions.</CommandEmpty>
+        {isSearching ? (
+          <>
+            <CommandGroup heading="Work item matches">
+              {searchResults.map((item) => (
+                <CommandItem
+                  key={item.itemId}
+                  onSelect={() => closeAndRun(() => onSelectItem(item.itemId))}
+                  value={`${item.title} ${item.statusLabel} ${item.assigneeName ?? ''} ${item.snippet}`}
+                >
+                  <FileText className="h-4 w-4 text-app-muted" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">{item.title}</span>
+                    <span className="truncate text-xs text-app-muted">
+                      {item.statusLabel} · {item.assigneeName ?? 'No agent'} · {item.projectName}
+                    </span>
+                    <span className="mt-1 line-clamp-2 text-xs leading-5 text-app-muted">
+                      {item.snippet}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandSeparator />
+          </>
+        ) : null}
+
         <CommandGroup heading="Actions">
           <CommandItem onSelect={() => closeAndRun(onCreateItem)}>
             <Plus className="h-4 w-4 text-app-muted" />
