@@ -21,6 +21,7 @@ import type {
 } from '@/renderer/features/settings/types';
 import type {
   WorkflowItem,
+  ItemPriority,
   WorkflowItemStatus,
   WorkflowProjectActivitySummary,
   WorkflowProjectFilter,
@@ -118,7 +119,9 @@ export interface WorkflowActions {
     input: {
       brief: string;
       note?: string;
+      priority?: ItemPriority;
       projectId: string;
+      slaDeadlineMs?: number;
       status: WorkflowItemStatus;
       title: string;
     },
@@ -145,7 +148,7 @@ export interface WorkflowActions {
   ) => void;
   updateItem: (
     itemId: string,
-    input: { brief?: string; note?: string; title?: string },
+    input: { brief?: string; note?: string; priority?: ItemPriority; slaDeadlineMs?: number | null; title?: string },
   ) => void;
   updateTask: (
     itemId: string,
@@ -221,13 +224,16 @@ export interface WorkflowSessionState {
     completedTaskCount: number;
     hasBlockedTasks: boolean;
     id: string;
+    priority: ItemPriority;
     primaryAgentId: string | null;
     primaryAgentName: string | null;
     specialStateLabel: string | null;
+    slaDeadlineMs?: number;
     status: WorkflowItemStatus;
     statusLabel: string;
     title: string;
     totalTaskCount: number;
+    updatedAt: number;
     updatedLabel: string;
   }>;
   isWorkflowHydrated: boolean;

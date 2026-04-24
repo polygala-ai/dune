@@ -22,10 +22,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
+import { useSlaCountdown } from '@/renderer/features/workflow/hooks/use-sla-countdown';
 import {
   workflowItemStatusLabels,
 } from '@/renderer/features/workflow/model/workflow-presenters';
 import type {
+  ItemPriority,
   WorkflowItemStatus,
   WorkflowItemSummary,
 } from '@/renderer/features/workflow/types';
@@ -39,6 +41,18 @@ const workflowColumns: WorkflowItemStatus[] = [
   'acceptance',
   'done',
 ];
+const priorityRank: Record<ItemPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+const priorityStyles: Record<ItemPriority, string> = {
+  critical: 'border-[#ef4444]/30 bg-[#ef4444]/10 text-[#ef4444]',
+  high: 'border-[#f97316]/30 bg-[#f97316]/10 text-[#f97316]',
+  medium: 'border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#3b82f6]',
+  low: 'border-[#6b7280]/30 bg-[#6b7280]/10 text-[#6b7280]',
+};
 
 /** Workflow board props. */
 interface WorkflowBoardProps {
@@ -53,11 +67,34 @@ function getColumnItems(
   items: WorkflowItemSummary[],
   status: WorkflowItemStatus,
 ) {
-  return items.filter((item) => item.status === status);
+  return items
+    .filter((item) => item.status === status)
+    .sort((left, right) =>
+      priorityRank[left.priority] === priorityRank[right.priority]
+        ? right.updatedAt - left.updatedAt
+        : priorityRank[left.priority] - priorityRank[right.priority],
+    );
+}
+
+/** Formats a compact SLA countdown label. */
+function formatSlaLabel(msLeft: number) {
+  const absMs = Math.abs(msLeft);
+  const minutes = Math.max(1, Math.ceil(absMs / 60_000));
+
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = Math.ceil(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+
+  return `${Math.ceil(hours / 24)}d`;
 }
 
 /** Renders the item card UI. */
-function ItemCard({
+export function ItemCard({
   active,
   item,
   listeners,
@@ -68,6 +105,17 @@ function ItemCard({
   listeners?: Record<string, unknown>;
   onSelect: () => void;
 }) {
+  const countdown = useSlaCountdown(item.slaDeadlineMs);
+  const isSlaMet = item.status === 'acceptance' || item.status === 'done';
+  const showPriority = item.priority === 'critical' || item.priority === 'high' || typeof item.slaDeadlineMs === 'number';
+  const slaLabel = countdown
+    ? isSlaMet
+      ? 'SLA met'
+      : countdown.isBreached
+        ? `${formatSlaLabel(countdown.msLeft)} late`
+        : `${formatSlaLabel(countdown.msLeft)} left`
+    : null;
+
   return (
     <article
       className={cn(
@@ -82,9 +130,22 @@ function ItemCard({
           onClick={onSelect}
           type="button"
         >
-          <p className="text-[15px] font-semibold tracking-[-0.03em] text-app-text">
-            {item.title}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {showPriority ? (
+              <span
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase',
+                  priorityStyles[item.priority],
+                )}
+                data-testid={`priority-badge-${item.priority}`}
+              >
+                {item.priority}
+              </span>
+            ) : null}
+            <p className="min-w-0 flex-1 text-[15px] font-semibold text-app-text">
+              {item.title}
+            </p>
+          </div>
           <p className="mt-2 truncate text-sm leading-6 text-app-muted">
             {item.brief || 'No brief yet.'}
           </p>
@@ -123,9 +184,44 @@ function ItemCard({
       ) : null}
 
       {item.specialStateLabel ? (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="pill-key border-transparent bg-app-card">
             {item.specialStateLabel}
+          </span>
+          {slaLabel ? (
+            <span
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-[11px] font-semibold',
+                isSlaMet
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+                  : countdown?.isBreached
+                    ? 'border-red-500/30 bg-red-500/10 text-red-500'
+                    : countdown?.isWarning
+                      ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600'
+                      : 'border-app-border bg-app-card text-app-muted',
+              )}
+              data-testid="sla-countdown"
+            >
+              {slaLabel}
+            </span>
+          ) : null}
+        </div>
+      ) : slaLabel ? (
+        <div className="mt-3">
+          <span
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-[11px] font-semibold',
+              isSlaMet
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+                : countdown?.isBreached
+                  ? 'border-red-500/30 bg-red-500/10 text-red-500'
+                  : countdown?.isWarning
+                    ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600'
+                    : 'border-app-border bg-app-card text-app-muted',
+            )}
+            data-testid="sla-countdown"
+          >
+            {slaLabel}
           </span>
         </div>
       ) : null}

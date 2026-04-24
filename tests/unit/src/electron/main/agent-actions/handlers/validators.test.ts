@@ -15,6 +15,7 @@ function createItem(status: WorkflowItem['status']): WorkflowItem {
     brief: 'Brief',
     createdAt: 1,
     id: 'item-1',
+        priority: 'medium',
     primaryAgentId: 'agent-1',
     projectId: 'project-1',
     scheduledTaskId: null,

@@ -45,7 +45,19 @@ export type WorkflowProjectFilter = (typeof workflowProjectFilters)[number];
 /** Workflow project screen shape. */
 export type WorkflowProjectScreen = 'main' | 'settings';
 /** Workflow event kind shape. */
-export type WorkflowEventKind = 'assignment' | 'feedback' | 'item' | 'note' | 'task';
+export type WorkflowEventKind =
+  | 'assignment'
+  | 'feedback'
+  | 'item'
+  | 'item.priority_changed'
+  | 'item.sla_breached'
+  | 'item.sla_cleared'
+  | 'item.sla_set'
+  | 'item.sla_warning'
+  | 'note'
+  | 'task';
+/** Workflow item priority shape. */
+export type ItemPriority = 'critical' | 'high' | 'medium' | 'low';
 
 /** Workflow project shape. */
 export interface WorkflowProject {
@@ -126,9 +138,13 @@ export interface WorkflowItem {
   brief: string;
   createdAt: number;
   id: string;
+  priority: ItemPriority;
   primaryAgentId: string | null;
   projectId: string;
   scheduledTaskId: string | null;
+  slaBreachedAt?: number;
+  slaDeadlineMs?: number;
+  slaWarnedAt?: number;
   sortOrder: number;
   status: WorkflowItemStatus;
   tasks: WorkflowTask[];
@@ -156,12 +172,17 @@ export interface WorkflowItemSummary {
   hasBlockedTasks: boolean;
   id: string;
   isAgentWorking: boolean;
+  priority: ItemPriority;
   primaryAgentId: string | null;
   primaryAgentName: string | null;
+  slaBreachedAt?: number;
+  slaDeadlineMs?: number;
+  slaWarnedAt?: number;
   specialStateLabel: string | null;
   status: WorkflowItemStatus;
   statusLabel: string;
   title: string;
+  updatedAt: number;
   totalTaskCount: number;
   updatedLabel: string;
 }

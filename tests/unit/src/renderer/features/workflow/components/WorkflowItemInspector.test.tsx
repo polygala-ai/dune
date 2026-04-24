@@ -30,6 +30,7 @@ const item: WorkflowItem & {
   brief: 'Rewrite the homepage narrative.',
   createdAt: 1,
   id: 'item-1',
+        priority: 'medium',
   primaryAgentId: null,
   primaryAgentName: null,
   projectId: project.id,

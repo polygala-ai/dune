@@ -7,7 +7,19 @@ export const messageRoles = ['assistant', 'system', 'user'] as const;
 export const messageStatuses = ['complete', 'streaming'] as const;
 export const modelAuthTypes = ['api-key', 'oauth-token'] as const;
 export const networkProxyModes = ['direct', 'manual', 'system'] as const;
-export const workflowEventKinds = ['assignment', 'feedback', 'item', 'note', 'task'] as const;
+export const workflowEventKinds = [
+  'assignment',
+  'feedback',
+  'item',
+  'item.priority_changed',
+  'item.sla_breached',
+  'item.sla_cleared',
+  'item.sla_set',
+  'item.sla_warning',
+  'note',
+  'task',
+] as const;
+export const workflowItemPriorities = ['critical', 'high', 'medium', 'low'] as const;
 export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;
 export const workflowProjectFilters = ['all', 'assigned', 'blocked', 'review'] as const;
 export const workflowProjectViews = ['board', 'agents', 'activity'] as const;

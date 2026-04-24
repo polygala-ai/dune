@@ -4,6 +4,7 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import type {
   WorkflowEventKind,
+  ItemPriority,
   WorkflowItemActivitySummary,
   WorkflowItemStatus,
   WorkflowProjectFilter,
@@ -15,6 +16,7 @@ import type { PersistedWorkflowItemActivityArchive } from '@/shared/workflow/act
 import {
   GLOBAL_STATE_ROW_ID,
   workflowEventKinds,
+  workflowItemPriorities,
   workflowItemStatuses,
   workflowProjectFilters,
   workflowProjectViews,
@@ -41,11 +43,15 @@ export const workflowItems = sqliteTable(
     brief: text('brief').notNull(),
     createdAt: integer('created_at').notNull().$type<number>(),
     id: text('id').primaryKey(),
+    priority: text('priority', { enum: workflowItemPriorities }).$type<ItemPriority>().notNull().default('medium'),
     primaryAgentId: text('primary_agent_id'),
     projectId: text('project_id')
       .notNull()
       .references(() => workflowProjects.id, { onDelete: 'cascade' }),
     scheduledTaskId: text('scheduled_task_id'),
+    slaBreachedAt: integer('sla_breached_at').$type<number | null>(),
+    slaDeadlineMs: integer('sla_deadline_ms').$type<number | null>(),
+    slaWarnedAt: integer('sla_warned_at').$type<number | null>(),
     sortOrder: integer('sort_order').notNull(),
     status: text('status', { enum: workflowItemStatuses }).$type<WorkflowItemStatus>().notNull(),
     title: text('title').notNull(),
