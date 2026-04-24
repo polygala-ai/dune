@@ -35,4 +35,5 @@ export const ipcChannels = {
   storageGet: 'dune:storage:get',
   storageKeys: 'dune:storage:keys',
   storageSet: 'dune:storage:set',
+  getUsageSummary: 'dune:usage:get-summary',
 } as const;

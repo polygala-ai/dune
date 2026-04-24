@@ -14,6 +14,32 @@ import type {
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
+/** Per-model token usage row. */
+export interface UsageByModel {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+}
+
+/** Per-session (agent) token usage row. */
+export interface UsageBySession {
+  session_id: string;
+  agent_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+}
+
+/** Usage summary result from AgentLite usage_get_summary. */
+export interface UsageSummaryResult {
+  total_tokens: number;
+  total_cost_usd: number | null;
+  request_count: number;
+  by_model: UsageByModel[];
+  by_session: UsageBySession[];
+}
+
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
   applyNetworkSettings?: () => Promise<void>;
@@ -68,4 +94,5 @@ export interface DesktopBridge {
   ) => () => void;
   updateAgentChannel?: (input: UpdateAgentChannelInput) => Promise<void>;
   updateAgentDefinition?: (agentId: string, definition: AgentDefinition) => Promise<void>;
+  getUsageSummary?: (params: { since?: number }) => Promise<UsageSummaryResult | null>;
 }

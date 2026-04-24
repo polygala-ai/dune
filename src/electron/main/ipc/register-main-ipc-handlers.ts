@@ -205,6 +205,11 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     ipcChannels.storageKeys,
     async (_event, store: string) => options.resolveStore(store).keys(),
   );
+  ipcMain.handle(
+    ipcChannels.getUsageSummary,
+    async (_event, params: { since?: number }) =>
+      withRuntime((runtimeController) => runtimeController.getUsageSummary(params)),
+  );
 
   // Shell, dialog, and app handlers.
   ipcMain.handle(ipcChannels.copyText, (_event, text: string) => {
