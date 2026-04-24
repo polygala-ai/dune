@@ -14,7 +14,7 @@ import {
   createDefaultWorkItemFilters,
   SearchIndex,
   type WorkItemSearchResult,
-} from '@/search/SearchIndex';
+} from '@/renderer/utils/SearchIndex';
 import type { Agent } from '@/renderer/features/agents/types';
 import type { WorkflowItem } from '@/renderer/features/workflow/types';
 import {

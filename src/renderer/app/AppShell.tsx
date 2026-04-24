@@ -34,7 +34,7 @@ import { useWorkflowPersistence } from '@/renderer/app/hooks/use-workflow-persis
 import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
-import { CommandPalette } from '@/components/CommandPalette';
+import { CommandPalette } from '@/renderer/components/CommandPalette';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
   useAgentSession,

@@ -10,11 +10,11 @@ import {
 } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { FilterPanel } from '@/components/FilterPanel';
+import { FilterPanel } from '@/renderer/components/FilterPanel';
 import {
   createDefaultWorkItemFilters,
   filterWorkflowItems,
-} from '@/search/SearchIndex';
+} from '@/renderer/utils/SearchIndex';
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import { useWorkflowSession } from '@/renderer/app/store/selectors';
