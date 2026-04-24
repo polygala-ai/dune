@@ -68,6 +68,7 @@ function createItem(overrides: Record<string, unknown> = {}) {
     activity: createWorkflowItemActivitySummary(),
     createdAt: 0,
     id: 'item-1',
+        priority: 'medium',
     primaryAgentId: 'agent-1',
     projectId: 'project-1',
     scheduledTaskId: null,

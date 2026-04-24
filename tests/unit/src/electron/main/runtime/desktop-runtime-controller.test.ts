@@ -114,4 +114,40 @@ describe('DesktopRuntimeController', () => {
     expect(cancelItemAssignment).toHaveBeenCalledWith('agent-1', 'task-123');
     expect(taskId).toBe('task-123');
   });
+
+  it('starts and stops the SLA monitor with the desktop runtime', async () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dune-controller-home-'));
+    tempDirs.push(homeDir);
+    const startMonitor = vi.fn();
+    const stopMonitor = vi.fn();
+    let controller!: DesktopRuntimeController;
+    controller = new DesktopRuntimeController({
+      actionServices: {
+        getRuntimeController: () => controller,
+        onWorkflowChanged: vi.fn(),
+        workflowStore: {
+          delete: async () => undefined,
+          get: async () => null,
+          keys: async () => [],
+          set: async () => undefined,
+        },
+      },
+      agentStore: { get: async () => null, set: async () => {} },
+      createRealRuntime: () => ({
+        ...createMockAgentRuntime(),
+        start: async () => undefined,
+      }),
+      createSlaMonitor: () => ({
+        start: startMonitor,
+        stop: stopMonitor,
+      }),
+      homeDir,
+    });
+
+    await controller.start();
+    await controller.shutdown();
+
+    expect(startMonitor).toHaveBeenCalledTimes(1);
+    expect(stopMonitor).toHaveBeenCalledTimes(1);
+  });
 });

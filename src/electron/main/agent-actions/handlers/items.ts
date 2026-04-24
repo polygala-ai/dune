@@ -17,12 +17,14 @@ import {
   compareItems,
   createWorkflowEvent,
   findItem,
+  isWorkflowItemPriority,
   isWorkflowItemStatus,
   prependWorkflowEvents,
   readWorkflowSnapshot,
   reindexProjectStatusGroup,
   touchProject,
   workflowItemStatuses,
+  workflowItemPriorities,
   writeWorkflowSnapshot,
   type WorkflowItem,
 } from './snapshot';
@@ -39,6 +41,23 @@ import {
   assertAgentCanSetPrimaryAgent,
 } from './validators';
 import { ToolHandlerError, type RegisteredTool } from './types';
+
+/** Reads optional SLA deadline input. */
+function readSlaDeadlineMs(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new ToolHandlerError('validation-error', 'slaDeadlineMs must be a positive millisecond timestamp or null.');
+  }
+
+  return Math.trunc(value);
+}
 
 /** Lists item tools. */
 export const itemTools: RegisteredTool[] = [
@@ -68,7 +87,14 @@ export const itemTools: RegisteredTool[] = [
         {
           brief: optionalStringSchema,
           note: optionalStringSchema,
+          priority: {
+            enum: [...workflowItemPriorities],
+            type: 'string',
+          },
           projectId: optionalStringSchema,
+          slaDeadlineMs: {
+            type: 'number',
+          },
           status: optionalStringSchema,
           title: stringSchema,
         },
@@ -82,6 +108,8 @@ export const itemTools: RegisteredTool[] = [
       const title = requireString(args.title, 'title');
       const brief = optionalString(args.brief) ?? '';
       const note = optionalString(args.note);
+      const priority = isWorkflowItemPriority(args.priority) ? args.priority : 'medium';
+      const slaDeadlineMs = readSlaDeadlineMs(args.slaDeadlineMs);
       const status = optionalString(args.status) ?? 'inbox';
       const now = Date.now();
       const itemId = createId('item');
@@ -99,9 +127,11 @@ export const itemTools: RegisteredTool[] = [
         brief,
         createdAt: now,
         id: itemId,
+        priority,
         primaryAgentId: null,
         projectId,
         scheduledTaskId: null,
+        ...(typeof slaDeadlineMs === 'number' ? { slaDeadlineMs } : {}),
         sortOrder: snapshot.items.filter((item) => item.projectId === projectId && item.status === status).length,
         status,
         tasks: createDefaultTasks(now),
@@ -136,6 +166,11 @@ export const itemTools: RegisteredTool[] = [
           itemId: stringSchema,
           note: optionalStringSchema,
           primaryAgentId: { type: ['string', 'null'] },
+          priority: {
+            enum: [...workflowItemPriorities],
+            type: 'string',
+          },
+          slaDeadlineMs: { type: ['number', 'null'] },
           title: optionalStringSchema,
         },
         ['itemId'],
@@ -147,10 +182,13 @@ export const itemTools: RegisteredTool[] = [
       const item = findItem(snapshot, requireString(args.itemId, 'itemId'));
       const note = optionalString(args.note);
       const title = optionalString(args.title);
+      const slaDeadlineMs = readSlaDeadlineMs(args.slaDeadlineMs);
       const now = Date.now();
 
       const touchesDetails = args.title !== undefined || args.brief !== undefined;
       const touchesAssignment = args.primaryAgentId !== undefined;
+      const touchesPriority = args.priority !== undefined;
+      const touchesSla = args.slaDeadlineMs !== undefined;
 
       if (touchesDetails) {
         assertAgentCanEditItem(item);
@@ -201,7 +239,51 @@ export const itemTools: RegisteredTool[] = [
         }
       }
 
-      if (!touchesDetails && !touchesAssignment) {
+      if (touchesPriority) {
+        if (!isWorkflowItemPriority(args.priority)) {
+          throw new ToolHandlerError(
+            'validation-error',
+            `priority must be one of: ${workflowItemPriorities.join(', ')}.`,
+          );
+        }
+
+        if (item.priority !== args.priority) {
+          item.priority = args.priority;
+          prependWorkflowEvents(item, [
+            ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+            createWorkflowEvent(
+              'item.priority_changed',
+              `Priority changed to ${args.priority}.`,
+              now,
+              agentContext.agentName,
+            ),
+          ]);
+        }
+      }
+
+      if (touchesSla) {
+        if (slaDeadlineMs === null) {
+          if (typeof item.slaDeadlineMs === 'number') {
+            delete item.slaDeadlineMs;
+            delete item.slaWarnedAt;
+            delete item.slaBreachedAt;
+            prependWorkflowEvents(item, [
+              ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+              createWorkflowEvent('item.sla_cleared', 'SLA deadline cleared.', now, agentContext.agentName),
+            ]);
+          }
+        } else if (typeof slaDeadlineMs === 'number') {
+          item.slaDeadlineMs = slaDeadlineMs;
+          delete item.slaWarnedAt;
+          delete item.slaBreachedAt;
+          prependWorkflowEvents(item, [
+            ...(note ? [createWorkflowEvent('note', note, now, agentContext.agentName)] : []),
+            createWorkflowEvent('item.sla_set', `SLA deadline set to ${new Date(slaDeadlineMs).toISOString()}.`, now, agentContext.agentName),
+          ]);
+        }
+      }
+
+      if (!touchesDetails && !touchesAssignment && !touchesPriority && !touchesSla) {
         return { item: presentItem(snapshot, item) };
       }
 

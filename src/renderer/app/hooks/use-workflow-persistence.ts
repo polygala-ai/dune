@@ -7,6 +7,7 @@ import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { createEmptyWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
 import {
   workflowItemStatuses,
+  type ItemPriority,
   workflowProjectFilters,
   workflowProjectViews,
   workflowTaskStatuses,
@@ -24,6 +25,7 @@ import { isPlainObject } from '@/shared/is-record';
 
 const STORE_NAME = 'workflow';
 const STORE_KEY = 'snapshot';
+const workflowItemPriorities = ['critical', 'high', 'medium', 'low'] as const;
 
 /** Normalizes task. */
 function normalizeTask(value: unknown): WorkflowTask | null {
@@ -89,15 +91,18 @@ function normalizeEvent(value: unknown): WorkflowEvent | null {
     return null;
   }
 
-  const kind = value.kind === 'assignment'
-    ? 'assignment'
-    : value.kind === 'feedback'
-      ? 'feedback'
-    : value.kind === 'task'
-      ? 'task'
-      : value.kind === 'note'
-        ? 'note'
-        : 'item';
+  const kind =
+    value.kind === 'assignment' ||
+    value.kind === 'feedback' ||
+    value.kind === 'item.priority_changed' ||
+    value.kind === 'item.sla_breached' ||
+    value.kind === 'item.sla_cleared' ||
+    value.kind === 'item.sla_set' ||
+    value.kind === 'item.sla_warning' ||
+    value.kind === 'note' ||
+    value.kind === 'task'
+      ? value.kind
+      : 'item';
 
   return {
     ...(typeof value.actor === 'string' && value.actor.trim()
@@ -205,6 +210,10 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
       : createWorkflowItemActivitySummary({
           totalEventCount: workflowEvents.length,
         });
+    const priority = workflowItemPriorities.includes(item.priority as ItemPriority)
+      ? (item.priority as ItemPriority)
+      : 'medium';
+    const slaDeadlineMs = typeof item.slaDeadlineMs === 'number' ? item.slaDeadlineMs : undefined;
 
     return [{
       activity,
@@ -215,6 +224,7 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
       brief: item.brief,
       createdAt: item.createdAt,
       id: item.id,
+      priority,
       primaryAgentId:
         typeof item.primaryAgentId === 'string' || item.primaryAgentId === null
           ? item.primaryAgentId
@@ -222,6 +232,13 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
       projectId: item.projectId,
       scheduledTaskId:
         typeof item.scheduledTaskId === 'string' ? item.scheduledTaskId : null,
+      ...(typeof item.slaBreachedAt === 'number' && slaDeadlineMs !== undefined
+        ? { slaBreachedAt: item.slaBreachedAt }
+        : {}),
+      ...(slaDeadlineMs !== undefined ? { slaDeadlineMs } : {}),
+      ...(typeof item.slaWarnedAt === 'number' && slaDeadlineMs !== undefined
+        ? { slaWarnedAt: item.slaWarnedAt }
+        : {}),
       sortOrder: item.sortOrder,
       status: workflowItemStatuses.includes(item.status as (typeof workflowItemStatuses)[number])
         ? (item.status as WorkflowSnapshot['items'][number]['status'])
