@@ -1236,7 +1236,7 @@ describe('AppShell', () => {
     expect(screen.getByText('Homepage copy rewrite')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^New project$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /create project/i }));
+    await user.click(screen.getByRole('button', { name: /^New project$/i }));
     expect(screen.queryByText('Accent')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Project name'), 'Studio Ops');
     await user.type(
