@@ -8,6 +8,7 @@ import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSe
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
 import { ShortcutsSettings } from '@/renderer/features/settings/components/ShortcutsSettings';
+import { UsageSettings } from '@/renderer/features/settings/components/UsageSettings';
 
 import type {
   SettingsRoute,
@@ -65,6 +66,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Shortcuts',
     description: 'Keyboard-first reference',
     Component: ShortcutsSettings,
+  },
+  {
+    id: 'usage',
+    title: 'Usage',
+    description: 'Token consumption and cost',
+    Component: UsageSettings,
   },
   {
     id: 'nuclear',

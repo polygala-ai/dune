@@ -39,6 +39,7 @@ export type AgentServiceListener = (snapshot: AgentServiceSnapshot) => void;
  */
 export interface AgentService {
   cancelTelegramSetupSession: (sessionId: string) => Promise<void>;
+  callAction?: (name: string, payload?: Record<string, unknown>) => Promise<unknown>;
   createAgent: (input: CreateAgentInput) => Promise<string>;
   deleteAgent: (agentId: string) => Promise<void>;
   ensureProjectMainAgent: (

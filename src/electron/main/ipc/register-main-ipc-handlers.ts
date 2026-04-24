@@ -171,6 +171,16 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     async (_event, agentId: string, input) =>
       withRuntime((runtimeController) => runtimeController.runIsolatedResearch(agentId, input)),
   );
+  ipcMain.handle(
+    ipcChannels.getUsageSummary,
+    async (_event, params: { since?: number }) => {
+      try {
+        return await withRuntime((runtimeController) => runtimeController.getUsageSummary(params));
+      } catch {
+        return null;
+      }
+    },
+  );
 
   // Workflow and storage handlers.
   ipcMain.handle(

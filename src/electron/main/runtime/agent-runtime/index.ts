@@ -130,6 +130,17 @@ const SHUTDOWN_TIMEOUT_MS = 5_000;
 const TRANSCRIPT_SUMMARY_CARD_ID = 'transcript-rolling-summary';
 const ISOLATED_RESEARCH_GROUP_FOLDER_PREFIX = 'isolated-research-slot-';
 
+interface AgentActionHttp {
+  mintContainerToken: (
+    groupFolder: string,
+    isMain: boolean,
+  ) => { url: string; token: string } | null;
+}
+
+type AgentLiteAgentWithActions = AgentLiteAgent & {
+  actionsHttp?: AgentActionHttp;
+};
+
 function cloneAgentMessage(message: AgentMessage): AgentMessage {
   return {
     ...message,
@@ -607,6 +618,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       cancelTelegramSetupSession: async (sessionId) => {
         await this.telegram.cancelSetupSession(sessionId);
       },
+      callAction: async (name, payload) => this.callAction(name, payload),
       createAgent: async (input) => this.createAgent(input),
       deleteAgent: async (agentId) => this.deleteAgent(agentId),
       ensureProjectMainAgent: async (projectId, projectName, projectRootPath) =>
@@ -690,6 +702,37 @@ export class AgentRuntime implements AgentRuntimeContract {
     };
     this.emit();
     await this.reloadExternalChannels();
+  }
+
+  /** Calls a host-registered AgentLite action from the main process. */
+  async callAction(name: string, payload: Record<string, unknown> = {}): Promise<unknown> {
+    const duneAgent = await this.resolveActionHostRuntime();
+    const agentLiteAgent = duneAgent.agentLiteAgent as AgentLiteAgentWithActions;
+    const actionAuth = agentLiteAgent.actionsHttp?.mintContainerToken(
+      duneAgent.groupFolder,
+      true,
+    );
+
+    if (!actionAuth) {
+      throw new Error('AgentLite action transport is unavailable.');
+    }
+
+    const response = await fetch(`${actionAuth.url}/call`, {
+      body: JSON.stringify({ name, payload }),
+      headers: {
+        authorization: `Bearer ${actionAuth.token}`,
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    const body = await response.json() as { result?: unknown; error?: string };
+
+    if (!response.ok) {
+      throw new Error(body.error ?? `AgentLite action "${name}" failed.`);
+    }
+
+    return body.result ?? null;
   }
 
   /** Shuts down agent. */
@@ -2334,6 +2377,19 @@ export class AgentRuntime implements AgentRuntimeContract {
     } finally {
       this.lifecycle.endEngineStart(startPromise);
     }
+  }
+
+  private async resolveActionHostRuntime(): Promise<DuneAgent> {
+    const selectedAgentId = this.snapshot.selectedAgentId;
+    const selectedRecord = selectedAgentId ? this.records.get(selectedAgentId) : undefined;
+    const fallbackRecord = this.records.values().next().value;
+    const record = selectedRecord ?? fallbackRecord;
+
+    if (!record) {
+      throw new Error('No AgentLite agents are available for action calls.');
+    }
+
+    return this.ensureAgentRuntime(record);
   }
 
   private async resolveExternalChannelFactory(

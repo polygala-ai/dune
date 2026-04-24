@@ -7,6 +7,7 @@ export type SettingsRoute =
   | 'models'
   | 'network'
   | 'shortcuts'
+  | 'usage'
   | 'nuclear';
 /** Theme preference shape. */
 export type ThemePreference = 'dark' | 'light' | 'system';

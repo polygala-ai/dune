@@ -194,6 +194,15 @@ export class DesktopRuntimeController {
     this.activeRuntime.service.selectAgent(agentId);
   }
 
+  /** Returns token usage summary, or null when AgentLite tracking is unavailable. */
+  async getUsageSummary(params: { since?: number }): Promise<unknown> {
+    try {
+      return await this.activeRuntime.service.callAction?.('usage_get_summary', params) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Resets desktop runtime. */
   async reset() {
     if (typeof this.activeRuntime.reset === 'function') {
