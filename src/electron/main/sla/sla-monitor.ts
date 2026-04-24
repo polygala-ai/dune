@@ -101,7 +101,7 @@ export class SlaMonitor {
           [createWorkflowEvent('item.sla_warning', `SLA warning: "${item.title}" is due soon.`, now, 'Dune')],
           now,
         );
-        this.notify(trigger, item, 'SLA deadline approaching');
+        this.notifyWarning(item, now);
       } else {
         item.slaBreachedAt = now;
         recordWorkflowItemEvents(
@@ -110,7 +110,7 @@ export class SlaMonitor {
           [createWorkflowEvent('item.sla_breached', `SLA breached: "${item.title}" missed its deadline.`, now, 'Dune')],
           now,
         );
-        this.notify(trigger, item, 'SLA deadline breached');
+        this.notifyBreach(item);
       }
 
       dirty = true;
@@ -145,11 +145,19 @@ export class SlaMonitor {
     return null;
   }
 
-  private notify(trigger: NotificationTriggerType, item: WorkflowItem, title: string): void {
+  private notifyWarning(item: WorkflowItem, now: number): void {
+    this.notify('sla_warning', item, `SLA expiring soon: ${item.title} — ${formatRemaining(item.slaDeadlineMs! - now)} remaining`);
+  }
+
+  private notifyBreach(item: WorkflowItem): void {
+    this.notify('sla_breach', item, `SLA breached: ${item.title} — deadline has passed`);
+  }
+
+  private notify(trigger: NotificationTriggerType, item: WorkflowItem, body: string): void {
     this.notificationManager?.notify({
-      body: item.title,
+      body,
       itemId: item.id,
-      title,
+      title: trigger === 'sla_warning' ? 'SLA expiring soon' : 'SLA breached',
       trigger,
     });
   }
@@ -157,4 +165,12 @@ export class SlaMonitor {
 
 function isWorkflowSnapshotLike(value: unknown): value is WorkflowSnapshot {
   return isPlainObject(value) && Array.isArray(value.items) && Array.isArray(value.projects);
+}
+
+function formatRemaining(ms: number): string {
+  const totalMinutes = Math.max(0, Math.ceil(ms / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${hours}h ${minutes}m`;
 }

@@ -78,19 +78,11 @@ function getColumnItems(
 
 /** Formats a compact SLA countdown label. */
 function formatSlaLabel(msLeft: number) {
-  const absMs = Math.abs(msLeft);
-  const minutes = Math.max(1, Math.ceil(absMs / 60_000));
+  const totalMinutes = Math.max(0, Math.ceil(Math.max(msLeft, 0) / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-
-  const hours = Math.ceil(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h`;
-  }
-
-  return `${Math.ceil(hours / 24)}d`;
+  return `${hours}h ${minutes}m`;
 }
 
 /** Renders the item card UI. */
@@ -110,10 +102,12 @@ export function ItemCard({
   const showPriority = item.priority === 'critical' || item.priority === 'high' || typeof item.slaDeadlineMs === 'number';
   const slaLabel = countdown
     ? isSlaMet
-      ? 'SLA met'
+      ? '✓ SLA met'
       : countdown.isBreached
-        ? `${formatSlaLabel(countdown.msLeft)} late`
-        : `${formatSlaLabel(countdown.msLeft)} left`
+        ? '🔴 SLA breached'
+        : countdown.isWarning
+          ? `⚠ SLA: ${formatSlaLabel(countdown.msLeft)}`
+          : `SLA: ${formatSlaLabel(countdown.msLeft)}`
     : null;
 
   return (
