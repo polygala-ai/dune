@@ -2681,6 +2681,7 @@ describe('AgentRuntime', () => {
           brief: 'Ship the runtime update.',
           createdAt: 1,
           id: 'item-1',
+        priority: 'medium',
           primaryAgentId: null,
           projectId: 'project-1',
           scheduledTaskId: 'task-1',

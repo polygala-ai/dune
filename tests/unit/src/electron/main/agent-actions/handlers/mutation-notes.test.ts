@@ -17,6 +17,7 @@ function createSnapshot(status: string = 'active'): WorkflowSnapshot {
         brief: 'Initial brief',
         createdAt: 1,
         id: 'item-1',
+        priority: 'medium',
         primaryAgentId: 'agent-1',
         projectId: 'project-1',
         scheduledTaskId: null,

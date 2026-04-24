@@ -6,6 +6,7 @@ import {
 } from '@/renderer/features/agents/model/time';
 import type { Agent } from '@/renderer/features/agents/types';
 import type {
+  ItemPriority,
   WorkflowItem,
   WorkflowItemStatus,
   WorkflowItemSummary,
@@ -13,6 +14,13 @@ import type {
   WorkflowSnapshot,
   WorkflowTaskStatus,
 } from '@/renderer/features/workflow/types';
+
+const priorityRank: Record<ItemPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
 
 /** Defines workflow item status labels. */
 export const workflowItemStatusLabels: Record<WorkflowItemStatus, string> = {
@@ -35,8 +43,8 @@ export const workflowTaskStatusLabels: Record<WorkflowTaskStatus, string> = {
 
 /** Compares items. */
 function compareItems(left: WorkflowItem, right: WorkflowItem) {
-  if (left.sortOrder !== right.sortOrder) {
-    return left.sortOrder - right.sortOrder;
+  if (priorityRank[left.priority] !== priorityRank[right.priority]) {
+    return priorityRank[left.priority] - priorityRank[right.priority];
   }
 
   return right.updatedAt - left.updatedAt;
@@ -152,13 +160,18 @@ export function presentWorkflowItemSummary(
     hasBlockedTasks,
     id: item.id,
     isAgentWorking,
+    priority: item.priority,
     primaryAgentId: item.primaryAgentId,
     primaryAgentName: primaryAgent?.name ?? null,
+    ...(typeof item.slaBreachedAt === 'number' ? { slaBreachedAt: item.slaBreachedAt } : {}),
+    ...(typeof item.slaDeadlineMs === 'number' ? { slaDeadlineMs: item.slaDeadlineMs } : {}),
+    ...(typeof item.slaWarnedAt === 'number' ? { slaWarnedAt: item.slaWarnedAt } : {}),
     specialStateLabel,
     status: item.status,
     statusLabel: formatWorkflowItemStatus(item.status),
     title: item.title,
     totalTaskCount,
+    updatedAt: item.updatedAt,
     updatedLabel: formatAgentTimestamp(item.updatedAt, now),
   };
 }

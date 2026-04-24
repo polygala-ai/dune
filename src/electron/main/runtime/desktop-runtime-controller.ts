@@ -6,6 +6,8 @@ import type {
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
+import { NotificationManager } from '@/electron/main/notifications/notification-manager';
+import { SlaMonitor } from '@/electron/main/sla/sla-monitor';
 import type {
   AgentDefinition,
   RunIsolatedResearchInput,
@@ -34,6 +36,7 @@ type RealRuntime = ActiveRuntime & {
 export interface DesktopRuntimeControllerOptions
   extends AgentRuntimeOptions {
   createRealRuntime?: (options: DesktopRuntimeControllerOptions) => RealRuntime;
+  createSlaMonitor?: (options: DesktopRuntimeControllerOptions) => Pick<SlaMonitor, 'start' | 'stop'>;
 }
 
 /** Coordinates desktop runtime. */
@@ -52,12 +55,23 @@ export class DesktopRuntimeController {
 
   private shutdownPromise: Promise<void> | null = null;
 
+  private readonly slaMonitor: Pick<SlaMonitor, 'start' | 'stop'> | null = null;
+
   constructor(options: DesktopRuntimeControllerOptions) {
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.runtimeOptions = options;
     this.createRealRuntime =
       options.createRealRuntime ??
       ((runtimeOptions) => new AgentRuntime(runtimeOptions));
+    this.slaMonitor =
+      options.createSlaMonitor?.(options) ??
+      (options.actionServices
+        ? new SlaMonitor({
+            notificationManager: new NotificationManager(),
+            onWorkflowChanged: options.actionServices.onWorkflowChanged,
+            workflowStore: options.actionServices.workflowStore,
+          })
+        : null);
     this.activeRuntime = createMockAgentRuntime({
       message: 'Starting Dune runtime.',
       mode: 'mock-fallback',
@@ -69,6 +83,8 @@ export class DesktopRuntimeController {
 
   /** Starts desktop runtime. */
   async start() {
+    this.slaMonitor?.start();
+
     try {
       const host = this.createRealRuntime(this.runtimeOptions);
       await host.start();
@@ -208,6 +224,8 @@ export class DesktopRuntimeController {
     }
 
     this.shutdownPromise = (async () => {
+      this.slaMonitor?.stop();
+
       this.activeRuntimeUnsubscribe?.();
       this.activeRuntimeUnsubscribe = null;
 

@@ -135,7 +135,9 @@ export function registerDuneActions(
     title: z.string().describe('Work item title'),
     brief: z.string().optional().describe('Work item brief/description'),
     note: z.string().optional().describe('Optional note to add to workflow history with this creation.'),
+    priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Priority (default: medium).'),
     projectId: z.string().optional().describe('Project ID. Omit for current project.'),
+    slaDeadlineMs: z.number().optional().describe('SLA deadline as a Unix millisecond timestamp.'),
     status: z.enum(['inbox', 'ready']).optional().describe('Initial status (default: inbox)'),
   });
   reg('workflow.items.update', {
@@ -145,6 +147,8 @@ export function registerDuneActions(
     note: z.string().optional().describe('Optional note to add to workflow history with this update.'),
     primaryAgentId: z.string().nullable().optional()
       .describe('Agent ID to assign, or null to unassign. Cannot change while item is done.'),
+    priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('New priority.'),
+    slaDeadlineMs: z.number().nullable().optional().describe('SLA deadline as a Unix millisecond timestamp, or null to clear.'),
   });
   reg('workflow.items.move', {
     itemId: z.string().describe('Work item ID'),

@@ -13,6 +13,7 @@ import {
 import type {
   WorkflowEventKind,
   WorkflowItem,
+  ItemPriority,
   WorkflowItemStatus,
   WorkflowProjectFilter,
   WorkflowProjectView,
@@ -29,6 +30,12 @@ import {
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
+const priorityRank: Record<ItemPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
 
 /** Creates item event. */
 function createItemEvent(
@@ -72,9 +79,9 @@ function sortItemsByProjectStatus(items: WorkflowItem[]) {
   for (const group of grouped.values()) {
     group
       .sort((left, right) =>
-        left.sortOrder === right.sortOrder
-          ? left.updatedAt - right.updatedAt
-          : left.sortOrder - right.sortOrder,
+        priorityRank[left.priority] === priorityRank[right.priority]
+          ? right.updatedAt - left.updatedAt
+          : priorityRank[left.priority] - priorityRank[right.priority],
       )
       .forEach((item, index) => {
         item.sortOrder = index;
@@ -489,9 +496,11 @@ export function createWorkflowSlice(
             brief,
             createdAt: updatedAt,
             id: itemId,
+            priority: input.priority ?? 'medium',
             primaryAgentId: null,
             projectId: input.projectId,
             scheduledTaskId: null,
+            ...(typeof input.slaDeadlineMs === 'number' ? { slaDeadlineMs: input.slaDeadlineMs } : {}),
             sortOrder: getProjectItems(
               state.items.filter((item) => item.status === input.status),
               input.projectId,
@@ -794,22 +803,51 @@ export function createWorkflowSlice(
 
                 const title = input.title?.trim();
                 const brief = input.brief?.trim();
-                const nextItem = {
+                const priority = input.priority;
+                const hasPriorityChange = priority !== undefined && priority !== item.priority;
+                const hasSlaChange = input.slaDeadlineMs !== undefined;
+                const nextSlaDeadlineMs = input.slaDeadlineMs;
+                const nextItem: WorkflowItem = {
                   ...item,
                   ...(title ? { title } : {}),
                   ...(brief !== undefined ? { brief } : {}),
+                  ...(priority ? { priority } : {}),
                   updatedAt,
                 };
 
-                if (title === undefined && brief === undefined) {
+                if (title === undefined && brief === undefined && !hasPriorityChange && !hasSlaChange) {
                   return item;
+                }
+
+                if (hasSlaChange) {
+                  if (typeof nextSlaDeadlineMs === 'number') {
+                    nextItem.slaDeadlineMs = nextSlaDeadlineMs;
+                  } else {
+                    delete nextItem.slaDeadlineMs;
+                  }
+
+                  delete nextItem.slaWarnedAt;
+                  delete nextItem.slaBreachedAt;
                 }
 
                 return appendItemEvents(
                   nextItem,
                   [
                     ...(normalizedNote ? [{ description: normalizedNote, kind: 'note' as const }] : []),
-                    { description: 'Work item details were updated.', kind: 'item' as const },
+                    ...(title !== undefined || brief !== undefined
+                      ? [{ description: 'Work item details were updated.', kind: 'item' as const }]
+                      : []),
+                    ...(hasPriorityChange
+                      ? [{ description: `Priority changed to ${priority}.`, kind: 'item.priority_changed' as const }]
+                      : []),
+                    ...(hasSlaChange
+                      ? [{
+                          description: typeof nextSlaDeadlineMs === 'number'
+                            ? `SLA deadline set to ${new Date(nextSlaDeadlineMs).toISOString()}.`
+                            : 'SLA deadline cleared.',
+                          kind: typeof nextSlaDeadlineMs === 'number' ? 'item.sla_set' as const : 'item.sla_cleared' as const,
+                        }]
+                      : []),
                   ],
                   updatedAt,
                 );

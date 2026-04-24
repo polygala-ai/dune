@@ -14,6 +14,10 @@ import { ToolHandlerError } from './types';
 export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;
 /** Workflow item status. */
 export type WorkflowItemStatus = (typeof workflowItemStatuses)[number];
+/** Workflow item priorities constant. */
+export const workflowItemPriorities = ['critical', 'high', 'medium', 'low'] as const;
+/** Workflow item priority. */
+export type ItemPriority = (typeof workflowItemPriorities)[number];
 
 /** Workflow snapshot. */
 export interface WorkflowSnapshot {
@@ -37,9 +41,13 @@ export interface WorkflowItem {
   brief: string;
   createdAt: number;
   id: string;
+  priority: ItemPriority;
   primaryAgentId: string | null;
   projectId: string;
   scheduledTaskId: string | null;
+  slaBreachedAt?: number;
+  slaDeadlineMs?: number;
+  slaWarnedAt?: number;
   sortOrder: number;
   status: string;
   tasks: WorkflowTask[];
@@ -160,7 +168,11 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()
           : createArtifactFolderName(item.title, item.id),
+      priority: isWorkflowItemPriority(item.priority) ? item.priority : 'medium',
       scheduledTaskId: item.scheduledTaskId ?? null,
+      ...(typeof item.slaBreachedAt === 'number' ? { slaBreachedAt: item.slaBreachedAt } : {}),
+      ...(typeof item.slaDeadlineMs === 'number' ? { slaDeadlineMs: item.slaDeadlineMs } : {}),
+      ...(typeof item.slaWarnedAt === 'number' ? { slaWarnedAt: item.slaWarnedAt } : {}),
       tasks: item.tasks.map((task) => ({ ...task })),
       workProducts: item.workProducts.map((workProduct) => ({ ...workProduct })),
       workflowEvents: item.workflowEvents.map((event) => ({ ...event })),
@@ -189,6 +201,20 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
       typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
         ? item.artifactFolderName.trim()
         : createArtifactFolderName(item.title, item.id);
+    item.priority = isWorkflowItemPriority(item.priority) ? item.priority : 'medium';
+
+    if (typeof item.slaDeadlineMs !== 'number') {
+      delete item.slaDeadlineMs;
+      delete item.slaWarnedAt;
+      delete item.slaBreachedAt;
+    } else {
+      if (typeof item.slaWarnedAt !== 'number') {
+        delete item.slaWarnedAt;
+      }
+      if (typeof item.slaBreachedAt !== 'number') {
+        delete item.slaBreachedAt;
+      }
+    }
   }
 
   for (const project of snapshot.projects) {
@@ -226,6 +252,11 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
 /** Returns whether the value is a workflow item status. */
 export function isWorkflowItemStatus(value: string): value is WorkflowItemStatus {
   return workflowItemStatuses.includes(value as WorkflowItemStatus);
+}
+
+/** Returns whether the value is a workflow item priority. */
+export function isWorkflowItemPriority(value: unknown): value is ItemPriority {
+  return typeof value === 'string' && workflowItemPriorities.includes(value as ItemPriority);
 }
 
 /** Compares items. */
