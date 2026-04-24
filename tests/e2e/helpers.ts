@@ -246,7 +246,7 @@ export async function navigateToWorkflow(page: AppPage) {
 
   await dispatchPrimaryShortcut(page, 'k');
   await expect(
-    page.getByPlaceholder('Jump to a project, work item, agent, or action…'),
+    page.getByPlaceholder('Search titles, briefs, and work products…'),
   ).toBeVisible();
   await page.getByText('Project board', { exact: true }).click();
 

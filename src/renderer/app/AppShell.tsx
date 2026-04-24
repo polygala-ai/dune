@@ -32,9 +32,10 @@ import { useTranscriptScroll } from '@/renderer/app/hooks/use-transcript-scroll'
 import { useWindowControlsOverlay } from '@/renderer/app/hooks/use-window-controls-overlay';
 import { useWorkflowPersistence } from '@/renderer/app/hooks/use-workflow-persistence';
 import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
-import { CommandMenu } from '@/renderer/app/shell/CommandMenu';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
+import { CommandPalette } from '@/renderer/components/CommandPalette';
+import { createDefaultWorkItemFilters } from '@/renderer/utils/searchIndex';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
   useAgentSession,
@@ -71,19 +72,18 @@ export default function AppShell() {
   const [isCreateWorkItemOpen, setCreateWorkItemOpen] = useState(false);
   const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
   const [loadingTranscriptAgentId, setLoadingTranscriptAgentId] = useState<string | null>(null);
+  const [workItemFilters, setWorkItemFilters] = useState(createDefaultWorkItemFilters);
   const { composerRef, focusComposer } = useComposerFocus();
   const { isMac } = useDesktopPlatform();
   const commands = useAppCommands();
   const {
     activeAgent,
     activeAgentCustomization,
-    commandAgents,
     draft,
     externalChannels,
     runtimeInfo,
   } = useAgentSession();
   const {
-    filteredItemSummaries,
     projectAgents,
     projects,
     selectedProject,
@@ -108,11 +108,13 @@ export default function AppShell() {
     agents,
     appendTranscriptPage,
     clearAgentAssignments,
+    items,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
       appendTranscriptPage: state.appendTranscriptPage,
       clearAgentAssignments: state.clearAgentAssignments,
+      items: state.items,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
@@ -515,9 +517,11 @@ export default function AppShell() {
               />
             ) : route === 'workflow' ? (
               <WorkflowWorkspace
+                filters={workItemFilters}
                 isCompactShell={isCompactShell}
                 isCreateProjectOpen={isCreateProjectOpen}
                 isCreateWorkItemOpen={isCreateWorkItemOpen}
+                onFiltersChange={setWorkItemFilters}
                 isSidebarOpen={controller.isSidebarDrawerOpen}
                 onCreateProjectOpenChange={setCreateProjectOpen}
                 onCreateWorkItemOpenChange={setCreateWorkItemOpen}
@@ -577,31 +581,16 @@ export default function AppShell() {
           sidebar={sidebar('h-full rounded-[24px]', { showQuickSwitch: false })}
         />
 
-        <CommandMenu
-          agents={commandAgents.filter((agent) =>
-            selectedProjectId ? agent.projectId === selectedProjectId : true,
-          )}
-          isContextPanelOpen={isContextPanelOpen}
-          items={filteredItemSummaries.map((item) => ({
-            id: item.id,
-            statusLabel: item.statusLabel,
-            title: item.title,
-            updatedLabel: item.updatedLabel,
-          }))}
-          onCreateAgent={controller.handleOpenCreateAgent}
-          onCreateItem={() => setCreateWorkItemOpen(true)}
-          onCreateProject={() => setCreateProjectOpen(true)}
+        <CommandPalette
+          agents={agents}
+          filters={workItemFilters}
+          items={items}
           onOpenChange={commands.setCommandOpen}
-          onOpenBoard={commands.openWorkflow}
-          onOpenSettings={controller.handleOpenSettings}
-          onSelectAgent={controller.handleSelectAgent}
-          onSelectItem={commands.openItem}
-          onSelectProject={(projectId) => {
+          onSelectItem={(itemId, projectId) => {
             commands.openWorkflow(projectId);
+            commands.openItem(itemId);
           }}
-          onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
-          projects={projects}
         />
 
         <CreateAgentDialog
