@@ -14,7 +14,7 @@ import { FilterPanel } from '@/renderer/components/FilterPanel';
 import {
   filterWorkflowItems,
   type WorkItemFilters,
-} from '@/renderer/utils/SearchIndex';
+} from '@/renderer/utils/searchIndex';
 import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import { useWorkflowSession } from '@/renderer/app/store/selectors';

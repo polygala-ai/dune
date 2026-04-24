@@ -15,7 +15,7 @@ import {
   SearchIndex,
   type WorkItemSearchResult,
   type WorkItemFilters,
-} from '@/renderer/utils/SearchIndex';
+} from '@/renderer/utils/searchIndex';
 import type { Agent } from '@/renderer/features/agents/types';
 import type { WorkflowItem } from '@/renderer/features/workflow/types';
 import {

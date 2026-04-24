@@ -35,7 +35,7 @@ import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
 import { CommandPalette } from '@/renderer/components/CommandPalette';
-import { createDefaultWorkItemFilters } from '@/renderer/utils/SearchIndex';
+import { createDefaultWorkItemFilters } from '@/renderer/utils/searchIndex';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
   useAgentSession,

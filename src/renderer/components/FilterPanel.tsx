@@ -12,7 +12,7 @@ import {
   type ReviewerFilter,
   unassignedAgentFilterId,
   type WorkItemFilters,
-} from '@/renderer/utils/SearchIndex';
+} from '@/renderer/utils/searchIndex';
 import {
   workflowItemStatusLabels,
 } from '@/renderer/features/workflow/model/workflow-presenters';

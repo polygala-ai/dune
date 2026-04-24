@@ -11,7 +11,7 @@ import {
   SearchIndex,
   unassignedAgentFilterId,
   type WorkItemFilters,
-} from '@/renderer/utils/SearchIndex';
+} from '@/renderer/utils/searchIndex';
 
 const baseFilters: WorkItemFilters = {
   agentIds: [],
