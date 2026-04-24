@@ -32,9 +32,9 @@ import { useTranscriptScroll } from '@/renderer/app/hooks/use-transcript-scroll'
 import { useWindowControlsOverlay } from '@/renderer/app/hooks/use-window-controls-overlay';
 import { useWorkflowPersistence } from '@/renderer/app/hooks/use-workflow-persistence';
 import { AppSidebar } from '@/renderer/app/shell/AppSidebar';
-import { CommandMenu } from '@/renderer/app/shell/CommandMenu';
 import { ContextPanelHost } from '@/renderer/app/shell/ContextPanelHost';
 import { SidebarDrawer } from '@/renderer/app/shell/SidebarDrawer';
+import { CommandPalette } from '@/components/CommandPalette';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import {
   useAgentSession,
@@ -77,13 +77,11 @@ export default function AppShell() {
   const {
     activeAgent,
     activeAgentCustomization,
-    commandAgents,
     draft,
     externalChannels,
     runtimeInfo,
   } = useAgentSession();
   const {
-    filteredItemSummaries,
     projectAgents,
     projects,
     selectedProject,
@@ -108,11 +106,13 @@ export default function AppShell() {
     agents,
     appendTranscriptPage,
     clearAgentAssignments,
+    items,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
       appendTranscriptPage: state.appendTranscriptPage,
       clearAgentAssignments: state.clearAgentAssignments,
+      items: state.items,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
@@ -577,31 +577,15 @@ export default function AppShell() {
           sidebar={sidebar('h-full rounded-[24px]', { showQuickSwitch: false })}
         />
 
-        <CommandMenu
-          agents={commandAgents.filter((agent) =>
-            selectedProjectId ? agent.projectId === selectedProjectId : true,
-          )}
-          isContextPanelOpen={isContextPanelOpen}
-          items={filteredItemSummaries.map((item) => ({
-            id: item.id,
-            statusLabel: item.statusLabel,
-            title: item.title,
-            updatedLabel: item.updatedLabel,
-          }))}
-          onCreateAgent={controller.handleOpenCreateAgent}
-          onCreateItem={() => setCreateWorkItemOpen(true)}
-          onCreateProject={() => setCreateProjectOpen(true)}
+        <CommandPalette
+          agents={agents}
+          items={items}
           onOpenChange={commands.setCommandOpen}
-          onOpenBoard={commands.openWorkflow}
-          onOpenSettings={controller.handleOpenSettings}
-          onSelectAgent={controller.handleSelectAgent}
-          onSelectItem={commands.openItem}
-          onSelectProject={(projectId) => {
+          onSelectItem={(itemId, projectId) => {
             commands.openWorkflow(projectId);
+            commands.openItem(itemId);
           }}
-          onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
-          projects={projects}
         />
 
         <CreateAgentDialog
