@@ -57,6 +57,7 @@ const bridge: DesktopBridge = {
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
+  getUsageSummary: (params) => ipcRenderer.invoke(ipcChannels.getUsageSummary, params),
   subscribe: (listener) => {
     /** Handles snapshot. */
     const handleSnapshot = (

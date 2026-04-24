@@ -302,6 +302,40 @@ interface AgentSessionTokenTotals {
 
 type AgentTokenUsageSnapshot = AgentMessageUsage;
 
+interface AgentLiteActionHttp {
+  mintContainerToken(
+    groupFolder: string,
+    isMain: boolean,
+  ): { url: string; token: string } | null;
+}
+
+type AgentLiteAgentWithActions = AgentLiteAgent & {
+  actionsHttp?: AgentLiteActionHttp;
+};
+
+interface UsageByModelRow {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+}
+
+interface UsageBySessionRow {
+  session_id: string;
+  agent_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+}
+
+interface UsageSummaryResult {
+  total_tokens: number;
+  total_cost_usd: number | null;
+  request_count: number;
+  by_model: UsageByModelRow[];
+  by_session: UsageBySessionRow[];
+}
+
 function asNonNegativeInteger(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return null;
@@ -316,6 +350,62 @@ function asFiniteNumber(value: unknown): number | null {
   }
 
   return value;
+}
+
+function isUsageSummaryResult(value: unknown): value is UsageSummaryResult {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const summary = value as UsageSummaryResult;
+  return typeof summary.total_tokens === 'number'
+    && typeof summary.request_count === 'number'
+    && Array.isArray(summary.by_model)
+    && Array.isArray(summary.by_session);
+}
+
+function addNullableCost(left: number | null, right: number | null): number | null {
+  if (left === null && right === null) {
+    return null;
+  }
+
+  return (left ?? 0) + (right ?? 0);
+}
+
+function mergeUsageSummaries(summaries: UsageSummaryResult[]): UsageSummaryResult {
+  const byModel = new Map<string, UsageByModelRow>();
+  const bySession: UsageBySessionRow[] = [];
+  let totalTokens = 0;
+  let totalCostUsd: number | null = null;
+  let requestCount = 0;
+
+  for (const summary of summaries) {
+    totalTokens += summary.total_tokens;
+    totalCostUsd = addNullableCost(totalCostUsd, summary.total_cost_usd);
+    requestCount += summary.request_count;
+    bySession.push(...summary.by_session);
+
+    for (const row of summary.by_model) {
+      const existing = byModel.get(row.model);
+
+      byModel.set(row.model, existing
+        ? {
+            cost_usd: addNullableCost(existing.cost_usd, row.cost_usd),
+            input_tokens: existing.input_tokens + row.input_tokens,
+            model: row.model,
+            output_tokens: existing.output_tokens + row.output_tokens,
+          }
+        : { ...row });
+    }
+  }
+
+  return {
+    by_model: [...byModel.values()],
+    by_session: bySession,
+    request_count: requestCount,
+    total_cost_usd: totalCostUsd,
+    total_tokens: totalTokens,
+  };
 }
 
 function captureAgentTokenUsageSnapshot(
@@ -731,6 +821,22 @@ export class AgentRuntime implements AgentRuntimeContract {
     await this.telegram.refreshRuntimeState({ forceReconnect: true });
   }
 
+  /** Returns token usage summary from running AgentLite agents. */
+  async getUsageSummary(params: { since?: number }): Promise<UsageSummaryResult | null> {
+    const summaries = await Promise.all(
+      [...this.lifecycle.allRuntimes()].map(([, duneAgent]) =>
+        this.callAgentLiteAction(duneAgent, 'usage_get_summary', params)),
+    );
+    const usableSummaries = summaries.filter((summary): summary is UsageSummaryResult =>
+      isUsageSummaryResult(summary));
+
+    if (usableSummaries.length === 0) {
+      return null;
+    }
+
+    return mergeUsageSummaries(usableSummaries);
+  }
+
   /** Resets agent. */
   reset() {
     this.messageStream.clear();
@@ -756,6 +862,35 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
     void this.telegram.disconnectAll();
+  }
+
+  private async callAgentLiteAction(
+    duneAgent: DuneAgent,
+    name: string,
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    const actionHost = duneAgent.agentLiteAgent as AgentLiteAgentWithActions;
+    const binding = actionHost.actionsHttp?.mintContainerToken('main', true);
+
+    if (!binding) {
+      return null;
+    }
+
+    const response = await fetch(`${binding.url}/call`, {
+      body: JSON.stringify({ name, payload }),
+      headers: {
+        Authorization: `Bearer ${binding.token}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const body = await response.json() as { result?: unknown };
+    return body.result ?? null;
   }
 
   // -------------------------------------------------------------------------
