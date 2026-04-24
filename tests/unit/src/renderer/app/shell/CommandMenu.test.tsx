@@ -34,6 +34,7 @@ describe('CommandMenu', () => {
         onToggleContextPanel={vi.fn()}
         open
         projects={[]}
+        searchIndex={{ search: () => [] }}
       />,
     );
 

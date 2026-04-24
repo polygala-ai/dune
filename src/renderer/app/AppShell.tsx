@@ -3,6 +3,7 @@
 import {
   type CSSProperties,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -52,6 +53,7 @@ import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import { TooltipProvider } from '@/renderer/shared/ui/tooltip';
 import { WorkflowProjectActionsMenu } from '@/renderer/features/workflow/components/WorkflowProjectActionsMenu';
+import { createSearchIndex } from '@/renderer/features/workflow/model/search-index';
 import {
   MAC_TITLEBAR_OVERLAY_HEIGHT,
   MAC_TITLEBAR_SIDEBAR_TOGGLE_GAP,
@@ -108,12 +110,18 @@ export default function AppShell() {
     agents,
     appendTranscriptPage,
     clearAgentAssignments,
+    allWorkflowItems,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
       appendTranscriptPage: state.appendTranscriptPage,
+      allWorkflowItems: state.items,
       clearAgentAssignments: state.clearAgentAssignments,
     })),
+  );
+  const searchIndex = useMemo(
+    () => createSearchIndex(allWorkflowItems, agents, projects),
+    [agents, allWorkflowItems, projects],
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
   const titlebarAreaRect = useWindowControlsOverlay(isMac);
@@ -602,6 +610,7 @@ export default function AppShell() {
           onToggleContextPanel={controller.handleToggleContextPanel}
           open={isCommandOpen}
           projects={projects}
+          searchIndex={searchIndex}
         />
 
         <CreateAgentDialog
