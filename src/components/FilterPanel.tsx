@@ -10,6 +10,7 @@ import {
   areWorkItemFiltersEmpty,
   createDefaultWorkItemFilters,
   type ReviewerFilter,
+  unassignedAgentFilterId,
   type WorkItemFilters,
 } from '@/search/SearchIndex';
 import {
@@ -50,6 +51,12 @@ function toggleStatus(statuses: WorkflowItemStatus[], status: WorkflowItemStatus
   return statuses.includes(status)
     ? statuses.filter((candidate) => candidate !== status)
     : [...statuses, status];
+}
+
+function toggleAgent(agentIds: string[], agentId: string) {
+  return agentIds.includes(agentId)
+    ? agentIds.filter((candidate) => candidate !== agentId)
+    : [...agentIds, agentId];
 }
 
 /** Renders the workflow board filters. */
@@ -131,29 +138,63 @@ export function FilterPanel({
             </div>
           </div>
 
-          <label className="min-w-0">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
               Agent
-            </span>
-            <select
-              className="focus-ring-app mt-3 h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-3 text-sm text-app-text outline-none focus-visible:ring-2"
-              onChange={(event) => {
-                onChange({
-                  ...filters,
-                  agentId: event.target.value,
-                });
-              }}
-              value={filters.agentId}
-            >
-              <option value="all">Any agent</option>
-              <option value="unassigned">Unassigned</option>
+            </div>
+            <div className="mt-3 flex max-h-[128px] flex-col gap-2 overflow-y-auto pr-1">
+              <label
+                className={cn(
+                  'pill-key cursor-pointer justify-start',
+                  filters.agentIds.includes(unassignedAgentFilterId)
+                    ? 'bg-app-accent-soft text-app-text'
+                    : '',
+                )}
+              >
+                <input
+                  checked={filters.agentIds.includes(unassignedAgentFilterId)}
+                  className="sr-only"
+                  onChange={() => {
+                    onChange({
+                      ...filters,
+                      agentIds: toggleAgent(filters.agentIds, unassignedAgentFilterId),
+                    });
+                  }}
+                  type="checkbox"
+                />
+                Unassigned
+              </label>
               {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
+                <label
+                  className={cn(
+                    'pill-key min-w-0 cursor-pointer justify-start',
+                    filters.agentIds.includes(agent.id) ? 'bg-app-accent-soft text-app-text' : '',
+                  )}
+                  key={agent.id}
+                >
+                  <input
+                    checked={filters.agentIds.includes(agent.id)}
+                    className="sr-only"
+                    onChange={() => {
+                      onChange({
+                        ...filters,
+                        agentIds: toggleAgent(filters.agentIds, agent.id),
+                      });
+                    }}
+                    type="checkbox"
+                  />
+                  <span className="truncate">
+                    {agent.name}
+                  </span>
+                </label>
               ))}
-            </select>
-          </label>
+              {agents.length === 0 ? (
+                <div className="text-xs text-app-muted">
+                  No project agents yet
+                </div>
+              ) : null}
+            </div>
+          </div>
 
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">

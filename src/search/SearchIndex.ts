@@ -12,9 +12,12 @@ import type {
 /** Reviewer filter mode. */
 export type ReviewerFilter = 'all' | 'has' | 'none';
 
+/** Assignee option used for work items without a primary agent. */
+export const unassignedAgentFilterId = 'unassigned';
+
 /** Work item filter state. */
 export interface WorkItemFilters {
-  agentId: string;
+  agentIds: string[];
   dateFrom: string;
   dateTo: string;
   reviewer: ReviewerFilter;
@@ -45,7 +48,7 @@ const defaultSnippetLength = 132;
 /** Creates empty work item filters. */
 export function createDefaultWorkItemFilters(): WorkItemFilters {
   return {
-    agentId: 'all',
+    agentIds: [],
     dateFrom: '',
     dateTo: '',
     reviewer: 'all',
@@ -66,7 +69,7 @@ export function hasReviewerSignal(item: WorkflowItem) {
 export function areWorkItemFiltersEmpty(filters: WorkItemFilters) {
   return (
     filters.statuses.length === 0 &&
-    filters.agentId === 'all' &&
+    filters.agentIds.length === 0 &&
     filters.dateFrom === '' &&
     filters.dateTo === '' &&
     filters.reviewer === 'all'
@@ -92,16 +95,12 @@ function matchesFilters(item: WorkflowItem, filters: WorkItemFilters) {
     return false;
   }
 
-  if (filters.agentId === 'unassigned' && item.primaryAgentId) {
-    return false;
-  }
+  if (filters.agentIds.length > 0) {
+    const assigneeFilterId = item.primaryAgentId ?? unassignedAgentFilterId;
 
-  if (
-    filters.agentId !== 'all' &&
-    filters.agentId !== 'unassigned' &&
-    item.primaryAgentId !== filters.agentId
-  ) {
-    return false;
+    if (!filters.agentIds.includes(assigneeFilterId)) {
+      return false;
+    }
   }
 
   const fromTimestamp = getDateTimestamp(filters.dateFrom, false);
