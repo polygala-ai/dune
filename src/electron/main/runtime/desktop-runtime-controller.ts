@@ -21,6 +21,7 @@ import {
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
+  getUsageSummary?: (params: { since?: number }) => Promise<unknown>;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -195,8 +196,12 @@ export class DesktopRuntimeController {
   }
 
   /** Returns token usage summary, or null when AgentLite tracking is unavailable. */
-  async getUsageSummary(_params: { since?: number }): Promise<unknown> {
-    return null;
+  async getUsageSummary(params: { since?: number }): Promise<unknown> {
+    try {
+      return await this.activeRuntime.getUsageSummary?.(params) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** Resets desktop runtime. */

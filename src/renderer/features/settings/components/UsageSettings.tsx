@@ -102,7 +102,9 @@ export function UsageSettings(_props: SettingsSectionComponentProps) {
     setLoading(true);
     try {
       const since = timeRange === '7d' ? Date.now() - SEVEN_DAYS_MS : undefined;
-      const result = await window.duneDesktop?.getUsageSummary?.({ since }) ?? null;
+      const result = await window.duneDesktop?.getUsageSummary?.(
+        since === undefined ? {} : { since },
+      ) ?? null;
       if (result === null) {
         setUnavailable(true);
         setData(null);
