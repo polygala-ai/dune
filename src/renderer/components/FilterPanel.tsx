@@ -8,9 +8,11 @@ import {
 
 import {
   areWorkItemFiltersEmpty,
+  countActiveWorkItemFilters,
   createDefaultWorkItemFilters,
   type ReviewerFilter,
   unassignedAgentFilterId,
+  type WorkItemDateFilterField,
   type WorkItemFilters,
 } from '@/renderer/utils/searchIndex';
 import {
@@ -70,6 +72,7 @@ export function FilterPanel({
   totalCount,
 }: FilterPanelProps) {
   const isFiltered = !areWorkItemFiltersEmpty(filters);
+  const activeFilterCount = countActiveWorkItemFilters(filters);
 
   return (
     <section className="rounded-[22px] border border-app-border bg-app-panel/70">
@@ -85,6 +88,14 @@ export function FilterPanel({
           <span className="truncate text-xs text-app-muted">
             {matchCount}/{totalCount} work items
           </span>
+          {activeFilterCount > 0 ? (
+            <span
+              aria-label={`${activeFilterCount} active filters`}
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-app-accent px-1.5 text-[11px] font-semibold text-white"
+            >
+              {activeFilterCount}
+            </span>
+          ) : null}
           <ChevronDown
             className={cn(
               'h-4 w-4 shrink-0 text-app-muted transition-transform',
@@ -197,12 +208,28 @@ export function FilterPanel({
           </div>
 
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-              Created
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
+                Date range
+              </div>
+              <select
+                aria-label="Date filter field"
+                className="focus-ring-app h-8 rounded-[12px] border border-app-border bg-app-panel px-2 text-xs text-app-text outline-none focus-visible:ring-2"
+                onChange={(event) => {
+                  onChange({
+                    ...filters,
+                    dateField: event.target.value as WorkItemDateFilterField,
+                  });
+                }}
+                value={filters.dateField}
+              >
+                <option value="created">Created</option>
+                <option value="updated">Updated</option>
+              </select>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Input
-                aria-label="Created from"
+                aria-label={`${filters.dateField === 'updated' ? 'Updated' : 'Created'} from`}
                 onChange={(event) => {
                   onChange({
                     ...filters,
@@ -213,7 +240,7 @@ export function FilterPanel({
                 value={filters.dateFrom}
               />
               <Input
-                aria-label="Created to"
+                aria-label={`${filters.dateField === 'updated' ? 'Updated' : 'Created'} to`}
                 onChange={(event) => {
                   onChange({
                     ...filters,

@@ -12,12 +12,16 @@ import type {
 /** Reviewer filter mode. */
 export type ReviewerFilter = 'all' | 'has' | 'none';
 
+/** Date field used by the date range filter. */
+export type WorkItemDateFilterField = 'created' | 'updated';
+
 /** Assignee option used for work items without a primary agent. */
 export const unassignedAgentFilterId = 'unassigned';
 
 /** Work item filter state. */
 export interface WorkItemFilters {
   agentIds: string[];
+  dateField: WorkItemDateFilterField;
   dateFrom: string;
   dateTo: string;
   reviewer: ReviewerFilter;
@@ -49,6 +53,7 @@ const defaultSnippetLength = 132;
 export function createDefaultWorkItemFilters(): WorkItemFilters {
   return {
     agentIds: [],
+    dateField: 'created',
     dateFrom: '',
     dateTo: '',
     reviewer: 'all',
@@ -70,9 +75,21 @@ export function areWorkItemFiltersEmpty(filters: WorkItemFilters) {
   return (
     filters.statuses.length === 0 &&
     filters.agentIds.length === 0 &&
+    filters.dateField === 'created' &&
     filters.dateFrom === '' &&
     filters.dateTo === '' &&
     filters.reviewer === 'all'
+  );
+}
+
+/** Counts active filter chips/options. */
+export function countActiveWorkItemFilters(filters: WorkItemFilters) {
+  return (
+    filters.statuses.length +
+    filters.agentIds.length +
+    (filters.dateFrom || filters.dateTo ? 1 : 0) +
+    (filters.dateField !== 'created' ? 1 : 0) +
+    (filters.reviewer !== 'all' ? 1 : 0)
   );
 }
 
@@ -105,12 +122,13 @@ function matchesFilters(item: WorkflowItem, filters: WorkItemFilters) {
 
   const fromTimestamp = getDateTimestamp(filters.dateFrom, false);
   const toTimestamp = getDateTimestamp(filters.dateTo, true);
+  const itemTimestamp = filters.dateField === 'updated' ? item.updatedAt : item.createdAt;
 
-  if (fromTimestamp !== null && item.createdAt < fromTimestamp) {
+  if (fromTimestamp !== null && itemTimestamp < fromTimestamp) {
     return false;
   }
 
-  if (toTimestamp !== null && item.createdAt > toTimestamp) {
+  if (toTimestamp !== null && itemTimestamp > toTimestamp) {
     return false;
   }
 

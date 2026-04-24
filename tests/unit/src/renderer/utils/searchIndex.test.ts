@@ -15,6 +15,7 @@ import {
 
 const baseFilters: WorkItemFilters = {
   agentIds: [],
+  dateField: 'created',
   dateFrom: '',
   dateTo: '',
   reviewer: 'all',
@@ -34,9 +35,11 @@ function createItem(input: {
   status?: WorkflowItemStatus;
   taskStatus?: WorkflowTaskStatus;
   title: string;
+  updatedAt?: number;
   workProductBody?: string;
 }): WorkflowItem {
   const createdAt = input.createdAt ?? Date.parse('2026-04-20T12:00:00Z');
+  const updatedAt = input.updatedAt ?? createdAt;
 
   return {
     activity: {
@@ -65,7 +68,7 @@ function createItem(input: {
         }]
       : [],
     title: input.title,
-    updatedAt: createdAt,
+    updatedAt,
     workProducts: input.workProductBody
       ? [{
           body: input.workProductBody,
@@ -154,6 +157,32 @@ describe('SearchIndex', () => {
     });
 
     expect(results.map((result) => result.id)).toEqual(['matching']);
+  });
+
+  it('can filter date ranges by updated date', () => {
+    const items = [
+      createItem({
+        createdAt: Date.parse('2026-04-10T10:00:00Z'),
+        id: 'updated-match',
+        title: 'Recently updated search work',
+        updatedAt: Date.parse('2026-04-22T10:00:00Z'),
+      }),
+      createItem({
+        createdAt: Date.parse('2026-04-10T10:00:00Z'),
+        id: 'updated-miss',
+        title: 'Older search work',
+        updatedAt: Date.parse('2026-04-12T10:00:00Z'),
+      }),
+    ];
+
+    const results = new SearchIndex(items, agents).search('search', {
+      ...baseFilters,
+      dateField: 'updated',
+      dateFrom: '2026-04-20',
+      dateTo: '2026-04-24',
+    });
+
+    expect(results.map((result) => result.id)).toEqual(['updated-match']);
   });
 
   it('filters unassigned items and items without reviewer signal', () => {
