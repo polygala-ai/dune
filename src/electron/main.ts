@@ -14,6 +14,7 @@ import { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 import { registerMainIpcHandlers } from '@/electron/main/ipc/register-main-ipc-handlers';
 import { createTelegramPowerCoordinator } from '@/electron/main/lifecycle/telegram-power-coordinator';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
+import { ProjectRegistry } from '@/electron/main/project-registry';
 import { resetLocalData } from '@/electron/main/reset-local-data';
 import { createRuntimeBootstrap } from '@/electron/main/runtime/runtime-bootstrap';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
@@ -107,6 +108,13 @@ void app.whenReady().then(async () => {
     },
     workflowStore: stores.workflow,
   });
+  const projectRegistry = new ProjectRegistry({
+    getRuntimeController,
+    notifyProjectsChanged: () => {
+      broadcast(ipcChannels.workflowChanged);
+    },
+    workflowStore: workflowCoordinator.workflowStore,
+  });
   const telegramPowerCoordinator = createTelegramPowerCoordinator({
     getRuntimeController,
   });
@@ -172,6 +180,7 @@ void app.whenReady().then(async () => {
     getMainWindow: () => mainWindow,
     getProjectActivityPage: workflowCoordinator.getProjectActivityPage,
     getRuntimeController,
+    projectRegistry,
     requireRuntimeController: () => runtimeBootstrap.requireRuntimeController(),
     resolveStore,
     restartApp: () => {
@@ -179,6 +188,7 @@ void app.whenReady().then(async () => {
     },
   });
 
+  await projectRegistry.initialize();
   await applyPersistedNetworkSettings();
 
   mainWindow = createMainWindow({

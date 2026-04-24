@@ -5,6 +5,7 @@ import { cn } from '@/renderer/shared/lib/utils';
 import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 
 import { SettingsNav } from './SettingsNav';
+import { ProjectSettings } from './ProjectSettings';
 import type {
   SettingsRoute,
   ThemePreference,
@@ -62,6 +63,14 @@ export function SettingsView({
           )}
           data-testid="settings-view"
         >
+          <ProjectSettings
+            agents={agents}
+            externalChannels={externalChannels}
+            onThemeChange={onThemeChange}
+            runtimeInfo={runtimeInfo}
+            themePreference={themePreference}
+          />
+          <div className="my-8 h-px bg-app-border" />
           <SectionComponent
             agents={agents}
             externalChannels={externalChannels}

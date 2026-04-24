@@ -38,9 +38,27 @@ export const secretEntries = sqliteTable('secret_entries', {
   updatedAt: integer('updated_at').notNull().$type<number>(),
 });
 
+/** Generic app state entries. */
+export const appState = sqliteTable('app_state', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
+/** App-level project settings. */
+export const projectSettings = sqliteTable('project_settings', {
+  defaultAgentId: text('default_agent_id'),
+  lastActiveAt: integer('last_active_at').$type<number | null>(),
+  projectId: text('project_id').primaryKey(),
+  telegramGroupId: text('telegram_group_id'),
+});
+
 export type ModelProviderRow = typeof modelProviders.$inferSelect;
 export type NewModelProviderRow = typeof modelProviders.$inferInsert;
 export type NetworkSettingsRow = typeof networkSettings.$inferSelect;
 export type NewNetworkSettingsRow = typeof networkSettings.$inferInsert;
 export type SecretEntryRow = typeof secretEntries.$inferSelect;
 export type NewSecretEntryRow = typeof secretEntries.$inferInsert;
+export type AppStateRow = typeof appState.$inferSelect;
+export type NewAppStateRow = typeof appState.$inferInsert;
+export type ProjectSettingsRow = typeof projectSettings.$inferSelect;
+export type NewProjectSettingsRow = typeof projectSettings.$inferInsert;

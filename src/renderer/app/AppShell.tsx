@@ -214,6 +214,20 @@ export default function AppShell() {
         controller.handleSidebarDrawerOpenChange(false);
         setCreateProjectOpen(true);
       },
+      onCreateProjectFromName: (name: string) => {
+        const projectId = useAppStore.getState().createProject({
+          description: '',
+          name,
+          rootPath: null,
+        });
+
+        if (projectId) {
+          controller.handleSidebarDrawerOpenChange(false);
+          commands.openWorkflow(projectId);
+        }
+
+        return projectId;
+      },
       onOpenPlugins: () => {
         controller.handleSidebarDrawerOpenChange(false);
         commands.openPlugins();

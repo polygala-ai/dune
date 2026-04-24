@@ -3,17 +3,16 @@
 import {
   Blocks,
   Command,
-  Plus,
   Settings2,
   Sparkles,
 } from 'lucide-react';
 
 import type { AppRoute } from '@/renderer/app/store/types';
 import type { WorkflowProject } from '@/renderer/features/workflow/types';
+import { ProjectSwitcher } from '@/renderer/features/projects/ProjectSwitcher';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
-import { ScrollArea } from '@/renderer/shared/ui/scroll-area';
 import { Separator } from '@/renderer/shared/ui/separator';
 import {
   Tooltip,
@@ -24,6 +23,7 @@ import {
 /** Workflow sidebar state. */
 interface WorkflowSidebarState {
   onCreateProject: () => void;
+  onCreateProjectFromName: (name: string) => string | null;
   onOpenPlugins: () => void;
   onOpenSettings: () => void;
   onSelectProject: (projectId: string) => void;
@@ -95,6 +95,11 @@ export function AppSidebar({
         </div>
 
         <div className="mt-5 space-y-1">
+          <ProjectSwitcher
+            onCreateProject={workflow.onCreateProjectFromName}
+            onSelectProject={workflow.onSelectProject}
+          />
+
           <button
             aria-current={route === 'plugins' ? 'page' : undefined}
             className={cn(
@@ -114,56 +119,7 @@ export function AppSidebar({
 
       <Separator />
 
-      <div className="mt-6 flex min-h-0 flex-1 flex-col px-1">
-        <div className="flex items-center justify-between gap-2 px-3 pb-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-            Projects
-          </div>
-          <Button
-            aria-label="Create project"
-            onClick={workflow.onCreateProject}
-            size="icon"
-            type="button"
-            variant="quiet"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <ScrollArea className="min-h-0 flex-1 pr-1" contentWidth="fill">
-          <div className="space-y-1 pr-2">
-            {workflow.projects.map((project) => {
-              const isSelected = workflow.selectedProjectId === project.id;
-
-              return (
-                <button
-                  aria-current={isSelected ? 'true' : undefined}
-                  aria-label={project.name}
-                  className={cn(
-                    'block w-full overflow-hidden rounded-[14px] px-3 py-2.5 text-left transition-colors',
-                    isSelected
-                      ? 'bg-app-accent-soft text-app-text'
-                      : 'text-app-text hover:bg-app-card',
-                  )}
-                  data-active-style={isSelected ? 'fill' : 'idle'}
-                  key={project.id}
-                  onClick={() => workflow.onSelectProject(project.id)}
-                  type="button"
-                >
-                  <div className="flex min-w-0 items-baseline">
-                    <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-app-text">
-                      {project.name}
-                    </p>
-                  </div>
-                  <p className="mt-1 truncate text-[12px] leading-5 text-app-muted">
-                    {project.description || 'Project'}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </div>
+      <div className="mt-6 min-h-0 flex-1" />
 
       <Separator />
 
