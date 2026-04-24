@@ -145,7 +145,7 @@ export interface WorkflowActions {
   ) => void;
   updateItem: (
     itemId: string,
-    input: { brief?: string; note?: string; title?: string },
+    input: { brief?: string; note?: string; priority?: WorkflowItem['priority']; slaDeadlineMs?: number | null; title?: string },
   ) => void;
   updateTask: (
     itemId: string,

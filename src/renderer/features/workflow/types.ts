@@ -34,8 +34,18 @@ export const workflowProjectFilters = [
   'review',
 ] as const;
 
+/** Workflow item priorities constant. */
+export const workflowItemPriorities = [
+  'critical',
+  'high',
+  'medium',
+  'low',
+] as const;
+
 /** Workflow item status. */
 export type WorkflowItemStatus = (typeof workflowItemStatuses)[number];
+/** Workflow item priority. */
+export type ItemPriority = (typeof workflowItemPriorities)[number];
 /** Workflow task status. */
 export type WorkflowTaskStatus = (typeof workflowTaskStatuses)[number];
 /** Workflow project view shape. */
@@ -127,9 +137,13 @@ export interface WorkflowItem {
   createdAt: number;
   id: string;
   primaryAgentId: string | null;
+  priority: ItemPriority;
   projectId: string;
   scheduledTaskId: string | null;
   sortOrder: number;
+  slaBreachedAt?: number | null | undefined;
+  slaDeadlineMs?: number | undefined;
+  slaWarnedAt?: number | null | undefined;
   status: WorkflowItemStatus;
   tasks: WorkflowTask[];
   title: string;
@@ -158,10 +172,13 @@ export interface WorkflowItemSummary {
   isAgentWorking: boolean;
   primaryAgentId: string | null;
   primaryAgentName: string | null;
+  priority: ItemPriority;
+  slaDeadlineMs?: number;
   specialStateLabel: string | null;
   status: WorkflowItemStatus;
   statusLabel: string;
   title: string;
   totalTaskCount: number;
+  updatedAt: number;
   updatedLabel: string;
 }

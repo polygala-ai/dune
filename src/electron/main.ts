@@ -3,6 +3,7 @@
 import {
   app,
   BrowserWindow,
+  Notification,
   session,
 } from 'electron';
 import fixPath from 'fix-path';
@@ -102,6 +103,21 @@ void app.whenReady().then(async () => {
   };
   const workflowCoordinator = createWorkflowCoordinator({
     getRuntimeController,
+    notifySla: (notification) => {
+      if (!Notification.isSupported()) {
+        return;
+      }
+
+      const body = notification.type === 'sla_warning' && typeof notification.msLeft === 'number'
+        ? `${Math.ceil(notification.msLeft / 3_600_000)}h ${Math.ceil((notification.msLeft % 3_600_000) / 60_000)}m remaining`
+        : 'Deadline has passed';
+      new Notification({
+        body,
+        title: notification.type === 'sla_warning'
+          ? `SLA expiring soon: ${notification.itemTitle}`
+          : `SLA breached: ${notification.itemTitle}`,
+      }).show();
+    },
     notifyWorkflowChanged: () => {
       broadcast(ipcChannels.workflowChanged);
     },

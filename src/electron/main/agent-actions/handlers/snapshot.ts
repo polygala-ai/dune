@@ -7,6 +7,10 @@ import {
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
+import {
+  normalizeItemPriority,
+  normalizeSlaDeadlineMs,
+} from '@/shared/workflow/priority-sla';
 
 import { ToolHandlerError } from './types';
 
@@ -38,9 +42,13 @@ export interface WorkflowItem {
   createdAt: number;
   id: string;
   primaryAgentId: string | null;
+  priority: 'critical' | 'high' | 'medium' | 'low';
   projectId: string;
   scheduledTaskId: string | null;
   sortOrder: number;
+  slaBreachedAt?: number | null | undefined;
+  slaDeadlineMs?: number | undefined;
+  slaWarnedAt?: number | null | undefined;
   status: string;
   tasks: WorkflowTask[];
   title: string;
@@ -160,7 +168,13 @@ export function cloneWorkflowSnapshot(snapshot: WorkflowSnapshot): WorkflowSnaps
         typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
           ? item.artifactFolderName.trim()
           : createArtifactFolderName(item.title, item.id),
+      priority: normalizeItemPriority(item.priority),
       scheduledTaskId: item.scheduledTaskId ?? null,
+      ...(typeof item.slaBreachedAt === 'number' ? { slaBreachedAt: item.slaBreachedAt } : {}),
+      ...(normalizeSlaDeadlineMs(item.slaDeadlineMs)
+        ? { slaDeadlineMs: normalizeSlaDeadlineMs(item.slaDeadlineMs) }
+        : {}),
+      ...(typeof item.slaWarnedAt === 'number' ? { slaWarnedAt: item.slaWarnedAt } : {}),
       tasks: item.tasks.map((task) => ({ ...task })),
       workProducts: item.workProducts.map((workProduct) => ({ ...workProduct })),
       workflowEvents: item.workflowEvents.map((event) => ({ ...event })),
@@ -185,6 +199,10 @@ export function normalizeWorkflowSnapshot(snapshot: WorkflowSnapshot): void {
   for (const item of snapshot.items) {
     item.activity = createWorkflowItemActivitySummary(item.activity);
     item.status = isWorkflowItemStatus(item.status) ? item.status : 'inbox';
+    item.priority = normalizeItemPriority(item.priority);
+    item.slaDeadlineMs = normalizeSlaDeadlineMs(item.slaDeadlineMs);
+    item.slaWarnedAt = typeof item.slaWarnedAt === 'number' ? item.slaWarnedAt : null;
+    item.slaBreachedAt = typeof item.slaBreachedAt === 'number' ? item.slaBreachedAt : null;
     item.artifactFolderName =
       typeof item.artifactFolderName === 'string' && item.artifactFolderName.trim()
         ? item.artifactFolderName.trim()

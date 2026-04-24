@@ -2682,6 +2682,7 @@ describe('AgentRuntime', () => {
           createdAt: 1,
           id: 'item-1',
           primaryAgentId: null,
+          priority: 'medium',
           projectId: 'project-1',
           scheduledTaskId: 'task-1',
           sortOrder: 0,

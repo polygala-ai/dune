@@ -5,6 +5,10 @@ import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
 import { createArtifactFolderName } from '@/shared/workflow/project-artifacts';
 import { ensureProjectArtifactFolder } from '@/electron/main/workflow/project-artifacts';
+import {
+  isItemPriority,
+  normalizeSlaDeadlineMs,
+} from '@/shared/workflow/priority-sla';
 
 import {
   optionalString,
@@ -100,6 +104,7 @@ export const itemTools: RegisteredTool[] = [
         createdAt: now,
         id: itemId,
         primaryAgentId: null,
+        priority: 'medium',
         projectId,
         scheduledTaskId: null,
         sortOrder: snapshot.items.filter((item) => item.projectId === projectId && item.status === status).length,
@@ -136,6 +141,8 @@ export const itemTools: RegisteredTool[] = [
           itemId: stringSchema,
           note: optionalStringSchema,
           primaryAgentId: { type: ['string', 'null'] },
+          priority: { enum: ['critical', 'high', 'medium', 'low'] },
+          slaDeadlineMs: { type: ['number', 'null'] },
           title: optionalStringSchema,
         },
         ['itemId'],
@@ -151,6 +158,8 @@ export const itemTools: RegisteredTool[] = [
 
       const touchesDetails = args.title !== undefined || args.brief !== undefined;
       const touchesAssignment = args.primaryAgentId !== undefined;
+      const touchesPriority = args.priority !== undefined;
+      const touchesSla = args.slaDeadlineMs !== undefined;
 
       if (touchesDetails) {
         assertAgentCanEditItem(item);
@@ -201,7 +210,58 @@ export const itemTools: RegisteredTool[] = [
         }
       }
 
-      if (!touchesDetails && !touchesAssignment) {
+      if (touchesPriority) {
+        const nextPriority = args.priority;
+
+        if (!isItemPriority(nextPriority)) {
+          throw new ToolHandlerError('validation-error', 'Priority must be one of: critical, high, medium, low.');
+        }
+
+        if (item.priority !== nextPriority) {
+          const previousPriority = item.priority;
+          item.priority = nextPriority;
+          prependWorkflowEvents(item, [
+            createWorkflowEvent(
+              'item',
+              `Priority changed from ${previousPriority} to ${nextPriority}.`,
+              now,
+              agentContext.agentName,
+            ),
+          ]);
+        }
+      }
+
+      if (touchesSla) {
+        const nextDeadline = args.slaDeadlineMs === null
+          ? undefined
+          : normalizeSlaDeadlineMs(args.slaDeadlineMs);
+
+        if (args.slaDeadlineMs !== null && nextDeadline === undefined) {
+          throw new ToolHandlerError('validation-error', 'slaDeadlineMs must be a positive Unix millisecond timestamp or null.');
+        }
+
+        if (item.slaDeadlineMs !== nextDeadline) {
+          if (nextDeadline === undefined) {
+            delete item.slaDeadlineMs;
+          } else {
+            item.slaDeadlineMs = nextDeadline;
+          }
+          item.slaWarnedAt = null;
+          item.slaBreachedAt = null;
+          prependWorkflowEvents(item, [
+            createWorkflowEvent(
+              'item',
+              nextDeadline
+                ? `SLA deadline set to ${new Date(nextDeadline).toISOString()}.`
+                : 'SLA deadline cleared.',
+              now,
+              agentContext.agentName,
+            ),
+          ]);
+        }
+      }
+
+      if (!touchesDetails && !touchesAssignment && !touchesPriority && !touchesSla) {
         return { item: presentItem(snapshot, item) };
       }
 

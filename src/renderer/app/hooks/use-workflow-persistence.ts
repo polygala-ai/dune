@@ -7,6 +7,7 @@ import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { createEmptyWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
 import {
   workflowItemStatuses,
+  workflowItemPriorities,
   workflowProjectFilters,
   workflowProjectViews,
   workflowTaskStatuses,
@@ -21,6 +22,10 @@ import {
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { isPlainObject } from '@/shared/is-record';
+import {
+  normalizeItemPriority,
+  normalizeSlaDeadlineMs,
+} from '@/shared/workflow/priority-sla';
 
 const STORE_NAME = 'workflow';
 const STORE_KEY = 'snapshot';
@@ -219,10 +224,18 @@ function normalizeCurrentSnapshot(value: unknown): WorkflowSnapshot | null {
         typeof item.primaryAgentId === 'string' || item.primaryAgentId === null
           ? item.primaryAgentId
           : null,
+      priority: workflowItemPriorities.includes(item.priority as (typeof workflowItemPriorities)[number])
+        ? normalizeItemPriority(item.priority)
+        : 'medium',
       projectId: item.projectId,
       scheduledTaskId:
         typeof item.scheduledTaskId === 'string' ? item.scheduledTaskId : null,
       sortOrder: item.sortOrder,
+      ...(typeof item.slaBreachedAt === 'number' ? { slaBreachedAt: item.slaBreachedAt } : {}),
+      ...(normalizeSlaDeadlineMs(item.slaDeadlineMs) !== undefined
+        ? { slaDeadlineMs: normalizeSlaDeadlineMs(item.slaDeadlineMs) }
+        : {}),
+      ...(typeof item.slaWarnedAt === 'number' ? { slaWarnedAt: item.slaWarnedAt } : {}),
       status: workflowItemStatuses.includes(item.status as (typeof workflowItemStatuses)[number])
         ? (item.status as WorkflowSnapshot['items'][number]['status'])
         : 'inbox',
