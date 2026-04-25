@@ -74,28 +74,28 @@ const settingsStore = createSettingsStore();
 
 function describeTemplateAgent(
   agents: TemplateScopedAgent[],
-  defaultAgentId: string | null | undefined,
+  agentId: string | null | undefined,
 ) {
-  if (!defaultAgentId) {
+  if (!agentId) {
     return 'No default agent';
   }
 
   return agents.find((agent) =>
-    agent.id === defaultAgentId || agent.name === defaultAgentId,
-  )?.name ?? `Unknown agent (${defaultAgentId})`;
+    agent.id === agentId || agent.name === agentId,
+  )?.name ?? `Unknown agent (${agentId})`;
 }
 
 function buildAgentOptions(
   agents: TemplateScopedAgent[],
-  defaultAgentId: string | null | undefined,
+  agentId: string | null | undefined,
 ) {
   const knownAgentRefs = new Set(agents.flatMap((agent) => [agent.id, agent.name]));
   const nextOptions = [...agents].sort((left, right) => left.name.localeCompare(right.name));
 
-  if (defaultAgentId && !knownAgentRefs.has(defaultAgentId)) {
+  if (agentId && !knownAgentRefs.has(agentId)) {
     nextOptions.push({
-      id: defaultAgentId,
-      name: `Unknown agent (${defaultAgentId})`,
+      id: agentId,
+      name: `Unknown agent (${agentId})`,
       projectId: null,
     });
   }
@@ -111,28 +111,30 @@ function TemplateFormDialog({
   state,
 }: TemplateFormDialogProps) {
   const [brief, setBrief] = useState('');
-  const [defaultAgentId, setDefaultAgentId] = useState('');
+  const [agentId, setAssignedAgentId] = useState('');
   const [name, setName] = useState('');
   const [rawTasks, setRawTasks] = useState('');
-  const [titlePattern, setTitlePattern] = useState('');
+  const [title, setTitle] = useState('');
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setBrief(state?.template?.briefTemplate ?? '');
-    setDefaultAgentId(state?.template?.defaultAgentId ?? '');
-    setName(state?.template?.name ?? '');
-    setRawTasks(state?.template?.defaultTasks.join('\n') ?? '');
-    setTitlePattern(state?.template?.titlePattern ?? '');
+    const template = state?.template ?? null;
+
+    setBrief(template?.brief ?? '');
+    setAssignedAgentId(template?.agentId ?? '');
+    setName(template?.name ?? '');
+    setRawTasks(template?.tasks.join('\n') ?? '');
+    setTitle(template?.title ?? '');
   }, [open, state]);
 
   const canSave = Boolean(name.trim());
   const dialogTitle = state?.mode === 'edit' ? 'Edit template' : 'Create template';
   const agentOptions = buildAgentOptions(
     agents,
-    defaultAgentId || state?.template?.defaultAgentId,
+    agentId || state?.template?.agentId,
   );
 
   return (
@@ -176,9 +178,9 @@ function TemplateFormDialog({
             </label>
             <Input
               id="template-title-pattern"
-              onChange={(event) => setTitlePattern(event.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
               placeholder="Research: "
-              value={titlePattern}
+              value={title}
             />
           </div>
 
@@ -225,8 +227,8 @@ function TemplateFormDialog({
             <select
               className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
               id="template-default-agent"
-              onChange={(event) => setDefaultAgentId(event.target.value)}
-              value={defaultAgentId}
+              onChange={(event) => setAssignedAgentId(event.target.value)}
+              value={agentId}
             >
               <option value="">No default agent</option>
               {agentOptions.map((agent) => (
@@ -248,14 +250,14 @@ function TemplateFormDialog({
               const existingTemplate = state?.template;
               const now = Date.now();
               const nextTemplate: WorkItemTemplate = {
-                briefTemplate: brief,
+                brief: brief,
                 builtIn: false,
                 createdAt: existingTemplate?.createdAt ?? now,
-                defaultAgentId: defaultAgentId.trim() || null,
-                defaultTasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
+                agentId: agentId.trim() || null,
+                tasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
                 id: existingTemplate?.id ?? createId('template'),
                 name: name.trim(),
-                titlePattern,
+                title,
                 updatedAt: now,
               };
 
@@ -528,14 +530,14 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                         Built-in
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-app-muted">Title pattern: {template.titlePattern || 'None'}</p>
+                    <p className="mt-2 text-sm text-app-muted">Title pattern: {template.title || 'None'}</p>
                   </div>
                 </div>
                 <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                  {template.briefTemplate || 'No default brief.'}
+                  {template.brief || 'No default brief.'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {template.defaultTasks.map((task) => (
+                  {template.tasks.map((task) => (
                     <span
                       className="rounded-full border border-app-border bg-app-card px-3 py-1 text-xs text-app-muted"
                       key={task}
@@ -572,9 +574,9 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h4 className="text-base font-semibold text-app-text">{template.name}</h4>
-                      <p className="mt-2 text-sm text-app-muted">Title pattern: {template.titlePattern || 'None'}</p>
+                      <p className="mt-2 text-sm text-app-muted">Title pattern: {template.title || 'None'}</p>
                       <p className="mt-1 text-sm text-app-muted">
-                        Default agent: {describeTemplateAgent(scopedAgents, template.defaultAgentId)}
+                        Default agent: {describeTemplateAgent(scopedAgents, template.agentId)}
                       </p>
                     </div>
 
@@ -626,11 +628,11 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
 
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                    {template.briefTemplate || 'No default brief.'}
+                    {template.brief || 'No default brief.'}
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {template.defaultTasks.length > 0 ? template.defaultTasks.map((task) => (
+                    {template.tasks.length > 0 ? template.tasks.map((task) => (
                       <span
                         className="rounded-full border border-app-border bg-app-card px-3 py-1 text-xs text-app-muted"
                         key={task}

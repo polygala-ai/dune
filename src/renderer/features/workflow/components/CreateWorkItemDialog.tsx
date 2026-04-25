@@ -125,7 +125,7 @@ export function CreateWorkItemDialog({
     ? resolveWorkItemTemplateDefaultAgent(selectedTemplate, projectId, agents)
     : null;
   const isTemplateDefaultAgentUnavailable =
-    Boolean(selectedTemplate?.defaultAgentId) && !defaultAgent;
+    Boolean(selectedTemplate?.agentId) && !defaultAgent;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -174,7 +174,7 @@ export function CreateWorkItemDialog({
               <p className="text-sm text-rose-200">{templateFeedback}</p>
             ) : selectedTemplate ? (
               <p className="text-sm text-app-muted">
-                Creates {selectedTemplate.defaultTasks.length} checklist item{selectedTemplate.defaultTasks.length === 1 ? '' : 's'}
+                Creates {selectedTemplate.tasks.length} checklist item{selectedTemplate.tasks.length === 1 ? '' : 's'}
                 {defaultAgent ? ` and assigns ${defaultAgent.name}.` : isTemplateDefaultAgentUnavailable
                   ? ' and skips the saved default agent because it does not match this project.'
                   : '.'}
@@ -280,7 +280,7 @@ export function CreateWorkItemDialog({
                   : {}),
                 projectId,
                 status,
-                ...(selectedTemplate ? { taskTitles: [...selectedTemplate.defaultTasks] } : {}),
+                ...(selectedTemplate ? { taskTitles: [...selectedTemplate.tasks] } : {}),
                 title,
               });
             }}
