@@ -22,6 +22,7 @@ function createActivityStatus(
     phase: 'tool_call_start',
     currentTool: 'Read',
     toolArgsSummary: 'file: status.json',
+    lastToolResultSummary: null,
     lastToolDurationMs: null,
     lastToolResult: null,
     turnCount: 3,
@@ -117,5 +118,46 @@ describe('AgentActivityPanel', () => {
     });
 
     expect(await screen.findByText('Navigator')).toBeInTheDocument();
+  });
+
+  it('renders thinking, waiting, and last result activity states', async () => {
+    window.duneDesktop = {
+      ...window.duneDesktop,
+      platform: window.duneDesktop?.platform ?? 'darwin',
+      getAgentActivity: vi.fn(async () => [
+        createActivityStatus({
+          agentId: 'agent-thinking',
+          agentName: 'Thinker',
+          currentTool: null,
+          lastToolResultSummary: null,
+          status: 'thinking',
+          toolArgsSummary: null,
+        }),
+        createActivityStatus({
+          agentId: 'agent-waiting',
+          agentName: 'Waiter',
+          currentTool: null,
+          lastToolResultSummary: null,
+          status: 'waiting',
+          toolArgsSummary: null,
+        }),
+        createActivityStatus({
+          agentId: 'agent-result',
+          agentName: 'Closer',
+          currentTool: null,
+          lastToolDurationMs: 12,
+          lastToolResultSummary: '{"ok":true}',
+          status: 'idle',
+          toolArgsSummary: null,
+        }),
+      ]),
+      subscribeAgentActivity: vi.fn(() => () => undefined),
+    };
+
+    render(<AgentActivityPanel />);
+
+    expect((await screen.findAllByText('Thinking')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Waiting for scheduler')).toBeInTheDocument();
+    expect(screen.getByText('Last result: {"ok":true} · 12ms')).toBeInTheDocument();
   });
 });

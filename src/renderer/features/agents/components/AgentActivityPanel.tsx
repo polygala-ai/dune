@@ -137,6 +137,22 @@ function getActivitySummary(status: AgentActivityStatus) {
     return 'Session finished';
   }
 
+  if (status.status === 'thinking') {
+    return 'Thinking';
+  }
+
+  if (status.status === 'waiting') {
+    return 'Waiting for scheduler';
+  }
+
+  if (status.lastToolResultSummary) {
+    const durationSuffix = status.lastToolDurationMs === null
+      ? ''
+      : ` · ${status.lastToolDurationMs}ms`;
+
+    return `Last result: ${status.lastToolResultSummary}${durationSuffix}`;
+  }
+
   if (status.toolArgsSummary) {
     const durationSuffix = status.lastToolDurationMs === null
       ? ''

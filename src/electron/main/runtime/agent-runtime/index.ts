@@ -2111,6 +2111,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       phase: pick('phase', previous?.phase ?? 'idle'),
       currentTool: pick('currentTool', previous?.currentTool ?? null),
       toolArgsSummary: pick('toolArgsSummary', previous?.toolArgsSummary ?? null),
+      lastToolResultSummary: pick('lastToolResultSummary', previous?.lastToolResultSummary ?? null),
       lastToolDurationMs: pick('lastToolDurationMs', previous?.lastToolDurationMs ?? null),
       lastToolResult: pick('lastToolResult', previous?.lastToolResult ?? null),
       turnCount: pick('turnCount', previous?.turnCount ?? 0),
@@ -2550,6 +2551,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           phase: 'tool_call_start',
           currentTool: event.toolName,
           toolArgsSummary: String(event.input ? event.input : event.toolName).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
+          lastToolResultSummary: null,
           lastToolResult: null,
           lastToolDurationMs: null,
           turnCount: (this.agentLiveStatus.get(agentId)?.turnCount ?? 0) + 1,
@@ -2627,6 +2629,7 @@ export class AgentRuntime implements AgentRuntimeContract {
                   status: block.is_error ? 'error' : 'idle',
                   phase: block.is_error ? 'error' : 'tool_call_done',
                   currentTool: null,
+                  lastToolResultSummary: output.slice(0, 200),
                   lastToolResult: this.createToolResult(
                     toolName,
                     output,
