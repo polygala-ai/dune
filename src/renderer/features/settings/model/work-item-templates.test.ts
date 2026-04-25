@@ -30,7 +30,7 @@ class MemoryStore implements WorkItemTemplateStore {
 
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
-    briefTemplate: 'Custom brief',
+    brief: 'Custom brief',
     builtIn: false,
     defaultTasks: ['One'],
     id: 'custom-template',
@@ -49,7 +49,7 @@ describe('work item templates settings model', () => {
         defaultTasks: ['First', 'Second'],
       }),
       {
-        briefTemplate: 'Should be filtered',
+        brief: 'Should be filtered',
         builtIn: true,
         defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
@@ -70,7 +70,7 @@ describe('work item templates settings model', () => {
 
     const saved = await saveCustomWorkItemTemplates(store, [
       customTemplate({
-        briefTemplate: 'Investigate',
+        brief: 'Investigate',
         defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
         id: ' custom-template ',
         name: ' Custom template ',
@@ -80,7 +80,7 @@ describe('work item templates settings model', () => {
 
     expect(saved).toEqual([
       customTemplate({
-        briefTemplate: 'Investigate',
+        brief: 'Investigate',
         defaultTasks: ['Scope', 'Write summary'],
         id: 'custom-template',
         name: 'Custom template',
@@ -105,14 +105,14 @@ describe('work item templates settings model', () => {
   it('parses imported templates from JSON and filters built-ins', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       customTemplate({
-        briefTemplate: 'Imported brief',
+        brief: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
         titlePattern: 'Import: ',
       }),
       {
-        briefTemplate: 'Built-in copy',
+        brief: 'Built-in copy',
         builtIn: true,
         defaultTasks: ['Ignore'],
         id: 'builtin-bug-fix',
@@ -121,7 +121,7 @@ describe('work item templates settings model', () => {
       },
     ]))).toEqual([
       customTemplate({
-        briefTemplate: 'Imported brief',
+        brief: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
@@ -143,10 +143,10 @@ describe('work item templates settings model', () => {
   it('serializes all normalized templates', () => {
     const serialized = serializeCustomWorkItemTemplates([
       customTemplate({
-        briefTemplate: 'Keep this',
+        brief: 'Keep this',
       }),
       {
-        briefTemplate: 'Include this',
+        brief: 'Include this',
         builtIn: true,
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
@@ -163,7 +163,7 @@ describe('work item templates settings model', () => {
     expect(upsertImportedWorkItemTemplates(
       [
         customTemplate({
-          briefTemplate: 'Original brief',
+          brief: 'Original brief',
           defaultTasks: ['One'],
           id: 'template-a',
           name: 'Template A',
@@ -172,14 +172,14 @@ describe('work item templates settings model', () => {
       ],
       [
         customTemplate({
-          briefTemplate: 'Updated brief',
+          brief: 'Updated brief',
           defaultTasks: ['Two'],
           id: 'template-a',
           name: 'Template A',
           titlePattern: 'Updated: ',
         }),
         customTemplate({
-          briefTemplate: 'New brief',
+          brief: 'New brief',
           defaultTasks: ['Three'],
           id: 'template-b',
           name: 'Template B',
@@ -188,14 +188,14 @@ describe('work item templates settings model', () => {
       ],
     )).toEqual([
       customTemplate({
-        briefTemplate: 'Updated brief',
+        brief: 'Updated brief',
         defaultTasks: ['Two'],
         id: 'template-a',
         name: 'Template A',
         titlePattern: 'Updated: ',
       }),
       customTemplate({
-        briefTemplate: 'New brief',
+        brief: 'New brief',
         defaultTasks: ['Three'],
         id: 'template-b',
         name: 'Template B',

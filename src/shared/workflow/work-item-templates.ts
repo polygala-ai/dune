@@ -5,7 +5,7 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 
 /** Work item template shape. */
 export interface WorkItemTemplate {
-  briefTemplate: string;
+  brief: string;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId?: string;
   defaultTasks: string[];
@@ -32,7 +32,7 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    briefTemplate: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nKey findings:\n\nSynthesis:\n\nRecommendation:',
+    brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nKey findings:\n\nSynthesis:\n\nRecommendation:',
     builtIn: true,
     defaultTasks: ['Understand', 'Research', 'Synthesize', 'Write report'],
     id: 'builtin-research-task',
@@ -40,7 +40,7 @@ export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
     titlePattern: 'Research: ',
   },
   {
-    briefTemplate: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nRoot cause:\n\nFix plan:\n\nVerification:',
+    brief: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nRoot cause:\n\nFix plan:\n\nVerification:',
     builtIn: true,
     defaultTasks: ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
     id: 'builtin-bug-fix',
@@ -48,7 +48,7 @@ export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
     titlePattern: 'Fix: ',
   },
   {
-    briefTemplate: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nImplementation tasks:\n\nAcceptance criteria:\n\nVerification:',
+    brief: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nImplementation tasks:\n\nAcceptance criteria:\n\nVerification:',
     builtIn: true,
     defaultTasks: ['Design', 'Review design', 'Implement', 'Test', 'PR'],
     id: 'builtin-feature-implementation',
@@ -56,7 +56,7 @@ export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
     titlePattern: 'Implement: ',
   },
   {
-    briefTemplate: 'Brief:\n\nCode/PR to review:\n\nChecklist:\n- Correctness and edge cases\n- Tests and coverage\n- Security and privacy\n- Performance\n- Maintainability\n\nFeedback:',
+    brief: 'Brief:\n\nCode/PR to review:\n\nChecklist:\n- Correctness and edge cases\n- Tests and coverage\n- Security and privacy\n- Performance\n- Maintainability\n\nFeedback:',
     builtIn: true,
     defaultTasks: ['Read brief', 'Review code', 'Write feedback'],
     id: 'builtin-code-review',
@@ -97,10 +97,10 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
   }
 
   const template: WorkItemTemplate = {
-    briefTemplate: typeof value.briefTemplate === 'string'
-      ? value.briefTemplate
-      : typeof value.brief === 'string'
-        ? value.brief
+    brief: typeof value.brief === 'string'
+      ? value.brief
+      : typeof value.briefTemplate === 'string'
+        ? value.briefTemplate
         : '',
     builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
     defaultTasks: Array.isArray(value.defaultTasks)

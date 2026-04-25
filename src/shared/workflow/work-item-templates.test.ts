@@ -13,7 +13,7 @@ import {
 
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
-    briefTemplate: '',
+    brief: '',
     builtIn: false,
     defaultTasks: [],
     id: 'custom-template',
@@ -47,15 +47,15 @@ describe('work item templates', () => {
 
   it('normalizes templates and strips invalid values', () => {
     expect(normalizeWorkItemTemplate({
-      briefTemplate: 'Investigate the issue.',
+      brief: 'Investigate the issue.',
+      builtIn: false,
       defaultAgentId: ' agent-1 ',
       defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
       id: ' template-1 ',
-      builtIn: false,
       name: ' Research helper ',
       titlePattern: 'Research: ',
     })).toEqual({
-      briefTemplate: 'Investigate the issue.',
+      brief: 'Investigate the issue.',
       builtIn: false,
       defaultAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
@@ -81,7 +81,7 @@ describe('work item templates', () => {
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
     })).toEqual({
-      briefTemplate: 'Legacy brief.',
+      brief: 'Legacy brief.',
       builtIn: false,
       defaultAgentId: 'agent-legacy',
       defaultTasks: ['Read'],
