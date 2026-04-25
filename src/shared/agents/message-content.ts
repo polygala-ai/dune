@@ -128,6 +128,10 @@ export function extractWorkspaceAttachmentPaths(content: string) {
 
   return {
     content: nextContent.replace(/[ \t]{2,}/g, ' ').trim(),
-    paths: paths.filter((p) => !p.split('/').some((seg) => seg === '..')),
+    paths: paths.filter((p) =>
+      !p.startsWith('file://')
+      && p.startsWith('/workspace/group/attachments/')
+      && !p.split('/').some((seg) => seg === '..')
+    ),
   };
 }

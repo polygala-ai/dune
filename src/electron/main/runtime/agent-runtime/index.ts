@@ -542,11 +542,12 @@ function wrapTelegramDriverForMedia(
           }
 
           const relativePath = attachmentPath.slice('/workspace/group/'.length);
-          const localPath = path.resolve(path.join(runtimeRoot, 'groups', groupFolder, relativePath));
+          const computedLocalPath = path.join(runtimeRoot, 'groups', groupFolder, relativePath);
+          const localPath = path.resolve(computedLocalPath);
 
           // Containment check — must stay inside attachments/.
           if (!localPath.startsWith(safeBase + path.sep) && localPath !== safeBase) {
-            console.warn('[TelegramMedia] Path traversal blocked:', attachmentPath, '->', localPath);
+            console.warn('[TelegramMedia] Path traversal blocked:', computedLocalPath);
             failedFilenames.push(path.basename(attachmentPath));
             continue;
           }
@@ -578,13 +579,8 @@ function wrapTelegramDriverForMedia(
           }
         }
 
-        const mediaFailure = failedFilenames.length > 0
-          && attemptedMediaCount > 0
-          ? new Error(`Failed to deliver ${failedFilenames.length} Telegram attachment(s): ${failedFilenames.join(', ')}`)
-          : null;
-
         // Report partial failures with a visible user-facing notice.
-        if (mediaFailure) {
+        if (failedFilenames.length > 0) {
           try {
             await base.sendMessage(
               jid,
