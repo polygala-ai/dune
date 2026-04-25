@@ -2782,7 +2782,66 @@ describe('AgentRuntime', () => {
     expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:999', traversalText);
   });
 
-  it('sends a visible error notice when one of multiple outbound Telegram attachments fails to deliver', async () => {
+  it('blocks outbound Telegram attachment symlinks that escape the attachments directory', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+    const sendTelegramMedia = vi.fn();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:888', { isGroup: false, name: 'Symlink Test' });
+    telegramHarness.emitIncomingMessage('tg:888', {
+      content: `/pair ${pairCode}`,
+      sender: 'symlink-test',
+      senderName: 'Symlink Test',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Symlink escape agent',
+      projectId: 'project-symlink',
+      telegramSetupSessionId: sessionId,
+    });
+
+    const runtimeRoot = path.join(homeDir, '.dune', 'agentlite');
+    const groupFolder = `symlink-escape-agent-${agentId.split(':').pop()?.slice(0, 8) ?? 'agent'}`;
+    const attachmentsDir = path.join(runtimeRoot, 'groups', groupFolder, 'attachments');
+    fs.mkdirSync(attachmentsDir, { recursive: true });
+    const outsideFile = path.join(homeDir, 'outside-secret.txt');
+    fs.writeFileSync(outsideFile, 'do-not-upload');
+    fs.symlinkSync(outsideFile, path.join(attachmentsDir, 'secret.txt'));
+
+    const messageText = 'Secret: (/workspace/group/attachments/secret.txt)';
+    await expect(
+      harness.duneChannel('symlink-escape-agent').sendMessage(toAgentChatJid(agentId), messageText),
+    ).rejects.toThrow('Failed to deliver 1 Telegram attachment');
+
+    expect(sendTelegramMedia).not.toHaveBeenCalled();
+    const sentTexts = (telegramHarness.sendMessage.mock.calls as [string, string][]).map(
+      ([, text]) => text,
+    );
+    expect(sentTexts.some((text) => text.includes('secret.txt'))).toBe(true);
+  });
+
+  it('rejects and sends a visible error notice when one of multiple outbound Telegram attachments fails to deliver', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
     const telegramHarness = createTelegramChannelFactoryHarness();
@@ -2838,10 +2897,12 @@ describe('AgentRuntime', () => {
 
     const messageText =
       'Here are two images: (/workspace/group/attachments/photo1.jpg) (/workspace/group/attachments/photo2.jpg)';
-    await harness.duneChannel('partial-delivery-agent').sendMessage(
-      toAgentChatJid(agentId),
-      messageText,
-    );
+    await expect(
+      harness.duneChannel('partial-delivery-agent').sendMessage(
+        toAgentChatJid(agentId),
+        messageText,
+      ),
+    ).rejects.toThrow('Failed to deliver 1 Telegram attachment');
 
     // Both attachments were attempted
     expect(sendTelegramMedia).toHaveBeenCalledTimes(2);

@@ -491,12 +491,12 @@ async function defaultSendTelegramMedia(
  *
  * Security:
  * - Extracted paths are already free of '..' components (extractWorkspaceAttachmentPaths filters them).
- * - After resolving the local path, a containment check ensures the resolved path stays
+ * - After resolving the local path, a realpath containment check ensures the resolved path stays
  *   inside <runtimeRoot>/groups/<groupFolder>/attachments/ to prevent escapes via symlinks
  *   or other means.
  *
  * Partial-delivery:
- * - Per-attachment failures are tracked; after the loop a visible ⚠️ notice is sent for any failures.
+ * - Per-attachment failures are tracked; after the loop a visible warning notice is sent for any failures.
  * - Long-caption follow-up failures also produce a visible notice.
  */
 function wrapTelegramDriverForMedia(
@@ -523,6 +523,7 @@ function wrapTelegramDriverForMedia(
 
         const chatId = jid.startsWith('tg:') ? jid.slice(3) : jid;
         const safeBase = path.resolve(path.join(runtimeRoot, 'groups', groupFolder, 'attachments'));
+        const safeBaseReal = fs.existsSync(safeBase) ? fs.realpathSync(safeBase) : safeBase;
 
         let didSendMedia = false;
         const failedFilenames: string[] = [];
@@ -555,6 +556,13 @@ function wrapTelegramDriverForMedia(
             continue;
           }
 
+          const localPathReal = fs.realpathSync(localPath);
+          if (!localPathReal.startsWith(safeBaseReal + path.sep) && localPathReal !== safeBaseReal) {
+            console.warn('[TelegramMedia] Symlink escape blocked:', attachmentPath, '->', localPathReal);
+            failedFilenames.push(path.basename(attachmentPath));
+            continue;
+          }
+
           const filename = path.basename(localPath) || 'attachment';
           const kind = inferAttachmentKind({ name: filename });
           const mediaKind: 'image' | 'file' = kind === 'image' ? 'image' : 'file';
@@ -567,6 +575,10 @@ function wrapTelegramDriverForMedia(
             failedFilenames.push(filename);
           }
         }
+
+        const mediaFailure = failedFilenames.length > 0
+          ? new Error(`Failed to deliver ${failedFilenames.length} Telegram attachment(s): ${failedFilenames.join(', ')}`)
+          : null;
 
         // Report partial failures with a visible user-facing notice.
         if (failedFilenames.length > 0) {
@@ -583,6 +595,9 @@ function wrapTelegramDriverForMedia(
         if (!didSendMedia) {
           // All attachments failed — fall back to plain text so the user sees something.
           await base.sendMessage(jid, text);
+          if (mediaFailure) {
+            throw mediaFailure;
+          }
           return;
         }
 
@@ -599,6 +614,10 @@ function wrapTelegramDriverForMedia(
               console.error('[TelegramMedia] Could not send caption-failure notice:', e2);
             }
           }
+        }
+
+        if (mediaFailure) {
+          throw mediaFailure;
         }
       },
     };
