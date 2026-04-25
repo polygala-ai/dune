@@ -2,7 +2,7 @@
 
 import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import type { AuditLog } from '@/electron/main/audit/audit-log';
+import type { AuditDatabase } from '@/electron/main/audit/audit-db';
 
 /** MCP-style tool definition. Used internally by RegisteredTool. */
 export interface ToolDefinition {
@@ -22,7 +22,7 @@ export interface ToolHandlerContext {
 
 /** Tool handler options. */
 export interface ToolHandlerOptions {
-  auditLog?: AuditLog;
+  auditLog?: AuditDatabase;
   getRuntimeController: () => DesktopRuntimeController;
   onWorkflowChanged: () => void;
   workflowStore: AppStorage;

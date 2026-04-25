@@ -11,7 +11,7 @@ import type { OpenDialogOptions } from 'electron';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage';
-import type { AuditLog } from '@/electron/main/audit/audit-log';
+import type { AuditDatabase } from '@/electron/main/audit/audit-db';
 import { registerAuditIpcHandlers } from '@/electron/main/ipc/audit-ipc';
 import {
   assertEmptyProjectRootDirectory,
@@ -51,7 +51,7 @@ interface RegisterMainIpcHandlersOptions {
   deleteLocalData: () => Promise<void>;
   dialog?: DialogLike;
   ensureRuntime: () => Promise<void>;
-  auditLog?: AuditLog;
+  auditLog?: AuditDatabase;
   getFocusedWindow?: () => BrowserWindow | null;
   getMainWindow: () => BrowserWindow | null;
   getProjectActivityPage: (

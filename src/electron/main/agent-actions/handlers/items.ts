@@ -136,7 +136,7 @@ export const itemTools: RegisteredTool[] = [
         itemId,
         itemTitle: title,
         projectId,
-        summary: `Created work item "${title}".`,
+        summary: `"${title}" created`,
         details: { status },
       });
       return { item: presentItem(snapshot, item), itemId };
@@ -234,7 +234,7 @@ export const itemTools: RegisteredTool[] = [
           itemId: item.id,
           itemTitle: item.title,
           projectId: item.projectId,
-          summary: `Updated work item "${item.title}".`,
+          summary: `"${item.title}" updated`,
           details: {
             briefChanged: previousBrief !== item.brief,
             titleChanged: previousTitle !== item.title,
@@ -251,8 +251,8 @@ export const itemTools: RegisteredTool[] = [
           itemTitle: item.title,
           projectId: item.projectId,
           summary: item.primaryAgentId
-            ? `Assigned primary agent to "${item.title}".`
-            : `Cleared primary agent for "${item.title}".`,
+            ? `Agent assigned to "${item.title}"`
+            : `Agent cleared for "${item.title}"`,
           details: { primaryAgentId: item.primaryAgentId },
         });
       }
@@ -335,10 +335,10 @@ export const itemTools: RegisteredTool[] = [
         itemId: item.id,
         itemTitle: item.title,
         projectId: item.projectId,
-        summary: `Moved "${item.title}" from ${previousStatus} to ${status}.`,
+        summary: `"${item.title}" moved from ${previousStatus} to ${status}`,
         details: {
-          fromStatus: previousStatus,
-          toStatus: status,
+          from: previousStatus,
+          to: status,
         },
       });
       return { item: presentItem(snapshot, item) };
@@ -374,7 +374,7 @@ export const itemTools: RegisteredTool[] = [
         itemId: item.id,
         itemTitle: item.title,
         projectId: item.projectId,
-        summary: `Added feedback to "${item.title}".`,
+        summary: `Feedback added to "${item.title}"`,
         details: { feedback },
       });
       return { item: presentItem(snapshot, item) };

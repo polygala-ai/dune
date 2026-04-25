@@ -48,6 +48,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      better-sqlite3:
+        specifier: ^12.8.0
+        version: 12.8.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -172,9 +175,6 @@ importers:
       autoprefixer:
         specifier: ^10.4.21
         version: 10.4.27(postcss@8.5.8)
-      better-sqlite3:
-        specifier: ^12.8.0
-        version: 12.8.0
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10

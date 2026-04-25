@@ -1,13 +1,13 @@
-import type { AuditEvent, QueryAuditParams } from '@/shared/audit-log';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
-import type { AuditLog } from '@/electron/main/audit/audit-log';
+import type { AuditEvent, QueryAuditParams } from '@/shared/audit-log';
+import type { AuditDatabase } from '@/electron/main/audit/audit-db';
 
 interface IpcMainLike {
   handle(channel: string, listener: (...args: any[]) => any): void;
 }
 
 interface RegisterAuditIpcHandlersOptions {
-  auditLog?: AuditLog | undefined;
+  auditLog?: AuditDatabase | undefined;
   ipcMain: IpcMainLike;
 }
 
