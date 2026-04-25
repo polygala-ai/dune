@@ -33,11 +33,11 @@ function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemp
     brief: 'Custom brief',
     builtIn: false,
     createdAt: 0,
-    agentId: null,
-    tasks: ['One'],
+    defaultAgentId: null,
+    defaultTasks: ['One'],
     id: 'custom-template',
     name: 'Custom template',
-    title: 'Custom: ',
+    titlePattern: 'Custom: ',
     updatedAt: 0,
     ...overrides,
   };
@@ -53,21 +53,21 @@ describe('work item templates settings model', () => {
 
     await store.set(WORK_ITEM_TEMPLATES_KEY, [
       customTemplate({
-        tasks: ['First', 'Second'],
+        defaultTasks: ['First', 'Second'],
       }),
       {
         brief: 'Should be filtered',
         builtIn: true,
-        tasks: ['Ignore me'],
+        defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
         name: 'Duplicate built-in',
-        title: 'Ignore: ',
+        titlePattern: 'Ignore: ',
       },
     ]);
 
     await expect(loadCustomWorkItemTemplates(store)).resolves.toEqual([
       customTemplate({
-        tasks: ['First', 'Second'],
+        defaultTasks: ['First', 'Second'],
       }),
     ]);
   });
@@ -78,20 +78,20 @@ describe('work item templates settings model', () => {
     const saved = await saveCustomWorkItemTemplates(store, [
       customTemplate({
         brief: 'Investigate',
-        tasks: [' Scope ', '', 'Scope', 'Write summary'],
+        defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
         id: ' custom-template ',
         name: ' Custom template ',
-        title: 'Research: ',
+        titlePattern: 'Research: ',
       }),
     ]);
 
     expect(saved).toEqual([
       customTemplate({
         brief: 'Investigate',
-        tasks: ['Scope', 'Write summary'],
+        defaultTasks: ['Scope', 'Write summary'],
         id: 'custom-template',
         name: 'Custom template',
-        title: 'Research: ',
+        titlePattern: 'Research: ',
       }),
     ]);
     await expect(store.get<WorkItemTemplate[]>(WORK_ITEM_TEMPLATES_KEY)).resolves.toEqual([
@@ -194,26 +194,26 @@ describe('work item templates settings model', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       customTemplate({
         brief: 'Imported brief',
-        tasks: ['Read the diff'],
+        defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
-        title: 'Import: ',
+        titlePattern: 'Import: ',
       }),
       {
         brief: 'Built-in copy',
         builtIn: true,
-        tasks: ['Ignore'],
+        defaultTasks: ['Ignore'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
-        title: 'Fix: ',
+        titlePattern: 'Fix: ',
       },
     ]))).toEqual([
       customTemplate({
         brief: 'Imported brief',
-        tasks: ['Read the diff'],
+        defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
-        title: 'Import: ',
+        titlePattern: 'Import: ',
       }),
     ]);
 
@@ -223,7 +223,7 @@ describe('work item templates settings model', () => {
     expect(() => parseImportedWorkItemTemplates(JSON.stringify({ nope: true }))).toThrow(
       'Templates file must contain a JSON array.',
     );
-    expect(() => parseImportedWorkItemTemplates(JSON.stringify([{ title: 'Invalid' }]))).toThrow(
+    expect(() => parseImportedWorkItemTemplates(JSON.stringify([{ titlePattern: 'Invalid' }]))).toThrow(
       'Templates file contains one or more invalid templates.',
     );
   });
@@ -231,20 +231,20 @@ describe('work item templates settings model', () => {
   it('parses the public template data model without display names', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       {
-        agentId: 'agent-research',
+        defaultAgentId: 'agent-research',
         brief: 'Research this topic.',
         id: 'public-template',
-        tasks: ['Read', 'Summarize'],
-        title: 'Research: topic',
+        defaultTasks: ['Read', 'Summarize'],
+        titlePattern: 'Research: topic',
       },
     ]))).toEqual([
       customTemplate({
-        agentId: 'agent-research',
+        defaultAgentId: 'agent-research',
         brief: 'Research this topic.',
         id: 'public-template',
         name: 'Research: topic',
-        tasks: ['Read', 'Summarize'],
-        title: 'Research: topic',
+        defaultTasks: ['Read', 'Summarize'],
+        titlePattern: 'Research: topic',
       }),
     ]);
   });
@@ -258,11 +258,11 @@ describe('work item templates settings model', () => {
         brief: 'Include this',
         builtIn: true,
         createdAt: 0,
-        agentId: null,
-        tasks: ['Ignored'],
+        defaultAgentId: null,
+        defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
-        title: 'Fix: ',
+        titlePattern: 'Fix: ',
         updatedAt: 0,
       },
     ]);
@@ -276,42 +276,42 @@ describe('work item templates settings model', () => {
       [
         customTemplate({
           brief: 'Original brief',
-          tasks: ['One'],
+          defaultTasks: ['One'],
           id: 'template-a',
           name: 'Template A',
-          title: 'A: ',
+          titlePattern: 'A: ',
         }),
       ],
       [
         customTemplate({
           brief: 'Updated brief',
-          tasks: ['Two'],
+          defaultTasks: ['Two'],
           id: 'template-a',
           name: 'Template A',
-          title: 'Updated: ',
+          titlePattern: 'Updated: ',
         }),
         customTemplate({
           brief: 'New brief',
-          tasks: ['Three'],
+          defaultTasks: ['Three'],
           id: 'template-b',
           name: 'Template B',
-          title: 'B: ',
+          titlePattern: 'B: ',
         }),
       ],
     )).toEqual([
       customTemplate({
         brief: 'Updated brief',
-        tasks: ['Two'],
+        defaultTasks: ['Two'],
         id: 'template-a',
         name: 'Template A',
-        title: 'Updated: ',
+        titlePattern: 'Updated: ',
       }),
       customTemplate({
         brief: 'New brief',
-        tasks: ['Three'],
+        defaultTasks: ['Three'],
         id: 'template-b',
         name: 'Template B',
-        title: 'B: ',
+        titlePattern: 'B: ',
       }),
     ]);
   });

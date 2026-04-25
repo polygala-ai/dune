@@ -9,11 +9,11 @@ export interface WorkItemTemplate {
   builtIn: boolean;
   createdAt: number;
   /** Agent ID or exact agent name to assign when the template is used. */
-  agentId: string | null;
+  defaultAgentId: string | null;
   id: string;
   name: string;
-  tasks: string[];
-  title: string;
+  defaultTasks: string[];
+  titlePattern: string;
   updatedAt: number;
 }
 
@@ -37,44 +37,44 @@ export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
     brief: 'Research {topic} and summarize findings. Identify credible sources, compare tradeoffs, and end with a concise recommendation.',
     builtIn: true,
     createdAt: 0,
-    agentId: null,
+    defaultAgentId: null,
     id: 'builtin-research-task',
     name: 'Research task',
-    tasks: ['Define scope', 'Gather sources', 'Summarize findings', 'Write report'],
-    title: 'Research: {topic}',
+    defaultTasks: ['Define scope', 'Gather sources', 'Summarize findings', 'Write report'],
+    titlePattern: 'Research: {topic}',
     updatedAt: 0,
   },
   {
     brief: 'Investigate the reported bug, document reproduction steps, identify the root cause, implement the fix, and add regression coverage.',
     builtIn: true,
     createdAt: 0,
-    agentId: null,
+    defaultAgentId: null,
     id: 'builtin-bug-fix',
     name: 'Bug fix',
-    tasks: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Open PR'],
-    title: 'Fix: {bug}',
+    defaultTasks: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Open PR'],
+    titlePattern: 'Fix: {bug}',
     updatedAt: 0,
   },
   {
     brief: 'Implement the requested feature end to end. Match existing product patterns, update relevant tests, and call out any follow-up work.',
     builtIn: true,
     createdAt: 0,
-    agentId: null,
+    defaultAgentId: null,
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
-    tasks: ['Write design doc', 'Implement feature', 'Write tests', 'Open PR'],
-    title: 'Implement: {feature}',
+    defaultTasks: ['Write design doc', 'Implement feature', 'Write tests', 'Open PR'],
+    titlePattern: 'Implement: {feature}',
     updatedAt: 0,
   },
   {
     brief: 'Review the target change for correctness, regressions, maintainability, and missing tests. Prioritize actionable findings with file and line references.',
     builtIn: true,
     createdAt: 0,
-    agentId: null,
+    defaultAgentId: null,
     id: 'builtin-code-review',
     name: 'Code review',
-    tasks: ['Read diff', 'Run tests locally', 'Leave review comments'],
-    title: 'Review: {PR}',
+    defaultTasks: ['Read diff', 'Run tests locally', 'Leave review comments'],
+    titlePattern: 'Review: {PR}',
     updatedAt: 0,
   },
 ];
@@ -110,49 +110,54 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
   }
 
   const id = typeof value.id === 'string' ? value.id.trim() : '';
-  const title = typeof value.title === 'string'
-    ? value.title
-    : typeof value.titlePattern === 'string'
-      ? value.titlePattern
-      : '';
+  const titlePattern = typeof value.titlePattern === 'string'
+    ? value.titlePattern
+    : typeof value.title === 'string'
+      ? value.title
+      : typeof value.titlePrefix === 'string'
+        ? value.titlePrefix
+        : '';
   const name = typeof value.name === 'string' && value.name.trim()
     ? value.name.trim()
-    : title.trim() || id;
+    : titlePattern.trim() || id;
 
   if (!id) {
     return null;
   }
 
-  const template: WorkItemTemplate = {
-    brief: typeof value.brief === 'string'
-        ? value.brief
-        : typeof value.briefTemplate === 'string'
-          ? value.briefTemplate
-        : '',
-    createdAt: normalizeTimestamp(value.createdAt),
-    agentId: null,
-    tasks: Array.isArray(value.tasks)
+  const defaultTasks = Array.isArray(value.defaultTasks)
+    ? normalizeWorkflowTaskTitles(
+        value.defaultTasks.filter((task): task is string => typeof task === 'string'),
+      )
+    : Array.isArray(value.tasks)
       ? normalizeWorkflowTaskTitles(
           value.tasks.filter((task): task is string => typeof task === 'string'),
         )
-      : Array.isArray(value.defaultTasks)
-        ? normalizeWorkflowTaskTitles(
-            value.defaultTasks.filter((task): task is string => typeof task === 'string'),
-          )
-      : [],
-    id,
+      : [];
+
+  return {
+    brief: typeof value.brief === 'string'
+      ? value.brief
+      : typeof value.briefSkeleton === 'string'
+        ? value.briefSkeleton
+        : typeof value.briefTemplate === 'string'
+          ? value.briefTemplate
+          : '',
     builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
+    createdAt: normalizeTimestamp(value.createdAt),
+    defaultAgentId: normalizeOptionalAgentId(
+      value.defaultAgentId
+        ?? value.assignedAgentId
+        ?? value.defaultAssigneeId
+        ?? value.defaultAssignedAgentId
+        ?? value.agentId,
+    ) ?? null,
+    id,
     name,
-    title,
+    defaultTasks,
+    titlePattern,
     updatedAt: normalizeTimestamp(value.updatedAt),
   };
-  const agentId = normalizeOptionalAgentId(
-    value.agentId ?? value.assignedAgentId ?? value.defaultAgentId ?? value.defaultAssignedAgentId,
-  );
-
-  template.agentId = agentId ?? null;
-
-  return template;
 }
 
 /** Normalizes work item templates. */
@@ -182,8 +187,8 @@ export function normalizeWorkItemTemplates(value: unknown): WorkItemTemplate[] {
 export function createWorkItemTemplatePrefill(template: WorkItemTemplate): WorkItemTemplatePrefill {
   return {
     brief: template.brief,
-    taskTitles: [...template.tasks],
-    title: template.title,
+    taskTitles: [...template.defaultTasks],
+    title: template.titlePattern,
   };
 }
 
@@ -193,14 +198,14 @@ export function resolveWorkItemTemplateDefaultAgent(
   projectId: string,
   agents: TemplateScopedAgent[],
 ) {
-  const agentId = normalizeOptionalAgentId(template?.agentId);
+  const defaultAgentId = normalizeOptionalAgentId(template?.defaultAgentId);
 
-  if (!agentId) {
+  if (!defaultAgentId) {
     return null;
   }
 
   const matchingAgent = agents.find((agent) =>
-    agent.id === agentId || agent.name === agentId,
+    agent.id === defaultAgentId || agent.name === defaultAgentId,
   );
 
   if (!matchingAgent) {
