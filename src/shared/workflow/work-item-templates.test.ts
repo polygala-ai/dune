@@ -8,7 +8,21 @@ import {
   normalizeWorkItemTemplate,
   normalizeWorkItemTemplates,
   resolveWorkItemTemplateDefaultAgent,
+  type WorkItemTemplate,
 } from './work-item-templates';
+
+function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
+  return {
+    briefTemplate: '',
+    createdAt: 1,
+    defaultTasks: [],
+    id: 'custom-template',
+    isBuiltIn: false,
+    name: 'Custom template',
+    titlePattern: '',
+    ...overrides,
+  };
+}
 
 describe('work item templates', () => {
   it('defines the four built-in templates', () => {
@@ -18,27 +32,63 @@ describe('work item templates', () => {
       'Feature implementation',
       'Code review',
     ]);
+    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.isBuiltIn)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      ['Understand', 'Research', 'Synthesize', 'Write report'],
-      ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
-      ['Design', 'Review design', 'Implement', 'Test', 'PR'],
-      ['Read brief', 'Review code', 'Write feedback'],
+      [
+        'Define research scope and questions',
+        'Search and collect sources',
+        'Analyze and synthesize findings',
+        'Write summary document',
+        'Review and finalize',
+      ],
+      [
+        'Reproduce the bug',
+        'Identify root cause',
+        'Implement fix',
+        'Write/update tests',
+        'Verify fix and close',
+      ],
+      [
+        'Write design doc',
+        'Review design',
+        'Implement feature',
+        'Write tests',
+        'Code review',
+        'Deploy and verify',
+      ],
+      [
+        'Read the diff/PR',
+        'Check correctness and logic',
+        'Check security implications',
+        'Check performance',
+        'Write review comments',
+        'Approve or request changes',
+      ],
     ]);
   });
 
   it('normalizes templates and strips invalid values', () => {
     expect(normalizeWorkItemTemplate({
-      brief: 'Investigate the issue.',
+      briefTemplate: 'Investigate the issue.',
+      createdAt: 123,
       defaultAgentId: ' agent-1 ',
       defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
       id: ' template-1 ',
+      isBuiltIn: false,
       name: ' Research helper ',
       titlePattern: 'Research: ',
     })).toEqual({
-      brief: 'Investigate the issue.',
+      briefTemplate: 'Investigate the issue.',
+      createdAt: 123,
       defaultAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
       id: 'template-1',
+      isBuiltIn: false,
       name: 'Research helper',
       titlePattern: 'Research: ',
     });
@@ -53,17 +103,19 @@ describe('work item templates', () => {
 
   it('normalizes legacy template field names', () => {
     expect(normalizeWorkItemTemplate({
-      briefTemplate: 'Legacy brief.',
+      brief: 'Legacy brief.',
       defaultAssignedAgentId: ' agent-legacy ',
       defaultTasks: ['Read'],
       id: 'legacy-template',
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
     })).toEqual({
-      brief: 'Legacy brief.',
+      briefTemplate: 'Legacy brief.',
+      createdAt: expect.any(Number),
       defaultAgentId: 'agent-legacy',
       defaultTasks: ['Read'],
       id: 'legacy-template',
+      isBuiltIn: false,
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
     });
@@ -71,48 +123,52 @@ describe('work item templates', () => {
 
   it('deduplicates templates by ID', () => {
     expect(normalizeWorkItemTemplates([
-      {
-        brief: '',
+      customTemplate({
         defaultTasks: ['One'],
         id: 'template-1',
         name: 'Alpha',
-        titlePattern: '',
-      },
-      {
-        brief: '',
+      }),
+      customTemplate({
         defaultTasks: ['Two'],
         id: 'template-1',
         name: 'Duplicate',
-        titlePattern: '',
-      },
+      }),
     ])).toEqual([
-      {
-        brief: '',
+      customTemplate({
         defaultTasks: ['One'],
         id: 'template-1',
         name: 'Alpha',
-        titlePattern: '',
-      },
+      }),
     ]);
   });
 
   it('creates prefill values from a template', () => {
-    expect(createWorkItemTemplatePrefill(BUILTIN_WORK_ITEM_TEMPLATES[0]!)).toEqual({
-      brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nSynthesis:\n\nReport:',
-      taskTitles: ['Understand', 'Research', 'Synthesize', 'Write report'],
-      title: 'Research: ',
+    const researchTemplate = BUILTIN_WORK_ITEM_TEMPLATES[0];
+
+    if (!researchTemplate) {
+      throw new Error('Missing research built-in template.');
+    }
+
+    expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
+      brief: 'Research {topic} and produce a summary with key findings, sources, and recommendations.',
+      taskTitles: [
+        'Define research scope and questions',
+        'Search and collect sources',
+        'Analyze and synthesize findings',
+        'Write summary document',
+        'Review and finalize',
+      ],
+      title: 'Research: {topic}',
     });
   });
 
   it('resolves the default agent only when it matches the project scope', () => {
-    const template = {
-      brief: '',
+    const template = customTemplate({
       defaultAgentId: 'agent-alpha',
       defaultTasks: ['Investigate'],
-      id: 'custom-template',
       name: 'Scoped template',
       titlePattern: 'Investigate: ',
-    };
+    });
 
     expect(resolveWorkItemTemplateDefaultAgent(template, 'project-1', [
       { id: 'agent-alpha', name: 'Alpha', projectId: 'project-1' },
@@ -134,14 +190,13 @@ describe('work item templates', () => {
   });
 
   it('resolves the default agent by exact name when an ID is not stored', () => {
-    const template = {
-      brief: '',
+    const template = customTemplate({
       defaultAgentId: 'Review agent',
       defaultTasks: ['Review'],
       id: 'custom-review-template',
       name: 'Review template',
       titlePattern: 'Review: ',
-    };
+    });
 
     expect(resolveWorkItemTemplateDefaultAgent(template, 'project-1', [
       { id: 'agent-review', name: 'Review agent', projectId: 'project-1' },

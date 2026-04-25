@@ -5,11 +5,12 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 
 /** Work item template shape. */
 export interface WorkItemTemplate {
-  brief: string;
+  briefTemplate: string;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId?: string;
   defaultTasks: string[];
   id: string;
+  builtIn: boolean;
   name: string;
   titlePattern: string;
 }
@@ -31,28 +32,32 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nSynthesis:\n\nReport:',
+    briefTemplate: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nKey findings:\n\nSynthesis:\n\nRecommendation:',
+    builtIn: true,
     defaultTasks: ['Understand', 'Research', 'Synthesize', 'Write report'],
     id: 'builtin-research-task',
     name: 'Research task',
     titlePattern: 'Research: ',
   },
   {
-    brief: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nFix notes:',
+    briefTemplate: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nRoot cause:\n\nFix plan:\n\nVerification:',
+    builtIn: true,
     defaultTasks: ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
     id: 'builtin-bug-fix',
     name: 'Bug fix',
     titlePattern: 'Fix: ',
   },
   {
-    brief: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nAcceptance criteria:',
+    briefTemplate: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nImplementation tasks:\n\nAcceptance criteria:\n\nVerification:',
+    builtIn: true,
     defaultTasks: ['Design', 'Review design', 'Implement', 'Test', 'PR'],
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
     titlePattern: 'Implement: ',
   },
   {
-    brief: 'Brief:\n\nCode/PR to review:\n\nFocus areas:\n\nFeedback:',
+    briefTemplate: 'Brief:\n\nCode/PR to review:\n\nChecklist:\n- Correctness and edge cases\n- Tests and coverage\n- Security and privacy\n- Performance\n- Maintainability\n\nFeedback:',
+    builtIn: true,
     defaultTasks: ['Read brief', 'Review code', 'Write feedback'],
     id: 'builtin-code-review',
     name: 'Code review',
@@ -92,11 +97,12 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
   }
 
   const template: WorkItemTemplate = {
-    brief: typeof value.brief === 'string'
-      ? value.brief
-      : typeof value.briefTemplate === 'string'
-        ? value.briefTemplate
+    briefTemplate: typeof value.briefTemplate === 'string'
+      ? value.briefTemplate
+      : typeof value.brief === 'string'
+        ? value.brief
         : '',
+    builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
     defaultTasks: Array.isArray(value.defaultTasks)
       ? normalizeWorkflowTaskTitles(
           value.defaultTasks.filter((task): task is string => typeof task === 'string'),
@@ -143,7 +149,7 @@ export function normalizeWorkItemTemplates(value: unknown): WorkItemTemplate[] {
 /** Creates a prefilled work item draft from a template. */
 export function createWorkItemTemplatePrefill(template: WorkItemTemplate): WorkItemTemplatePrefill {
   return {
-    brief: template.brief,
+    brief: template.briefTemplate,
     taskTitles: [...template.defaultTasks],
     title: template.titlePattern,
   };

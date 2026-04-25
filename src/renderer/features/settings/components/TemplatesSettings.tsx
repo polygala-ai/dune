@@ -5,6 +5,8 @@ import {
   Download,
   Pencil,
   Plus,
+  ArrowDown,
+  ArrowUp,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -33,7 +35,6 @@ import {
   upsertImportedWorkItemTemplates,
 } from '@/renderer/features/settings/model/work-item-templates';
 import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
-import { isBuiltInWorkItemTemplateId } from '@/shared/workflow/work-item-templates';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
@@ -120,7 +121,7 @@ function TemplateFormDialog({
       return;
     }
 
-    setBrief(state?.template?.brief ?? '');
+    setBrief(state?.template?.briefTemplate ?? '');
     setDefaultAgentId(state?.template?.defaultAgentId ?? '');
     setName(state?.template?.name ?? '');
     setRawTasks(state?.template?.defaultTasks.join('\n') ?? '');
@@ -246,7 +247,8 @@ function TemplateFormDialog({
             onClick={() => {
               const existingTemplate = state?.template;
               const nextTemplate: WorkItemTemplate = {
-                brief,
+                briefTemplate: brief,
+                builtIn: false,
                 defaultTasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
                 id: existingTemplate?.id ?? createId('template'),
                 name: name.trim(),
@@ -301,8 +303,8 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   }, []);
 
   const templates = mergeWorkItemTemplates(customTemplates);
-  const builtInTemplates = templates.filter((template) => isBuiltInWorkItemTemplateId(template.id));
-  const userTemplates = templates.filter((template) => !isBuiltInWorkItemTemplateId(template.id));
+  const builtInTemplates = templates.filter((template) => template.builtIn);
+  const userTemplates = templates.filter((template) => !template.builtIn);
 
   const persistTemplates = async (nextTemplates: WorkItemTemplate[], successMessage: string) => {
     const savedTemplates = await saveCustomWorkItemTemplates(settingsStore, nextTemplates);
@@ -350,6 +352,33 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
     }
   };
 
+  const handleTemplateMove = async (template: WorkItemTemplate, direction: -1 | 1) => {
+    const currentIndex = customTemplates.findIndex((candidate) => candidate.id === template.id);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= customTemplates.length) {
+      return;
+    }
+
+    const nextTemplates = [...customTemplates];
+    const [movedTemplate] = nextTemplates.splice(currentIndex, 1);
+
+    if (!movedTemplate) {
+      return;
+    }
+
+    nextTemplates.splice(nextIndex, 0, movedTemplate);
+
+    try {
+      await persistTemplates(nextTemplates, `Moved template “${template.name}”.`);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: `Failed to reorder template. ${String(error)}`,
+      });
+    }
+  };
+
   const handleExport = async () => {
     if (typeof window.duneDesktop?.exportWorkItemTemplates !== 'function') {
       setFeedback({
@@ -365,7 +394,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
     try {
       const savedPath = await window.duneDesktop.exportWorkItemTemplates(
         'dune-work-item-templates.json',
-        serializeCustomWorkItemTemplates(customTemplates),
+        serializeCustomWorkItemTemplates(templates),
       );
 
       if (!savedPath) {
@@ -374,7 +403,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
 
       setFeedback({
         kind: 'success',
-        message: `Exported ${customTemplates.length} custom template${customTemplates.length === 1 ? '' : 's'} to ${savedPath}.`,
+        message: `Exported ${templates.length} template${templates.length === 1 ? '' : 's'} to ${savedPath}.`,
       });
     } catch (error) {
       setFeedback({
@@ -438,7 +467,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
       />
 
       <div className="mt-4 rounded-[18px] border border-app-border bg-app-panel/40 px-4 py-3 text-sm text-app-muted">
-        Built-in templates are always available. Import and export only include custom templates.
+        Built-in templates are always available. Export includes every template; import adds or updates custom templates.
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -454,7 +483,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
         </Button>
         <Button disabled={isExporting} onClick={() => void handleExport()} type="button" variant="outline">
           <Download className="h-4 w-4" />
-          Export custom JSON
+          Export JSON
         </Button>
         <Button disabled={isImporting} onClick={() => void handleImport()} type="button" variant="outline">
           <Upload className="h-4 w-4" />
@@ -495,11 +524,11 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                         Built-in
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-app-muted">Title prefix: {template.titlePattern || 'None'}</p>
+                    <p className="mt-2 text-sm text-app-muted">Title pattern: {template.titlePattern || 'None'}</p>
                   </div>
                 </div>
                 <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                  {template.brief || 'No default brief.'}
+                  {template.briefTemplate || 'No default brief.'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {template.defaultTasks.map((task) => (
@@ -531,7 +560,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
             </div>
           ) : (
             <div className="grid gap-3">
-              {userTemplates.map((template) => (
+              {userTemplates.map((template, index) => (
                 <article
                   className="rounded-[20px] border border-app-border bg-app-panel/50 p-5"
                   key={template.id}
@@ -539,13 +568,35 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h4 className="text-base font-semibold text-app-text">{template.name}</h4>
-                      <p className="mt-2 text-sm text-app-muted">Title prefix: {template.titlePattern || 'None'}</p>
+                      <p className="mt-2 text-sm text-app-muted">Title pattern: {template.titlePattern || 'None'}</p>
                       <p className="mt-1 text-sm text-app-muted">
                         Default agent: {describeTemplateAgent(scopedAgents, template.defaultAgentId)}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <Button
+                        disabled={index === 0}
+                        onClick={() => {
+                          void handleTemplateMove(template, -1);
+                        }}
+                        title="Move template up"
+                        type="button"
+                        variant="quiet"
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        disabled={index === userTemplates.length - 1}
+                        onClick={() => {
+                          void handleTemplateMove(template, 1);
+                        }}
+                        title="Move template down"
+                        type="button"
+                        variant="quiet"
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
                       <Button
                         onClick={() => {
                           setDialogState({ mode: 'edit', template });
@@ -571,7 +622,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
 
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                    {template.brief || 'No default brief.'}
+                    {template.briefTemplate || 'No default brief.'}
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">

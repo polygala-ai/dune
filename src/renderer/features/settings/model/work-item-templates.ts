@@ -20,7 +20,8 @@ export interface WorkItemTemplateStore {
 /** Normalizes custom work item templates. */
 export function normalizeCustomWorkItemTemplates(value: unknown): WorkItemTemplate[] {
   return normalizeWorkItemTemplates(value)
-    .filter((template) => !isBuiltInWorkItemTemplateId(template.id));
+    .filter((template) => !template.builtIn && !isBuiltInWorkItemTemplateId(template.id))
+    .map((template) => ({ ...template, builtIn: false }));
 }
 
 /** Loads custom work item templates. */
@@ -80,9 +81,9 @@ export function parseImportedWorkItemTemplates(json: string) {
   return normalizeCustomWorkItemTemplates(parsedTemplates);
 }
 
-/** Serializes custom work item templates to JSON. */
+/** Serializes work item templates to JSON. */
 export function serializeCustomWorkItemTemplates(templates: WorkItemTemplate[]) {
-  return JSON.stringify(normalizeCustomWorkItemTemplates(templates), null, 2);
+  return JSON.stringify(normalizeWorkItemTemplates(templates), null, 2);
 }
 
 /** Upserts imported work item templates into the current custom set. */
