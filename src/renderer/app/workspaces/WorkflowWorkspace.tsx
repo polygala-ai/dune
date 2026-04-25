@@ -11,6 +11,7 @@ import { CompactShellToolbar } from '@/renderer/app/shell/CompactShellToolbar';
 import { useAppCommands } from '@/renderer/app/store/app-commands';
 import { useWorkflowSession } from '@/renderer/app/store/selectors';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
+import { AuditLogView } from '@/renderer/features/audit-log/AuditLogView';
 import { CreateProjectDialog } from '@/renderer/features/workflow/components/CreateProjectDialog';
 import { CreateWorkItemDialog } from '@/renderer/features/workflow/components/CreateWorkItemDialog';
 import { WorkflowBoard } from '@/renderer/features/workflow/components/WorkflowBoard';
@@ -36,6 +37,7 @@ const projectHeaderTabs = [
   { label: 'Activity', value: 'activity' },
   { label: 'Board', value: 'board' },
   { label: 'Agents', value: 'agents' },
+  { label: 'Audit Log', value: 'audit-log' },
 ] as const;
 
 /** Workflow workspace props. */
@@ -426,6 +428,11 @@ export function WorkflowWorkspace({
                               return;
                             }
 
+                            if (tab.value === 'audit-log') {
+                              commands.openAuditLog();
+                              return;
+                            }
+
                             commands.openWorkflow();
                           }}
                           role="tab"
@@ -486,6 +493,8 @@ export function WorkflowWorkspace({
                     }}
                     runtimeInfo={runtimeInfo}
                   />
+                ) : selectedProjectView === 'audit-log' ? (
+                  <AuditLogView projectId={selectedProject.id} />
                 ) : (
                   <WorkflowProjectActivity
                     entries={mergedActivityEntries}

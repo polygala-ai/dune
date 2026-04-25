@@ -87,6 +87,7 @@ beforeEach(() => {
     openPath: vi.fn(() => Promise.resolve(undefined)),
     platform: 'darwin',
     prepareProjectRootPath: vi.fn((rootPath: string) => Promise.resolve(rootPath)),
+    recordAuditEvent: vi.fn(() => Promise.resolve(undefined)),
     reloadExternalChannels: vi.fn(() => Promise.resolve(undefined)),
     restartApp: vi.fn(() => Promise.resolve(undefined)),
     selectProjectDirectory: vi.fn(() => Promise.resolve('/tmp/project-root')),

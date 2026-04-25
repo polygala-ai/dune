@@ -143,7 +143,7 @@ export const projectTools: RegisteredTool[] = [
       inputSchema: objectSchema({ projectId: optionalStringSchema }),
       name: 'workflow.projects.delete',
     },
-    handler: async ({ agentContext, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
+    handler: async ({ agentContext, auditLog, getRuntimeController, onWorkflowChanged, workflowStore }, args) => {
       const snapshot = await readWorkflowSnapshot(workflowStore);
       const projectId = resolveProjectId(args.projectId, agentContext.projectId);
 
@@ -154,6 +154,7 @@ export const projectTools: RegisteredTool[] = [
       const runtimeController = getRuntimeController();
       const projectAgents = runtimeController.getSnapshot().agents
         .filter((agent) => agent.projectId === projectId);
+      const deletedItems = snapshot.items.filter((item) => item.projectId === projectId);
 
       await Promise.all(projectAgents.map((agent) => runtimeController.deleteAgent(agent.id)));
 
@@ -167,6 +168,20 @@ export const projectTools: RegisteredTool[] = [
       }
 
       await writeWorkflowSnapshot(workflowStore, snapshot, onWorkflowChanged);
+
+      for (const item of deletedItems) {
+        auditLog?.record({
+          actor: agentContext.agentName ?? 'user',
+          actorType: 'agent',
+          eventType: 'item.deleted',
+          itemId: item.id,
+          itemTitle: item.title,
+          projectId,
+          summary: `Deleted work item "${item.title}".`,
+          details: { viaProjectDelete: true },
+        });
+      }
+
       return { success: true };
     },
   },

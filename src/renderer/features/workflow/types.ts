@@ -24,6 +24,7 @@ export const workflowProjectViews = [
   'board',
   'agents',
   'activity',
+  'audit-log',
 ] as const;
 
 /** Workflow project filters constant. */

@@ -27,6 +27,7 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
+import type { AuditEvent } from '@/shared/audit-log';
 
 const defaultProjectColors = ['#A86D46', '#7A8B5D', '#4F7A78', '#9D6A71', '#6C69A6'] as const;
 
@@ -49,6 +50,19 @@ function createItemEvent(
 function normalizeNote(note: string | null | undefined) {
   const normalized = note?.trim();
   return normalized ? normalized : null;
+}
+
+/** Records a user-originated audit event through the Electron bridge. */
+function recordUserAuditEvent(event: Omit<AuditEvent, 'actor' | 'actorType'>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  void window.duneDesktop?.recordAuditEvent?.({
+    ...event,
+    actor: 'user',
+    actorType: 'user',
+  });
 }
 
 /** Sorts items by project status. */
@@ -247,13 +261,14 @@ export function createInitialWorkflowState(): WorkflowState {
 export function createWorkflowSlice(
   initialState: WorkflowState,
 ): AppStoreSlice<WorkflowSlice> {
-  return (set) => {
+  return (set, get) => {
     const actions: WorkflowActions = {
       addTask: (itemId, title, note) => {
         const trimmedTitle = title.trim();
         const normalizedNote = normalizeNote(note);
+        const targetItem = get().items.find((item) => item.id === itemId) ?? null;
 
-        if (!trimmedTitle) {
+        if (!trimmedTitle || !targetItem) {
           return null;
         }
 
@@ -307,14 +322,24 @@ export function createWorkflowSlice(
           };
         });
 
+        recordUserAuditEvent({
+          eventType: 'task.created',
+          itemId,
+          itemTitle: targetItem.title,
+          projectId: targetItem.projectId,
+          summary: `Added task "${trimmedTitle}" to "${targetItem.title}".`,
+          ts: updatedAt,
+          details: { taskId, taskTitle: trimmedTitle },
+        });
         return taskId;
       },
       addWorkProduct: (itemId, input) => {
         const title = input.title.trim();
         const body = input.body.trim();
         const normalizedNote = normalizeNote(input.note);
+        const targetItem = get().items.find((item) => item.id === itemId) ?? null;
 
-        if (!title || !body) {
+        if (!title || !body || !targetItem) {
           return null;
         }
 
@@ -364,12 +389,26 @@ export function createWorkflowSlice(
           };
         });
 
+        recordUserAuditEvent({
+          eventType: 'work_product.added',
+          itemId,
+          itemTitle: targetItem.title,
+          projectId: targetItem.projectId,
+          summary: `Added work product "${title}" to "${targetItem.title}".`,
+          ts: updatedAt,
+          details: { workProductId: productId, workProductTitle: title },
+        });
         return productId;
       },
       assignPrimaryAgent: (itemId, input) => {
         const updatedAt = Date.now();
         const clearedDescription = 'Primary agent cleared.';
         const normalizedNote = normalizeNote(input.note);
+        const targetItem = get().items.find((item) => item.id === itemId) ?? null;
+
+        if (!targetItem) {
+          return;
+        }
 
         set((state) => {
           const targetItem = state.items.find((item) => item.id === itemId);
@@ -423,10 +462,26 @@ export function createWorkflowSlice(
             }),
           };
         });
+
+        recordUserAuditEvent({
+          eventType: 'agent.assigned',
+          itemId,
+          itemTitle: targetItem.title,
+          projectId: targetItem.projectId,
+          summary: input.agentId
+            ? `Assigned primary agent to "${targetItem.title}".`
+            : `Cleared primary agent for "${targetItem.title}".`,
+          ts: updatedAt,
+          details: {
+            agentId: input.agentId,
+            agentName: input.agentName ?? null,
+          },
+        });
       },
       clearAgentAssignments: (agentId) => {
         const updatedAt = Date.now();
         const clearedDescription = 'Primary agent cleared.';
+        const clearedItems = get().items.filter((item) => item.primaryAgentId === agentId);
 
         set((state) => {
           const touchedProjectIds = new Set<string>();
@@ -466,6 +521,18 @@ export function createWorkflowSlice(
             }),
           };
         });
+
+        for (const item of clearedItems) {
+          recordUserAuditEvent({
+            eventType: 'agent.assigned',
+            itemId: item.id,
+            itemTitle: item.title,
+            projectId: item.projectId,
+            summary: `Cleared primary agent for "${item.title}".`,
+            ts: updatedAt,
+            details: { agentId },
+          });
+        }
       },
       createItem: (input) => {
         const title = input.title.trim();
@@ -521,6 +588,15 @@ export function createWorkflowSlice(
           };
         });
 
+        recordUserAuditEvent({
+          eventType: 'item.created',
+          itemId,
+          itemTitle: title,
+          projectId: input.projectId,
+          summary: `Created work item "${title}".`,
+          ts: updatedAt,
+          details: { status: input.status },
+        });
         return itemId;
       },
       createProject: (input) => {
@@ -560,6 +636,8 @@ export function createWorkflowSlice(
         return projectId;
       },
       deleteProject: (projectId) => {
+        const deletedItems = get().items.filter((item) => item.projectId === projectId);
+
         set((state) => {
           if (!state.projects.some((project) => project.id === projectId)) {
             return state;
@@ -604,6 +682,17 @@ export function createWorkflowSlice(
             selectedProjectScreen: 'main',
           };
         });
+
+        for (const item of deletedItems) {
+          recordUserAuditEvent({
+            eventType: 'item.deleted',
+            itemId: item.id,
+            itemTitle: item.title,
+            projectId,
+            summary: `Deleted work item "${item.title}".`,
+            details: { viaProjectDelete: true },
+          });
+        }
       },
       hydrateWorkflow: (snapshot) => {
         const nextSnapshot = ensureSelection(getWorkflowSnapshotState(snapshot));
@@ -620,6 +709,14 @@ export function createWorkflowSlice(
         });
       },
       moveItem: (itemId, status, index, note) => {
+        const previousItem = get().items.find((currentItem) => currentItem.id === itemId) ?? null;
+
+        if (!previousItem || (previousItem.status === 'review' && status === 'done')) {
+          return;
+        }
+
+        const updatedAt = Date.now();
+
         set((state) => {
           const item = state.items.find((currentItem) => currentItem.id === itemId);
 
@@ -632,7 +729,6 @@ export function createWorkflowSlice(
           }
 
           const normalizedNote = normalizeNote(note);
-          const updatedAt = Date.now();
           const destination = getProjectItems(
             state.items.filter((currentItem) => currentItem.id !== itemId && currentItem.status === status),
             item.projectId,
@@ -680,6 +776,19 @@ export function createWorkflowSlice(
               selectedProjectView: state.selectedProjectView,
             }),
           };
+        });
+
+        recordUserAuditEvent({
+          eventType: 'item.moved',
+          itemId,
+          itemTitle: previousItem.title,
+          projectId: previousItem.projectId,
+          summary: `Moved "${previousItem.title}" from ${previousItem.status} to ${status}.`,
+          ts: updatedAt,
+          details: {
+            fromStatus: previousItem.status,
+            toStatus: status,
+          },
         });
       },
       openProjectSettings: () => {
@@ -775,6 +884,17 @@ export function createWorkflowSlice(
         });
       },
       updateItem: (itemId, input) => {
+        const targetItem = get().items.find((item) => item.id === itemId) ?? null;
+        const title = input.title?.trim();
+        const brief = input.brief?.trim();
+        const hasUpdate = title !== undefined || brief !== undefined;
+
+        if (!targetItem || !hasUpdate) {
+          return;
+        }
+
+        const updatedAt = Date.now();
+
         set((state) => {
           const targetItem = state.items.find((item) => item.id === itemId);
 
@@ -782,7 +902,6 @@ export function createWorkflowSlice(
             return state;
           }
 
-          const updatedAt = Date.now();
           const normalizedNote = normalizeNote(input.note);
 
           return {
@@ -792,8 +911,6 @@ export function createWorkflowSlice(
                   return item;
                 }
 
-                const title = input.title?.trim();
-                const brief = input.brief?.trim();
                 const nextItem = {
                   ...item,
                   ...(title ? { title } : {}),
@@ -822,8 +939,30 @@ export function createWorkflowSlice(
             }),
           };
         });
+
+        recordUserAuditEvent({
+          eventType: 'item.updated',
+          itemId,
+          itemTitle: title || targetItem.title,
+          projectId: targetItem.projectId,
+          summary: `Updated work item "${title || targetItem.title}".`,
+          ts: updatedAt,
+          details: {
+            briefChanged: brief !== undefined && brief !== targetItem.brief,
+            titleChanged: !!title && title !== targetItem.title,
+          },
+        });
       },
       updateTask: (itemId, taskId, input) => {
+        const targetItem = get().items.find((item) => item.id === itemId) ?? null;
+        const targetTask = targetItem?.tasks.find((task) => task.id === taskId) ?? null;
+
+        if (!targetItem || !targetTask) {
+          return;
+        }
+
+        const updatedAt = Date.now();
+
         set((state) => {
           const targetItem = state.items.find((item) => item.id === itemId);
 
@@ -831,7 +970,6 @@ export function createWorkflowSlice(
             return state;
           }
 
-          const updatedAt = Date.now();
           const normalizedNote = normalizeNote(input.note);
 
           return {
@@ -876,6 +1014,21 @@ export function createWorkflowSlice(
               selectedProjectView: state.selectedProjectView,
             }),
           };
+        });
+
+        const taskTitle = input.title?.trim() || targetTask.title;
+        recordUserAuditEvent({
+          eventType: 'task.updated',
+          itemId,
+          itemTitle: targetItem.title,
+          projectId: targetItem.projectId,
+          summary: `Updated task "${taskTitle}" on "${targetItem.title}".`,
+          ts: updatedAt,
+          details: {
+            status: input.status ?? targetTask.status,
+            taskId,
+            taskTitle,
+          },
         });
       },
       setItemActivity: (itemId, activity) => {

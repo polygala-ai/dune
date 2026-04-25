@@ -137,10 +137,13 @@ describe('registerMainIpcHandlers', () => {
   it('registers the full main-process handler surface', () => {
     const { handlers } = createHarness();
 
-    expect(handlers.size).toBe(30);
+    expect(handlers.size).toBe(33);
     expect([...handlers.keys()]).toEqual(expect.arrayContaining([
       ipcChannels.getRuntimeSnapshot,
       ipcChannels.getAgentTranscriptPage,
+      ipcChannels.getAuditLog,
+      ipcChannels.exportAuditCsv,
+      ipcChannels.recordAuditEvent,
       ipcChannels.getProjectActivityPage,
       ipcChannels.applyNetworkSettings,
       ipcChannels.copyText,

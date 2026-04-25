@@ -5,12 +5,14 @@ import type { App } from 'electron';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage';
+import type { AuditDatabase } from '@/electron/main/audit/audit-db';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 
 interface RuntimeBootstrapOptions {
   agentLiteHomeDir?: string;
   agentStore: AppStorage;
   app: Pick<App, 'getAppPath'>;
+  auditLog?: AuditDatabase;
   onAgentIdle: (agentId: string) => void;
   onItemActivityChanged: (payload: { isWorking: boolean; itemId: string }) => void;
   onRuntimeSnapshot: (snapshot: AgentServiceSnapshot) => void;
@@ -59,6 +61,7 @@ export function createRuntimeBootstrap(options: RuntimeBootstrapOptions) {
 
       runtimeController = new DesktopRuntimeController({
         actionServices: {
+          ...(options.auditLog ? { auditLog: options.auditLog } : {}),
           getRuntimeController: requireRuntimeController,
           onWorkflowChanged: options.onWorkflowChanged,
           workflowStore: options.workflowStore,

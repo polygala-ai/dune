@@ -3,6 +3,7 @@
 import {
   Blocks,
   Command,
+  History,
   Plus,
   Settings2,
   Sparkles,
@@ -24,11 +25,13 @@ import {
 /** Workflow sidebar state. */
 interface WorkflowSidebarState {
   onCreateProject: () => void;
+  onOpenAuditLog: () => void;
   onOpenPlugins: () => void;
   onOpenSettings: () => void;
   onSelectProject: (projectId: string) => void;
   projects: WorkflowProject[];
   selectedProjectId: string | null;
+  selectedProjectView: string;
 }
 
 /** App sidebar props. */
@@ -108,6 +111,22 @@ export function AppSidebar({
           >
             <Blocks className="h-4 w-4 shrink-0 text-app-muted" />
             <span>Plugins</span>
+          </button>
+          <button
+            aria-current={route === 'workflow' && workflow.selectedProjectView === 'audit-log' ? 'page' : undefined}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-sm font-medium transition-colors',
+              route === 'workflow' && workflow.selectedProjectView === 'audit-log'
+                ? 'bg-app-accent-soft text-app-text'
+                : 'text-app-text hover:bg-app-card',
+              !workflow.selectedProjectId && 'opacity-50',
+            )}
+            disabled={!workflow.selectedProjectId}
+            onClick={workflow.onOpenAuditLog}
+            type="button"
+          >
+            <History className="h-4 w-4 shrink-0 text-app-muted" />
+            <span>Audit Log</span>
           </button>
         </div>
       </div>

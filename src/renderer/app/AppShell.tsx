@@ -214,6 +214,10 @@ export default function AppShell() {
         controller.handleSidebarDrawerOpenChange(false);
         setCreateProjectOpen(true);
       },
+      onOpenAuditLog: () => {
+        controller.handleSidebarDrawerOpenChange(false);
+        commands.openAuditLog(selectedProjectId);
+      },
       onOpenPlugins: () => {
         controller.handleSidebarDrawerOpenChange(false);
         commands.openPlugins();
@@ -225,6 +229,7 @@ export default function AppShell() {
       },
       projects,
       selectedProjectId,
+      selectedProjectView,
     },
   };
   const sidebar = (className: string, options?: { showQuickSwitch?: boolean }) => (
