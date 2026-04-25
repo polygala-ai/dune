@@ -1,5 +1,11 @@
 // Shared agent activity status payloads.
 
+export interface AgentToolResult {
+  toolName: string | null;
+  preview: string;
+  isError?: boolean;
+}
+
 export interface AgentActivityStatus {
   schemaVersion: 1;
   updatedAt: string;
@@ -10,8 +16,9 @@ export interface AgentActivityStatus {
   currentTool: string | null;
   toolArgsSummary: string | null;
   lastToolDurationMs: number | null;
-  lastToolResult: string | null;
+  lastToolResult: AgentToolResult | null;
   turnCount: number;
+  currentTaskId: string | null;
   workItemId: string | null;
   workItemTitle: string | null;
   sessionId: string;

@@ -113,6 +113,15 @@ function getStatusBadgeClass(status: AgentActivityStatus['status']) {
   }
 }
 
+function formatToolResult(status: AgentActivityStatus) {
+  if (!status.lastToolResult) {
+    return null;
+  }
+
+  const toolName = status.lastToolResult.toolName ?? status.currentTool ?? 'Tool';
+  return `${toolName}: ${status.lastToolResult.preview}`;
+}
+
 function getActivitySummary(status: AgentActivityStatus) {
   if (status.currentTool) {
     return status.toolArgsSummary
@@ -136,8 +145,10 @@ function getActivitySummary(status: AgentActivityStatus) {
     return `Last: ${status.toolArgsSummary}${durationSuffix}`;
   }
 
-  if (status.lastToolResult) {
-    return `Last result: ${status.lastToolResult}`;
+  const resultSummary = formatToolResult(status);
+
+  if (resultSummary) {
+    return `Last result: ${resultSummary}`;
   }
 
   return 'Idle';
@@ -278,6 +289,7 @@ export function AgentActivityPanel() {
             <div className="flex flex-col gap-3">
               {statuses.map((status) => {
                 const workItemTitle = getWorkItemTitle(status, itemTitlesById);
+                const toolResult = formatToolResult(status);
 
                 return (
                   <article
@@ -305,9 +317,14 @@ export function AgentActivityPanel() {
                               Work item · <span className="text-app-text">{workItemTitle}</span>
                             </div>
                           ) : null}
-                          {status.lastToolResult ? (
+                          {status.currentTaskId ? (
                             <div className="mt-1 text-xs leading-5 text-app-muted">
-                              Result · <span className="text-app-text">{status.lastToolResult}</span>
+                              Task · <span className="text-app-text">{status.currentTaskId}</span>
+                            </div>
+                          ) : null}
+                          {toolResult ? (
+                            <div className="mt-1 text-xs leading-5 text-app-muted">
+                              Result · <span className="text-app-text">{toolResult}</span>
                             </div>
                           ) : null}
                           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-app-muted">

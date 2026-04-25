@@ -25,6 +25,7 @@ function createActivityStatus(
     lastToolDurationMs: null,
     lastToolResult: null,
     turnCount: 3,
+    currentTaskId: null,
     workItemId: null,
     workItemTitle: null,
     sessionId: 'session-1',
@@ -49,7 +50,11 @@ describe('AgentActivityPanel', () => {
       platform: window.duneDesktop?.platform ?? 'darwin',
       getAgentActivity: vi.fn(async () => [
         createActivityStatus({
-          lastToolResult: '{"ok":true}',
+          lastToolResult: {
+            toolName: 'Read',
+            preview: '{"ok":true}',
+          },
+          currentTaskId: 'task-1',
           workItemId: firstItem?.id ?? null,
         }),
       ]),
@@ -60,7 +65,8 @@ describe('AgentActivityPanel', () => {
 
     expect(await screen.findByText('Navigator')).toBeInTheDocument();
     expect(screen.getByText('Read · file: status.json')).toBeInTheDocument();
-    expect(screen.getByText('{"ok":true}')).toBeInTheDocument();
+    expect(screen.getByText('Read: {"ok":true}')).toBeInTheDocument();
+    expect(screen.getByText('task-1')).toBeInTheDocument();
     expect(screen.getByText('Tool calling')).toBeInTheDocument();
     expect(screen.getByText(firstItem?.title ?? '')).toBeInTheDocument();
   });

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  AgentToolResult,
   AgentActivityStatus,
 } from '@/shared/agents/agent-activity';
 import type {
@@ -486,6 +487,9 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   /** Runtime-event-derived status for the activity panel. */
   private readonly agentLiveStatus = new Map<string, AgentActivityStatus>();
+
+  /** Maps SDK tool_use IDs to names so result blocks can display useful labels. */
+  private readonly liveToolNamesByUseId = new Map<string, Map<string, string>>();
 
   private readonly records = new AgentRecords();
 
@@ -2110,6 +2114,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       lastToolDurationMs: pick('lastToolDurationMs', previous?.lastToolDurationMs ?? null),
       lastToolResult: pick('lastToolResult', previous?.lastToolResult ?? null),
       turnCount: pick('turnCount', previous?.turnCount ?? 0),
+      currentTaskId: pick('currentTaskId', previous?.currentTaskId ?? null),
       workItemId: pick('workItemId', previous?.workItemId ?? null),
       workItemTitle: pick('workItemTitle', previous?.workItemTitle ?? null),
       sessionId: previous?.sessionId ?? `runtime-${agentId}`,
@@ -2118,6 +2123,51 @@ export class AgentRuntime implements AgentRuntimeContract {
 
     this.agentLiveStatus.set(agentId, next);
     this.emit();
+  }
+
+  private rememberToolName(agentId: string, toolUseId: string, toolName: string) {
+    const tools = this.liveToolNamesByUseId.get(agentId) ?? new Map<string, string>();
+    tools.set(toolUseId, toolName);
+    this.liveToolNamesByUseId.set(agentId, tools);
+  }
+
+  private consumeToolName(agentId: string, toolUseId: string) {
+    const tools = this.liveToolNamesByUseId.get(agentId);
+    const toolName = tools?.get(toolUseId) ?? null;
+
+    if (tools) {
+      tools.delete(toolUseId);
+      if (tools.size === 0) {
+        this.liveToolNamesByUseId.delete(agentId);
+      }
+    }
+
+    return toolName;
+  }
+
+  private createToolResult(
+    toolName: string | null,
+    value: unknown,
+    isError = false,
+  ): AgentToolResult | null {
+    if (value == null) {
+      return null;
+    }
+
+    let preview: string;
+    try {
+      preview = typeof value === 'string'
+        ? value
+        : JSON.stringify(value);
+    } catch {
+      preview = String(value);
+    }
+
+    return {
+      toolName,
+      preview: preview.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH),
+      ...(isError ? { isError: true } : {}),
+    };
   }
 
   private scheduleFinalizeAssistantMessage(agentId: string) {
@@ -2487,6 +2537,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       const alAgent = duneAgent.agentLiteAgent;
 
       alAgent.on('run.tool', (event) => {
+        this.rememberToolName(agentId, event.toolUseId, event.toolName);
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           kind: 'tool',
@@ -2506,6 +2557,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       });
 
       alAgent.on('run.tool_progress', (event) => {
+        this.rememberToolName(agentId, event.toolUseId, event.toolName);
         this.updateLiveStatus(agentId, {
           status: 'tool-calling',
           phase: 'tool_call_start',
@@ -2554,6 +2606,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         if (sdkType === 'user' && Array.isArray(msg?.message?.content)) {
           for (const block of msg.message.content as Array<Record<string, unknown>>) {
             if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+              const toolName = this.consumeToolName(agentId, block.tool_use_id);
               const output = typeof block.content === 'string'
                 ? block.content
                 : Array.isArray(block.content)
@@ -2571,10 +2624,14 @@ export class AgentRuntime implements AgentRuntimeContract {
                   timestamp: Date.now(),
                 });
                 this.updateLiveStatus(agentId, {
-                  status: 'idle',
-                  phase: 'tool_call_done',
+                  status: block.is_error ? 'error' : 'idle',
+                  phase: block.is_error ? 'error' : 'tool_call_done',
                   currentTool: null,
-                  lastToolResult: output.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH),
+                  lastToolResult: this.createToolResult(
+                    toolName,
+                    output,
+                    Boolean(block.is_error),
+                  ),
                 });
               }
             }
@@ -2627,6 +2684,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           status: 'waiting',
           phase: 'idle',
           currentTool: null,
+          currentTaskId: event.taskId,
           toolArgsSummary: 'scheduled task started',
         });
         void this.resolveWorkItemForTask(event.taskId).then((workItem) => {
@@ -2645,7 +2703,8 @@ export class AgentRuntime implements AgentRuntimeContract {
           status: 'idle',
           phase: 'done',
           currentTool: null,
-          lastToolResult: event.result?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
+          currentTaskId: null,
+          lastToolResult: this.createToolResult('scheduled task', event.result ?? null),
           toolArgsSummary: 'scheduled task completed',
         });
         void this.updateItemActivityForTask(event.taskId, false);
@@ -2656,7 +2715,8 @@ export class AgentRuntime implements AgentRuntimeContract {
           status: 'error',
           phase: 'error',
           currentTool: null,
-          lastToolResult: event.error?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
+          currentTaskId: null,
+          lastToolResult: this.createToolResult('scheduled task', event.error ?? null, true),
           toolArgsSummary: 'scheduled task failed',
         });
         void this.updateItemActivityForTask(event.taskId, false);
@@ -2667,6 +2727,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           status: 'idle',
           phase: 'idle',
           currentTool: null,
+          currentTaskId: null,
           toolArgsSummary: 'scheduled task skipped',
         });
       });
