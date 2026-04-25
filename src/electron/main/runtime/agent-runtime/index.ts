@@ -63,6 +63,8 @@ import {
 } from '@/electron/main/dune-paths';
 import { auto as autoAcpPeers } from '@boxlite-ai/agentlite/acp/peers';
 import { DuneAgent, type DuneAcpOptions } from '../dune-agent';
+import type { OutboundMessageAttachmentSource } from '../dune-channel';
+import { withTelegramOutboundMedia } from '../telegram-media-driver';
 import {
   registerDuneActions,
   type ActionHostServices,
@@ -370,7 +372,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         const { telegram } = await importTelegramModule(
           '@boxlite-ai/agentlite/channels/telegram',
         );
-        return telegram({ token });
+        return withTelegramOutboundMedia(telegram({ token }));
       });
     this.telegram = new TelegramBridge({
       callbacks: {
@@ -1337,13 +1339,24 @@ export class AgentRuntime implements AgentRuntimeContract {
     return appendAgentTokenUsageSummary(text, summary);
   }
 
-  private handleOutboundMessage(chatJid: string, text: string) {
+  private handleOutboundMessage(
+    chatJid: string,
+    text: string,
+    attachmentSources: OutboundMessageAttachmentSource[] = [],
+  ) {
     const agentId = this.resolveAgentIdByChatJid(chatJid);
 
     if (!agentId) {
       return;
     }
 
+    const record = this.records.get(agentId);
+    const attachments = record
+      ? normalizeAgentAttachments(attachmentSources, {
+        groupFolder: record.groupFolder,
+        runtimeRoot: this.runtimeRoot,
+      })
+      : [];
     const pending = this.messageStream.get(agentId);
     const now = this.now();
 
@@ -1369,7 +1382,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             messages: [
               ...agent.messages,
               {
-                attachments: [],
+                attachments,
                 content: text,
                 createdAt: now,
                 format: 'markdown',
@@ -1390,6 +1403,7 @@ export class AgentRuntime implements AgentRuntimeContract {
             message.id === pending.messageId
               ? {
                   ...message,
+                  attachments: attachments.length > 0 ? attachments : message.attachments,
                   content:
                     text.startsWith(message.content)
                       ? text
@@ -1783,8 +1797,8 @@ export class AgentRuntime implements AgentRuntimeContract {
         onExternalInbound: (text, senderName, attachments) => {
           this.handleExternalInboundMessage(agentId, text, senderName, attachments);
         },
-        onOutboundMessage: (chatJid, text) => {
-          this.handleOutboundMessage(chatJid, text);
+        onOutboundMessage: (chatJid, text, attachments) => {
+          this.handleOutboundMessage(chatJid, text, attachments);
         },
         primaryChatJid: toAgentChatJid(agentId),
         ...(actionServicesForAgent && ownerProjectId ? {

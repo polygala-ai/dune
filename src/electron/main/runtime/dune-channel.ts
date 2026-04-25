@@ -8,6 +8,26 @@ import type {
 
 import { isDuneAgentChatJid } from '@/shared/agents/agent-id';
 
+/** Attachment metadata that can be forwarded to external channel drivers. */
+export interface OutboundMessageAttachment {
+  caption?: string;
+  kind?: 'audio' | 'document' | 'file' | 'image' | 'video';
+  mimeType?: string;
+  name?: string;
+  path?: string;
+  url?: string;
+}
+
+export type OutboundMessageAttachmentSource = OutboundMessageAttachment | string;
+
+interface AttachmentAwareChannelDriver extends ChannelDriver {
+  sendMessage(
+    jid: string,
+    text: string,
+    attachments?: OutboundMessageAttachmentSource[],
+  ): Promise<void>;
+}
+
 /** Dune channel options. */
 export interface DuneChannelOptions {
   boundExternalJid?: string | undefined;
@@ -15,8 +35,29 @@ export interface DuneChannelOptions {
   decorateOutboundMessage?: ((chatJid: string, text: string) => Promise<string> | string) | undefined;
   externalChannelFactory?: ChannelDriverFactory | undefined;
   onExternalInbound?: ((text: string, senderName: string, attachments?: string[]) => Promise<void> | void) | undefined;
-  onOutboundMessage: (chatJid: string, text: string) => Promise<void> | void;
+  onOutboundMessage: (
+    chatJid: string,
+    text: string,
+    attachments?: OutboundMessageAttachmentSource[],
+  ) => Promise<void> | void;
   primaryJid: string;
+}
+
+/** Normalizes outbound attachments. */
+function normalizeOutboundAttachments(
+  attachments: unknown,
+): OutboundMessageAttachmentSource[] {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+
+  return attachments.filter((attachment): attachment is OutboundMessageAttachmentSource => {
+    if (typeof attachment === 'string') {
+      return attachment.trim().length > 0;
+    }
+
+    return Boolean(attachment && typeof attachment === 'object');
+  });
 }
 
 /** Implements Dune channel behavior. */
@@ -135,10 +176,15 @@ export class DuneChannel implements ChannelDriver {
   }
 
   /** Sends message. */
-  async sendMessage(jid: string, text: string) {
+  async sendMessage(
+    jid: string,
+    text: string,
+    attachments?: OutboundMessageAttachmentSource[],
+  ) {
     const outboundText = this.decorateOutboundMessage
       ? await this.decorateOutboundMessage(jid, text)
       : text;
+    const outboundAttachments = normalizeOutboundAttachments(attachments);
     const timestamp = new Date().toISOString();
     const group = this.config.registeredGroups()[jid];
 
@@ -150,7 +196,7 @@ export class DuneChannel implements ChannelDriver {
       true,
     );
 
-    this.config.onMessage(jid, {
+    const outboundMessage = {
       chat_jid: jid,
       content: outboundText,
       is_bot_message: true,
@@ -158,13 +204,30 @@ export class DuneChannel implements ChannelDriver {
       sender: 'dune-assistant',
       sender_name: 'Dune',
       timestamp,
-    });
+      ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
+    } as Parameters<ChannelDriverConfig['onMessage']>[1] & {
+      attachments?: OutboundMessageAttachmentSource[];
+    };
+
+    this.config.onMessage(jid, outboundMessage as Parameters<ChannelDriverConfig['onMessage']>[1]);
 
     if (this.externalDriver && this.boundExternalJid) {
-      await this.externalDriver.sendMessage(this.boundExternalJid, outboundText);
+      if (outboundAttachments.length > 0) {
+        await (this.externalDriver as AttachmentAwareChannelDriver).sendMessage(
+          this.boundExternalJid,
+          outboundText,
+          outboundAttachments,
+        );
+      } else {
+        await this.externalDriver.sendMessage(this.boundExternalJid, outboundText);
+      }
     }
 
-    await this.onOutboundMessage(jid, outboundText);
+    if (outboundAttachments.length > 0) {
+      await this.onOutboundMessage(jid, outboundText, outboundAttachments);
+    } else {
+      await this.onOutboundMessage(jid, outboundText);
+    }
   }
 
   /** Pushes inbound message. */

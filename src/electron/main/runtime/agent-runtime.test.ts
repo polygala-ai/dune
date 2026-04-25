@@ -28,6 +28,7 @@ import {
   resolveProjectDuneDir,
 } from '@/electron/main/dune-paths';
 import type { DuneChannel } from './dune-channel';
+import type { OutboundMessageAttachmentSource } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
@@ -290,7 +291,11 @@ function createTelegramChannelFactoryHarness(
     connect?: () => Promise<void> | void;
     disconnect?: () => Promise<void> | void;
     isConnected?: () => boolean;
-    sendMessage?: (jid: string, text: string) => Promise<void> | void;
+    sendMessage?: (
+      jid: string,
+      text: string,
+      attachments?: OutboundMessageAttachmentSource[],
+    ) => Promise<void> | void;
   } = {},
 ) {
   const connectedTokens = new Set<string>();
@@ -309,8 +314,12 @@ function createTelegramChannelFactoryHarness(
       connectedTokens.delete(currentToken);
     }
   });
-  const sendMessage = vi.fn(async (jid: string, text: string) => {
-    await options.sendMessage?.(jid, text);
+  const sendMessage = vi.fn(async (
+    jid: string,
+    text: string,
+    attachments?: OutboundMessageAttachmentSource[],
+  ) => {
+    await options.sendMessage?.(jid, text, attachments);
   });
 
   const resolveConfig = (
@@ -1673,6 +1682,87 @@ describe('AgentRuntime', () => {
     );
 
     expect(telegramHarness.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes outbound assistant attachments through to Telegram and stores them on the assistant message', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'agentlite_test_bot',
+      telegramSecretsStore,
+    });
+
+    await host.start();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Release triage',
+      projectId: 'project-1',
+    });
+    const sessionId = await host.service.startTelegramSetupSession({
+      agentId,
+      token: 'telegram-bot-token',
+    });
+    const pairCode = host.getSnapshot().telegramSetupSessions
+      .find((session) => session.id === sessionId)?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:123', {
+      isGroup: true,
+      name: 'Product QA',
+    });
+    telegramHarness.emitIncomingMessage('tg:123', {
+      content: `/pair ${pairCode}`,
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    await host.service.updateAgentChannel({
+      agentId,
+      channelId: 'telegram',
+      telegramSetupSessionId: sessionId,
+    });
+
+    const attachments = [
+      {
+        kind: 'video' as const,
+        name: 'demo.mp4',
+        url: 'file:///tmp/demo.mp4',
+      },
+    ];
+
+    await harness.duneChannel('release-triage').sendMessage(
+      toAgentChatJid(agentId),
+      'Demo attached.',
+      attachments,
+    );
+
+    expect(telegramHarness.sendMessage).toHaveBeenLastCalledWith(
+      'tg:123',
+      'Demo attached.',
+      attachments,
+    );
+
+    const agent = host.getSnapshot().agents.find((item) => item.id === agentId);
+    const assistantMessage = agent?.messages.find((message) => message.role === 'assistant');
+
+    expect(assistantMessage?.attachments).toEqual([
+      {
+        kind: 'video',
+        name: 'demo.mp4',
+        url: 'file:///tmp/demo.mp4',
+      },
+    ]);
   });
 
   it('appends token usage summaries to outbound Telegram responses and keeps per-session totals', async () => {

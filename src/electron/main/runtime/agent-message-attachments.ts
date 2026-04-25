@@ -8,6 +8,11 @@ import { inferAttachmentKind } from '@/shared/agents/message-content';
 
 const WORKSPACE_GROUP_PREFIX = '/workspace/group/';
 
+interface AttachmentCandidate extends Omit<Partial<AgentAttachment>, 'kind'> {
+  kind?: AgentAttachment['kind'] | 'document';
+  path?: string;
+}
+
 /** Converts to local attachment path. */
 function toLocalAttachmentPath(
   source: string,
@@ -81,24 +86,31 @@ export function normalizeAgentAttachments(
       continue;
     }
 
-    const candidate = attachment as Partial<AgentAttachment>;
-    const rawUrl = typeof candidate.url === 'string' ? candidate.url.trim() : '';
+    const candidate = attachment as AttachmentCandidate;
+    const rawSource =
+      typeof candidate.path === 'string' && candidate.path.trim()
+        ? candidate.path.trim()
+        : typeof candidate.url === 'string'
+          ? candidate.url.trim()
+          : '';
     const sourceBackedUrl =
-      rawUrl && (rawUrl.startsWith('https://') || rawUrl.startsWith('file://'))
-        ? rawUrl
-        : rawUrl
-          ? createAgentAttachmentFromSource(rawUrl, options)?.url ?? ''
+      rawSource && (rawSource.startsWith('https://') || rawSource.startsWith('file://'))
+        ? rawSource
+        : rawSource
+          ? createAgentAttachmentFromSource(rawSource, options)?.url ?? ''
           : '';
 
     if (!sourceBackedUrl || seenUrls.has(sourceBackedUrl)) {
       continue;
     }
 
-    const normalizedKind = inferAttachmentKind({
+    const inferredKind = inferAttachmentKind({
       ...(typeof candidate.mimeType === 'string' ? { mimeType: candidate.mimeType } : {}),
       ...(typeof candidate.name === 'string' ? { name: candidate.name } : {}),
       url: sourceBackedUrl,
     });
+    const normalizedKind =
+      candidate.kind === 'document' ? 'file' : candidate.kind ?? inferredKind;
     const normalizedName =
       typeof candidate.name === 'string' && candidate.name.trim()
         ? candidate.name

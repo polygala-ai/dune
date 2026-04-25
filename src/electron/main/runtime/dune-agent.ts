@@ -9,6 +9,7 @@ import type {
 } from '@boxlite-ai/agentlite';
 
 import { DuneChannel } from './dune-channel';
+import type { OutboundMessageAttachmentSource } from './dune-channel';
 
 /** ACP peer config understood by newer AgentLite runtimes. */
 export interface DuneAcpPeerConfig {
@@ -42,7 +43,11 @@ export interface DuneAgentOptions {
   }>;
   name: string;
   onExternalInbound?: (text: string, senderName: string, attachments?: string[]) => void;
-  onOutboundMessage: (chatJid: string, text: string) => void;
+  onOutboundMessage: (
+    chatJid: string,
+    text: string,
+    attachments?: OutboundMessageAttachmentSource[],
+  ) => void;
   primaryChatJid: string;
   /**
    * Called immediately after `agentLite.getOrCreateAgent(...)` returns, with
@@ -106,8 +111,8 @@ export class DuneAgent {
           decorateOutboundMessage: options.decorateOutboundMessage,
           externalChannelFactory: options.externalChannelFactory,
           onExternalInbound: options.onExternalInbound,
-          onOutboundMessage: (jid, text) => {
-            options.onOutboundMessage(jid, text);
+          onOutboundMessage: (jid, text, attachments) => {
+            options.onOutboundMessage(jid, text, attachments);
           },
           primaryJid: options.primaryChatJid,
         });

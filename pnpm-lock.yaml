@@ -66,6 +66,9 @@ importers:
       global-agent:
         specifier: ^3.0.0
         version: 3.0.0
+      grammy:
+        specifier: ^1.42.0
+        version: 1.42.0(encoding@0.1.13)
       lucide-react:
         specifier: ^0.511.0
         version: 0.511.0(react@19.2.4)
