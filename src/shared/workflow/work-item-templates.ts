@@ -149,7 +149,7 @@ export function normalizeWorkItemTemplates(value: unknown): WorkItemTemplate[] {
 /** Creates a prefilled work item draft from a template. */
 export function createWorkItemTemplatePrefill(template: WorkItemTemplate): WorkItemTemplatePrefill {
   return {
-    brief: template.briefTemplate,
+    brief: template.brief,
     taskTitles: [...template.defaultTasks],
     title: template.titlePattern,
   };

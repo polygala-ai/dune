@@ -14,10 +14,9 @@ import {
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
     briefTemplate: '',
-    createdAt: 1,
+    builtIn: false,
     defaultTasks: [],
     id: 'custom-template',
-    isBuiltIn: false,
     name: 'Custom template',
     titlePattern: '',
     ...overrides,
@@ -32,63 +31,35 @@ describe('work item templates', () => {
       'Feature implementation',
       'Code review',
     ]);
-    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.isBuiltIn)).toEqual([
+    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.builtIn)).toEqual([
       true,
       true,
       true,
       true,
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      [
-        'Define research scope and questions',
-        'Search and collect sources',
-        'Analyze and synthesize findings',
-        'Write summary document',
-        'Review and finalize',
-      ],
-      [
-        'Reproduce the bug',
-        'Identify root cause',
-        'Implement fix',
-        'Write/update tests',
-        'Verify fix and close',
-      ],
-      [
-        'Write design doc',
-        'Review design',
-        'Implement feature',
-        'Write tests',
-        'Code review',
-        'Deploy and verify',
-      ],
-      [
-        'Read the diff/PR',
-        'Check correctness and logic',
-        'Check security implications',
-        'Check performance',
-        'Write review comments',
-        'Approve or request changes',
-      ],
+      ['Understand', 'Research', 'Synthesize', 'Write report'],
+      ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
+      ['Design', 'Review design', 'Implement', 'Test', 'PR'],
+      ['Read brief', 'Review code', 'Write feedback'],
     ]);
   });
 
   it('normalizes templates and strips invalid values', () => {
     expect(normalizeWorkItemTemplate({
       briefTemplate: 'Investigate the issue.',
-      createdAt: 123,
       defaultAgentId: ' agent-1 ',
       defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
       id: ' template-1 ',
-      isBuiltIn: false,
+      builtIn: false,
       name: ' Research helper ',
       titlePattern: 'Research: ',
     })).toEqual({
       briefTemplate: 'Investigate the issue.',
-      createdAt: 123,
+      builtIn: false,
       defaultAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
       id: 'template-1',
-      isBuiltIn: false,
       name: 'Research helper',
       titlePattern: 'Research: ',
     });
@@ -103,7 +74,7 @@ describe('work item templates', () => {
 
   it('normalizes legacy template field names', () => {
     expect(normalizeWorkItemTemplate({
-      brief: 'Legacy brief.',
+      briefTemplate: 'Legacy brief.',
       defaultAssignedAgentId: ' agent-legacy ',
       defaultTasks: ['Read'],
       id: 'legacy-template',
@@ -111,11 +82,10 @@ describe('work item templates', () => {
       titlePattern: 'Legacy: ',
     })).toEqual({
       briefTemplate: 'Legacy brief.',
-      createdAt: expect.any(Number),
+      builtIn: false,
       defaultAgentId: 'agent-legacy',
       defaultTasks: ['Read'],
       id: 'legacy-template',
-      isBuiltIn: false,
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
     });
@@ -150,15 +120,9 @@ describe('work item templates', () => {
     }
 
     expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
-      brief: 'Research {topic} and produce a summary with key findings, sources, and recommendations.',
-      taskTitles: [
-        'Define research scope and questions',
-        'Search and collect sources',
-        'Analyze and synthesize findings',
-        'Write summary document',
-        'Review and finalize',
-      ],
-      title: 'Research: {topic}',
+      brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nKey findings:\n\nSynthesis:\n\nRecommendation:',
+      taskTitles: ['Understand', 'Research', 'Synthesize', 'Write report'],
+      title: 'Research: ',
     });
   });
 
