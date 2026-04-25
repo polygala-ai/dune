@@ -108,4 +108,22 @@ describe('work item templates', () => {
       name: 'Alpha',
     });
   });
+
+  it('resolves the default agent by exact name when an ID is not stored', () => {
+    const template = {
+      brief: '',
+      defaultAgentId: 'Review agent',
+      defaultTasks: ['Review'],
+      id: 'custom-review-template',
+      name: 'Review template',
+      titlePattern: 'Review: ',
+    };
+
+    expect(resolveWorkItemTemplateDefaultAgent(template, 'project-1', [
+      { id: 'agent-review', name: 'Review agent', projectId: 'project-1' },
+    ])).toEqual({
+      id: 'agent-review',
+      name: 'Review agent',
+    });
+  });
 });

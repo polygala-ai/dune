@@ -79,7 +79,7 @@ function describeTemplateAgent(
     return 'No default agent';
   }
 
-  return agents.find((agent) => agent.id === defaultAgentId)?.name
+  return agents.find((agent) => agent.id === defaultAgentId || agent.name === defaultAgentId)?.name
     ?? `Unknown agent (${defaultAgentId})`;
 }
 
@@ -87,10 +87,10 @@ function buildAgentOptions(
   agents: TemplateScopedAgent[],
   defaultAgentId: string | undefined,
 ) {
-  const knownAgentIds = new Set(agents.map((agent) => agent.id));
+  const knownAgentRefs = new Set(agents.flatMap((agent) => [agent.id, agent.name]));
   const nextOptions = [...agents].sort((left, right) => left.name.localeCompare(right.name));
 
-  if (defaultAgentId && !knownAgentIds.has(defaultAgentId)) {
+  if (defaultAgentId && !knownAgentRefs.has(defaultAgentId)) {
     nextOptions.push({
       id: defaultAgentId,
       name: `Unknown agent (${defaultAgentId})`,

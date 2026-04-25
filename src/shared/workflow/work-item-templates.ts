@@ -6,6 +6,7 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 /** Work item template shape. */
 export interface WorkItemTemplate {
   brief: string;
+  /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId?: string;
   defaultTasks: string[];
   id: string;
@@ -160,7 +161,9 @@ export function resolveWorkItemTemplateDefaultAgent(
     return null;
   }
 
-  const matchingAgent = agents.find((agent) => agent.id === defaultAgentId);
+  const matchingAgent = agents.find((agent) =>
+    agent.id === defaultAgentId || agent.name === defaultAgentId,
+  );
 
   if (!matchingAgent) {
     return null;
