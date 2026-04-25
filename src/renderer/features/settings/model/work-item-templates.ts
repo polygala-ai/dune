@@ -20,8 +20,8 @@ export interface WorkItemTemplateStore {
 /** Normalizes custom work item templates. */
 export function normalizeCustomWorkItemTemplates(value: unknown): WorkItemTemplate[] {
   return normalizeWorkItemTemplates(value)
-    .filter((template) => !template.builtIn && !isBuiltInWorkItemTemplateId(template.id))
-    .map((template) => ({ ...template, builtIn: false }));
+    .filter((template) => !template.isBuiltIn && !isBuiltInWorkItemTemplateId(template.id))
+    .map((template) => ({ ...template, isBuiltIn: false }));
 }
 
 /** Loads custom work item templates. */

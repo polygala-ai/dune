@@ -31,11 +31,13 @@ class MemoryStore implements WorkItemTemplateStore {
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
     brief: 'Custom brief',
-    builtIn: false,
+    createdAt: 0,
     defaultTasks: ['One'],
     id: 'custom-template',
+    isBuiltIn: false,
     name: 'Custom template',
     titlePattern: 'Custom: ',
+    updatedAt: 0,
     ...overrides,
   };
 }
@@ -50,7 +52,7 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Should be filtered',
-        builtIn: true,
+        isBuiltIn: true,
         defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
         name: 'Duplicate built-in',
@@ -113,7 +115,7 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Built-in copy',
-        builtIn: true,
+        isBuiltIn: true,
         defaultTasks: ['Ignore'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
@@ -147,11 +149,13 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Include this',
-        builtIn: true,
+        createdAt: 0,
+        isBuiltIn: true,
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
         titlePattern: 'Fix: ',
+        updatedAt: 0,
       },
     ]);
 

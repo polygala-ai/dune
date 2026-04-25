@@ -6,13 +6,15 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 /** Work item template shape. */
 export interface WorkItemTemplate {
   brief: string;
+  createdAt: number;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId?: string;
   defaultTasks: string[];
   id: string;
-  builtIn: boolean;
+  isBuiltIn: boolean;
   name: string;
   titlePattern: string;
+  updatedAt: number;
 }
 
 /** Template-scoped agent shape. */
@@ -32,36 +34,44 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nKey findings:\n\nSynthesis:\n\nRecommendation:',
-    builtIn: true,
-    defaultTasks: ['Understand', 'Research', 'Synthesize', 'Write report'],
+    brief: 'Investigate [topic]. Produce a clear research report with findings.',
+    createdAt: 0,
+    defaultTasks: ['Define scope', 'Research', 'Synthesize findings', 'Write report'],
     id: 'builtin-research-task',
+    isBuiltIn: true,
     name: 'Research task',
     titlePattern: 'Research: ',
+    updatedAt: 0,
   },
   {
-    brief: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nRoot cause:\n\nFix plan:\n\nVerification:',
-    builtIn: true,
-    defaultTasks: ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
+    brief: 'Bug: [description]. Steps to reproduce: ...',
+    createdAt: 0,
+    defaultTasks: ['Reproduce', 'Identify root cause', 'Fix', 'Test', 'Open PR'],
     id: 'builtin-bug-fix',
+    isBuiltIn: true,
     name: 'Bug fix',
-    titlePattern: 'Fix: ',
+    titlePattern: 'Bug: {{description}}',
+    updatedAt: 0,
   },
   {
-    brief: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nImplementation tasks:\n\nAcceptance criteria:\n\nVerification:',
-    builtIn: true,
-    defaultTasks: ['Design', 'Review design', 'Implement', 'Test', 'PR'],
+    brief: 'Implement [feature]. Requirements: ...',
+    createdAt: 0,
+    defaultTasks: ['Understand brief', 'Research', 'Design', 'Implement', 'Test', 'Open PR'],
     id: 'builtin-feature-implementation',
+    isBuiltIn: true,
     name: 'Feature implementation',
     titlePattern: 'Implement: ',
+    updatedAt: 0,
   },
   {
-    brief: 'Brief:\n\nCode/PR to review:\n\nChecklist:\n- Correctness and edge cases\n- Tests and coverage\n- Security and privacy\n- Performance\n- Maintainability\n\nFeedback:',
-    builtIn: true,
-    defaultTasks: ['Read brief', 'Review code', 'Write feedback'],
+    brief: 'Review PR #[number]: [title]. Focus on ...',
+    createdAt: 0,
+    defaultTasks: ['Read the diff', 'Check logic', 'Check tests', 'Leave feedback'],
     id: 'builtin-code-review',
+    isBuiltIn: true,
     name: 'Code review',
     titlePattern: 'Review: ',
+    updatedAt: 0,
   },
 ];
 
@@ -76,6 +86,12 @@ function normalizeOptionalAgentId(value: unknown) {
 
   const normalized = value.trim();
   return normalized || undefined;
+}
+
+function normalizeTimestamp(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : 0;
 }
 
 /** Returns whether the template ID belongs to a built-in template. */
@@ -102,15 +118,17 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
       : typeof value.briefTemplate === 'string'
         ? value.briefTemplate
         : '',
-    builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
+    createdAt: normalizeTimestamp(value.createdAt),
     defaultTasks: Array.isArray(value.defaultTasks)
       ? normalizeWorkflowTaskTitles(
           value.defaultTasks.filter((task): task is string => typeof task === 'string'),
         )
       : [],
     id,
+    isBuiltIn: value.isBuiltIn === true || value.builtIn === true || isBuiltInWorkItemTemplateId(id),
     name,
     titlePattern: typeof value.titlePattern === 'string' ? value.titlePattern : '',
+    updatedAt: normalizeTimestamp(value.updatedAt),
   };
   const defaultAgentId = normalizeOptionalAgentId(
     value.defaultAgentId ?? value.defaultAssignedAgentId,

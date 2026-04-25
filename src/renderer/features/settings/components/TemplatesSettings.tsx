@@ -246,13 +246,16 @@ function TemplateFormDialog({
             disabled={!canSave}
             onClick={() => {
               const existingTemplate = state?.template;
+              const now = Date.now();
               const nextTemplate: WorkItemTemplate = {
                 brief,
-                builtIn: false,
+                createdAt: existingTemplate?.createdAt ?? now,
                 defaultTasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
                 id: existingTemplate?.id ?? createId('template'),
+                isBuiltIn: false,
                 name: name.trim(),
                 titlePattern,
+                updatedAt: now,
               };
 
               if (defaultAgentId.trim()) {
@@ -303,8 +306,8 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   }, []);
 
   const templates = mergeWorkItemTemplates(customTemplates);
-  const builtInTemplates = templates.filter((template) => template.builtIn);
-  const userTemplates = templates.filter((template) => !template.builtIn);
+  const builtInTemplates = templates.filter((template) => template.isBuiltIn);
+  const userTemplates = templates.filter((template) => !template.isBuiltIn);
 
   const persistTemplates = async (nextTemplates: WorkItemTemplate[], successMessage: string) => {
     const savedTemplates = await saveCustomWorkItemTemplates(settingsStore, nextTemplates);
