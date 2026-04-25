@@ -80,6 +80,7 @@ describe('preload bridge', () => {
     await desktopBridge?.ensureProjectMainAgent?.('project-1', 'Alpha', '/tmp/project-1');
     await desktopBridge?.ensureProjectArtifactFolder?.('/tmp/project-1', 'homepage-copy-abcd1234');
     await desktopBridge?.exportWorkItemTemplates?.('templates.json', '[]');
+    await desktopBridge?.exportWorkItemTemplatesJson?.();
     await desktopBridge?.getAgentTranscriptPage?.('agent-1', { beforeMessageId: 'message-1', limit: 20 });
     await desktopBridge?.getProjectActivityPage?.('project-1', { beforeEntryId: 'event-1', limit: 20 });
     await desktopBridge?.listProjectArtifactEntries?.('/tmp/project-1', 'homepage-copy-abcd1234');
@@ -95,6 +96,27 @@ describe('preload bridge', () => {
       targets: [{ brief: 'Alpha brief', title: 'Alpha' }],
     });
     await desktopBridge?.importWorkItemTemplates?.();
+    await desktopBridge?.importWorkItemTemplatesJson?.('[]');
+    await desktopBridge?.listWorkItemTemplates?.();
+    await desktopBridge?.createWorkItemTemplate?.({
+      briefTemplate: 'Brief',
+      builtIn: false,
+      defaultAgentId: null,
+      defaultTasks: ['Task'],
+      id: 'template-1',
+      name: 'Template',
+      titlePattern: 'Title',
+    });
+    await desktopBridge?.updateWorkItemTemplate?.({
+      briefTemplate: 'Updated brief',
+      builtIn: false,
+      defaultAgentId: null,
+      defaultTasks: ['Task'],
+      id: 'template-1',
+      name: 'Updated template',
+      titlePattern: 'Updated title',
+    });
+    await desktopBridge?.deleteWorkItemTemplate?.('template-1');
     await desktopBridge?.selectProjectDirectory?.();
     await desktopBridge?.getTelegramSetupSession?.('telegram-session-1');
     await desktopBridge?.startTelegramSetupSession?.({ token: 'bot-token' });
@@ -135,6 +157,7 @@ describe('preload bridge', () => {
       'templates.json',
       '[]',
     );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.templatesExport);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getAgentTranscriptPage,
       'agent-1',
@@ -170,6 +193,17 @@ describe('preload bridge', () => {
       },
     );
     expect(invoke).toHaveBeenCalledWith(ipcChannels.importWorkItemTemplates);
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.templatesImport, '[]');
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.templatesList);
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.templatesCreate,
+      expect.objectContaining({ id: 'template-1' }),
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.templatesUpdate,
+      expect.objectContaining({ name: 'Updated template' }),
+    );
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.templatesDelete, 'template-1');
     expect(invoke).toHaveBeenCalledWith(ipcChannels.selectProjectDirectory);
     expect(invoke).toHaveBeenCalledWith(
       ipcChannels.getTelegramSetupSession,
@@ -237,11 +271,16 @@ describe('preload bridge', () => {
       'ensureProjectArtifactFolder',
       'ensureProjectMainAgent',
       'exportWorkItemTemplates',
+      'exportWorkItemTemplatesJson',
       'getAgentTranscriptPage',
       'getProjectActivityPage',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
       'importWorkItemTemplates',
+      'importWorkItemTemplatesJson',
+      'listWorkItemTemplates',
+      'createWorkItemTemplate',
+      'deleteWorkItemTemplate',
       'listProjectArtifactEntries',
       'openExternal',
       'openPath',
@@ -255,6 +294,7 @@ describe('preload bridge', () => {
       'sendAgentMessage',
       'startTelegramSetupSession',
       'updateAgentChannel',
+      'updateWorkItemTemplate',
       'storageDelete',
       'storageGet',
       'storageKeys',

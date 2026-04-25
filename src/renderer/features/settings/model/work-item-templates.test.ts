@@ -32,13 +32,11 @@ function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemp
   return {
     briefTemplate: 'Custom brief',
     builtIn: false,
-    createdAt: 0,
     defaultAgentId: null,
     defaultTasks: ['One'],
     id: 'custom-template',
     name: 'Custom template',
     titlePattern: 'Custom: ',
-    updatedAt: 0,
     ...overrides,
   };
 }
@@ -249,7 +247,7 @@ describe('work item templates settings model', () => {
     ]);
   });
 
-  it('serializes all normalized templates', () => {
+  it('serializes custom normalized templates', () => {
     const serialized = serializeCustomWorkItemTemplates([
       customTemplate({
         defaultAgentId: 'agent-custom',
@@ -258,18 +256,15 @@ describe('work item templates settings model', () => {
       {
         briefTemplate: 'Include this',
         builtIn: true,
-        createdAt: 0,
         defaultAgentId: null,
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
         titlePattern: 'Fix: ',
-        updatedAt: 0,
       },
     ]);
 
     expect(serialized).toContain('"custom-template"');
-    expect(serialized).toContain('"builtin-bug-fix"');
     expect(JSON.parse(serialized)).toEqual([
       {
         brief: 'Keep this',
@@ -279,15 +274,8 @@ describe('work item templates settings model', () => {
         name: 'Custom template',
         titlePattern: 'Custom: ',
       },
-      {
-        brief: 'Include this',
-        defaultAgent: null,
-        defaultTasks: ['Ignored'],
-        id: 'builtin-bug-fix',
-        name: 'Bug fix',
-        titlePattern: 'Fix: ',
-      },
     ]);
+    expect(serialized).not.toContain('builtin-bug-fix');
     expect(serialized).not.toContain('builtIn');
     expect(serialized).not.toContain('createdAt');
     expect(serialized).not.toContain('updatedAt');

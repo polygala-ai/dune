@@ -8,10 +8,6 @@ import {
   resolveWorkItemTemplateDefaultAgent,
   type WorkItemTemplate,
 } from '@/shared/workflow/work-item-templates';
-import {
-  loadCustomWorkItemTemplates,
-  mergeWorkItemTemplates,
-} from '@/renderer/features/settings/model/work-item-templates';
 import type {
   WorkflowItemStatus,
   WorkflowProject,
@@ -25,19 +21,6 @@ import {
 } from '@/renderer/shared/ui/dialog';
 
 const itemStatuses: WorkflowItemStatus[] = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'];
-
-const STORE_NAME = 'settings';
-
-function createSettingsStore() {
-  return {
-    get: async <T,>(key: string): Promise<T | null> => {
-      const value = await window.duneDesktop?.storageGet?.(STORE_NAME, key);
-      return (value as T | null | undefined) ?? null;
-    },
-  };
-}
-
-const settingsStore = createSettingsStore();
 
 /** Create work item dialog props. */
 interface CreateWorkItemDialogProps {
@@ -66,9 +49,7 @@ export function CreateWorkItemDialog({
   open,
   projects,
 }: CreateWorkItemDialogProps) {
-  const [availableTemplates, setAvailableTemplates] = useState<WorkItemTemplate[]>(
-    mergeWorkItemTemplates([]),
-  );
+  const [availableTemplates, setAvailableTemplates] = useState<WorkItemTemplate[]>([]);
   const [title, setTitle] = useState('');
   const [brief, setBrief] = useState('');
   const [projectId, setProjectId] = useState(initialProjectId ?? projects[0]?.id ?? '');
@@ -91,13 +72,21 @@ export function CreateWorkItemDialog({
 
     let cancelled = false;
 
-    loadCustomWorkItemTemplates(settingsStore)
-      .then((customTemplates) => {
+    const listWorkItemTemplates = window.duneDesktop?.listWorkItemTemplates;
+
+    if (typeof listWorkItemTemplates !== 'function') {
+      setAvailableTemplates([]);
+      setTemplateFeedback('Templates are not available in this environment.');
+      return;
+    }
+
+    listWorkItemTemplates()
+      .then((templates) => {
         if (cancelled) {
           return;
         }
 
-        setAvailableTemplates(mergeWorkItemTemplates(customTemplates));
+        setAvailableTemplates(templates ?? []);
         setTemplateFeedback(null);
       })
       .catch((error) => {
@@ -105,7 +94,7 @@ export function CreateWorkItemDialog({
           return;
         }
 
-        setAvailableTemplates(mergeWorkItemTemplates([]));
+        setAvailableTemplates([]);
         setTemplateFeedback(`Failed to load templates. ${String(error)}`);
       });
 

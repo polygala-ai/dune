@@ -6,8 +6,6 @@ import {
   Download,
   Pencil,
   Plus,
-  ArrowDown,
-  ArrowUp,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -27,19 +25,9 @@ import {
 } from '@/renderer/shared/ui/dialog';
 import { Input } from '@/renderer/shared/ui/input';
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
-import {
-  loadCustomWorkItemTemplates,
-  mergeWorkItemTemplates,
-  parseImportedWorkItemTemplates,
-  saveCustomWorkItemTemplates,
-  serializeCustomWorkItemTemplates,
-  upsertImportedWorkItemTemplates,
-} from '@/renderer/features/settings/model/work-item-templates';
 import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
-
-const STORE_NAME = 'settings';
 
 type FeedbackState =
   | { kind: 'error'; message: string }
@@ -58,20 +46,6 @@ interface TemplateFormDialogProps {
   open: boolean;
   state: TemplateDialogState | null;
 }
-
-function createSettingsStore() {
-  return {
-    get: async <T,>(key: string): Promise<T | null> => {
-      const value = await window.duneDesktop?.storageGet?.(STORE_NAME, key);
-      return (value as T | null | undefined) ?? null;
-    },
-    set: async <T,>(key: string, value: T) => {
-      await window.duneDesktop?.storageSet?.(STORE_NAME, key, value);
-    },
-  };
-}
-
-const settingsStore = createSettingsStore();
 
 function describeTemplateAgent(
   agents: TemplateScopedAgent[],
@@ -249,17 +223,14 @@ function TemplateFormDialog({
             disabled={!canSave}
             onClick={() => {
               const existingTemplate = state?.template;
-              const now = Date.now();
               const nextTemplate: WorkItemTemplate = {
                 briefTemplate: brief,
                 builtIn: false,
-                createdAt: existingTemplate?.createdAt ?? now,
                 defaultAgentId: defaultAgentId.trim() || null,
                 defaultTasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
                 id: existingTemplate?.id ?? createId('template'),
                 name: name.trim(),
                 titlePattern,
-                updatedAt: now,
               };
 
               onSave(nextTemplate);
@@ -288,11 +259,24 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   const [isImporting, setImporting] = useState(false);
   const [isLoading, setLoading] = useState(true);
   const [dialogState, setDialogState] = useState<TemplateDialogState | null>(null);
+  const [templates, setTemplates] = useState<WorkItemTemplate[]>([]);
 
   useEffect(() => {
-    loadCustomWorkItemTemplates(settingsStore)
+    const listWorkItemTemplates = window.duneDesktop?.listWorkItemTemplates;
+
+    if (typeof listWorkItemTemplates !== 'function') {
+      setFeedback({
+        kind: 'error',
+        message: 'Template settings are not available in this environment.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    listWorkItemTemplates()
       .then((templates) => {
-        setCustomTemplates(templates);
+        setTemplates(templates ?? []);
+        setCustomTemplates(templates.filter((template) => !template.builtIn));
       })
       .catch((error) => {
         setFeedback({
@@ -305,14 +289,33 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
       });
   }, []);
 
-  const templates = mergeWorkItemTemplates(customTemplates);
   const builtInTemplates = templates.filter((template) => template.builtIn);
   const userTemplates = templates.filter((template) => !template.builtIn);
 
-  const persistTemplates = async (nextTemplates: WorkItemTemplate[], successMessage: string) => {
-    const savedTemplates = await saveCustomWorkItemTemplates(settingsStore, nextTemplates);
+  const refreshTemplates = async () => {
+    if (typeof window.duneDesktop?.listWorkItemTemplates !== 'function') {
+      throw new Error('Template settings are not available in this environment.');
+    }
 
-    setCustomTemplates(savedTemplates);
+    const nextTemplates = await window.duneDesktop.listWorkItemTemplates();
+    setTemplates(nextTemplates ?? []);
+    setCustomTemplates((nextTemplates ?? []).filter((template) => !template.builtIn));
+  };
+
+  useEffect(() => {
+    if (!isLoading) {
+      setTemplates((currentTemplates) => {
+        if (currentTemplates.length > 0) {
+          return currentTemplates;
+        }
+
+        return customTemplates;
+      });
+    }
+  }, [customTemplates, isLoading]);
+
+  const persistTemplates = async (successMessage: string) => {
+    await refreshTemplates();
     setFeedback({
       kind: 'success',
       message: successMessage,
@@ -320,17 +323,15 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   };
 
   const handleTemplateSave = async (template: WorkItemTemplate) => {
-    const nextTemplates = dialogState?.mode === 'edit'
-      ? customTemplates.map((candidate) => (candidate.id === template.id ? template : candidate))
-      : [...customTemplates, template];
-
     try {
-      await persistTemplates(
-        nextTemplates,
-        dialogState?.mode === 'edit'
-          ? `Updated template “${template.name}”.`
-          : `Created template “${template.name}”.`,
-      );
+      if (dialogState?.mode === 'edit') {
+        await window.duneDesktop?.updateWorkItemTemplate?.(template);
+      } else {
+        await window.duneDesktop?.createWorkItemTemplate?.(template);
+      }
+      await persistTemplates(dialogState?.mode === 'edit'
+        ? `Updated template "${template.name}".`
+        : `Created template "${template.name}".`);
       setDialogOpen(false);
       setDialogState(null);
     } catch (error) {
@@ -347,10 +348,8 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
     }
 
     try {
-      await persistTemplates(
-        customTemplates.filter((candidate) => candidate.id !== template.id),
-        `Deleted template “${template.name}”.`,
-      );
+      await window.duneDesktop?.deleteWorkItemTemplate?.(template.id);
+      await persistTemplates(`Deleted template "${template.name}".`);
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -360,49 +359,20 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   };
 
   const handleTemplateDuplicate = async (template: WorkItemTemplate) => {
-    const now = Date.now();
     const duplicate: WorkItemTemplate = {
       ...template,
       builtIn: false,
-      createdAt: now,
       id: createId('template'),
       name: `${template.name} copy`,
-      updatedAt: now,
     };
 
     try {
-      await persistTemplates([...customTemplates, duplicate], `Duplicated template “${template.name}”.`);
+      await window.duneDesktop?.createWorkItemTemplate?.(duplicate);
+      await persistTemplates(`Duplicated template "${template.name}".`);
     } catch (error) {
       setFeedback({
         kind: 'error',
         message: `Failed to duplicate template. ${String(error)}`,
-      });
-    }
-  };
-
-  const handleTemplateMove = async (template: WorkItemTemplate, direction: -1 | 1) => {
-    const currentIndex = customTemplates.findIndex((candidate) => candidate.id === template.id);
-    const nextIndex = currentIndex + direction;
-
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= customTemplates.length) {
-      return;
-    }
-
-    const nextTemplates = [...customTemplates];
-    const [movedTemplate] = nextTemplates.splice(currentIndex, 1);
-
-    if (!movedTemplate) {
-      return;
-    }
-
-    nextTemplates.splice(nextIndex, 0, movedTemplate);
-
-    try {
-      await persistTemplates(nextTemplates, `Moved template “${template.name}”.`);
-    } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: `Failed to reorder template. ${String(error)}`,
       });
     }
   };
@@ -422,7 +392,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
     try {
       const savedPath = await window.duneDesktop.exportWorkItemTemplates(
         'dune-work-item-templates.json',
-        serializeCustomWorkItemTemplates(templates),
+        await window.duneDesktop.exportWorkItemTemplatesJson?.() ?? '[]',
       );
 
       if (!savedPath) {
@@ -431,7 +401,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
 
       setFeedback({
         kind: 'success',
-        message: `Exported ${templates.length} template${templates.length === 1 ? '' : 's'} to ${savedPath}.`,
+        message: `Exported ${userTemplates.length} custom template${userTemplates.length === 1 ? '' : 's'} to ${savedPath}.`,
       });
     } catch (error) {
       setFeedback({
@@ -462,7 +432,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
         return;
       }
 
-      const importedTemplates = parseImportedWorkItemTemplates(importedJson);
+      const importedTemplates = await window.duneDesktop.importWorkItemTemplatesJson?.(importedJson) ?? [];
 
       if (importedTemplates.length === 0) {
         setFeedback({
@@ -472,10 +442,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
         return;
       }
 
-      await persistTemplates(
-        upsertImportedWorkItemTemplates(customTemplates, importedTemplates),
-        `Imported ${importedTemplates.length} custom template${importedTemplates.length === 1 ? '' : 's'}.`,
-      );
+      await persistTemplates(`Imported ${importedTemplates.length} custom template${importedTemplates.length === 1 ? '' : 's'}.`);
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -495,7 +462,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
       />
 
       <div className="mt-4 rounded-[18px] border border-app-border bg-app-panel/40 px-4 py-3 text-sm text-app-muted">
-        Built-in templates are always available. Export includes every template; import adds or updates custom templates.
+        Built-in templates are always available. Export includes custom templates; import adds or updates custom templates.
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -588,7 +555,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
             </div>
           ) : (
             <div className="grid gap-3">
-              {userTemplates.map((template, index) => (
+              {userTemplates.map((template) => (
                 <article
                   className="rounded-[20px] border border-app-border bg-app-panel/50 p-5"
                   key={template.id}
@@ -603,28 +570,6 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button
-                        disabled={index === 0}
-                        onClick={() => {
-                          void handleTemplateMove(template, -1);
-                        }}
-                        title="Move template up"
-                        type="button"
-                        variant="quiet"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        disabled={index === userTemplates.length - 1}
-                        onClick={() => {
-                          void handleTemplateMove(template, 1);
-                        }}
-                        title="Move template down"
-                        type="button"
-                        variant="quiet"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
                       <Button
                         onClick={() => {
                           void handleTemplateDuplicate(template);

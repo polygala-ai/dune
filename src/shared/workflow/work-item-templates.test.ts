@@ -15,13 +15,11 @@ function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemp
   return {
     briefTemplate: '',
     builtIn: false,
-    createdAt: 0,
     defaultAgentId: null,
     defaultTasks: [],
     id: 'custom-template',
     name: 'Custom template',
     titlePattern: '',
-    updatedAt: 0,
     ...overrides,
   };
 }
@@ -41,10 +39,10 @@ describe('work item templates', () => {
       true,
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
+      ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
       ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write tests', 'Verify fix'],
-      ['Design', 'Implement', 'Write tests', 'Code review', 'Deploy'],
-      ['Read the code', 'Check for bugs', 'Check style/conventions', 'Write review comments'],
+      ['Research and design', 'Implement feature', 'Write tests', 'Update documentation'],
+      ['Read the code', 'Check for bugs', 'Check style and naming', 'Verify test coverage', 'Write review summary'],
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.titlePattern)).toEqual([
       'Research: [topic]',
@@ -53,10 +51,10 @@ describe('work item templates', () => {
       'Review: [PR/branch name]',
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.briefTemplate)).toEqual([
-      'Research and summarize findings on...',
-      'Steps to reproduce:\n\nExpected behavior:\n\nActual behavior:',
-      'Requirements:\n\nAcceptance criteria:',
-      'Review the following code for correctness, style, and best practices.',
+      'Research [topic] and summarize findings.',
+      'Fix [describe bug]. Steps to reproduce: [steps]. Expected: [expected]. Actual: [actual].',
+      'Implement [feature name]. Requirements: [requirements].',
+      'Review [PR/code] for correctness, style, and test coverage.',
     ]);
   });
 
@@ -64,23 +62,19 @@ describe('work item templates', () => {
     expect(normalizeWorkItemTemplate({
       briefTemplate: 'Investigate the issue.',
       builtIn: false,
-      createdAt: 123,
       defaultAgentId: ' agent-1 ',
       defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
       id: ' template-1 ',
       name: ' Research helper ',
       titlePattern: 'Research: ',
-      updatedAt: 456,
     })).toEqual({
       briefTemplate: 'Investigate the issue.',
       builtIn: false,
-      createdAt: 123,
       defaultAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
       id: 'template-1',
       name: 'Research helper',
       titlePattern: 'Research: ',
-      updatedAt: 456,
     });
 
     expect(normalizeWorkItemTemplate({
@@ -102,13 +96,11 @@ describe('work item templates', () => {
     })).toEqual({
       briefTemplate: 'Legacy brief.',
       builtIn: false,
-      createdAt: 0,
       defaultAgentId: 'agent-legacy',
       defaultTasks: ['Read'],
       id: 'legacy-template',
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
-      updatedAt: 0,
     });
   });
 
@@ -141,8 +133,8 @@ describe('work item templates', () => {
     }
 
     expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
-      brief: 'Research and summarize findings on...',
-      taskTitles: ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
+      brief: 'Research [topic] and summarize findings.',
+      taskTitles: ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
       title: 'Research: [topic]',
     });
   });

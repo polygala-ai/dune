@@ -55,11 +55,17 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
   startTelegramSetupSession: (input) =>
     ipcRenderer.invoke(ipcChannels.startTelegramSetupSession, input),
+  createWorkItemTemplate: (template) => ipcRenderer.invoke(ipcChannels.templatesCreate, template),
+  deleteWorkItemTemplate: (templateId) => ipcRenderer.invoke(ipcChannels.templatesDelete, templateId),
+  exportWorkItemTemplatesJson: () => ipcRenderer.invoke(ipcChannels.templatesExport),
+  importWorkItemTemplatesJson: (json) => ipcRenderer.invoke(ipcChannels.templatesImport, json),
+  listWorkItemTemplates: () => ipcRenderer.invoke(ipcChannels.templatesList),
   storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
   storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
   storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
   storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
+  updateWorkItemTemplate: (template) => ipcRenderer.invoke(ipcChannels.templatesUpdate, template),
   subscribe: (listener) => {
     /** Handles snapshot. */
     const handleSnapshot = (

@@ -126,7 +126,7 @@ export function parseImportedWorkItemTemplates(json: string) {
 
 /** Serializes work item templates to JSON. */
 export function serializeCustomWorkItemTemplates(templates: WorkItemTemplate[]) {
-  const exportedTemplates: ExportedWorkItemTemplate[] = normalizeWorkItemTemplates(templates)
+  const exportedTemplates: ExportedWorkItemTemplate[] = normalizeCustomWorkItemTemplates(templates)
     .map((template) => ({
       brief: template.briefTemplate,
       defaultAgent: template.defaultAgentId,

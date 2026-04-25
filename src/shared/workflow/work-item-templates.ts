@@ -7,14 +7,12 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 export interface WorkItemTemplate {
   briefTemplate: string;
   builtIn: boolean;
-  createdAt: number;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId: string | null;
   defaultTasks: string[];
   id: string;
   name: string;
   titlePattern: string;
-  updatedAt: number;
 }
 
 /** Template-scoped agent shape. */
@@ -34,48 +32,40 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    briefTemplate: 'Research and summarize findings on...',
+    briefTemplate: 'Research [topic] and summarize findings.',
     builtIn: true,
-    createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
+    defaultTasks: ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
     id: 'builtin-research-task',
     name: 'Research task',
     titlePattern: 'Research: [topic]',
-    updatedAt: 0,
   },
   {
-    briefTemplate: 'Steps to reproduce:\n\nExpected behavior:\n\nActual behavior:',
+    briefTemplate: 'Fix [describe bug]. Steps to reproduce: [steps]. Expected: [expected]. Actual: [actual].',
     builtIn: true,
-    createdAt: 0,
     defaultAgentId: null,
     defaultTasks: ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write tests', 'Verify fix'],
     id: 'builtin-bug-fix',
     name: 'Bug fix',
     titlePattern: 'Fix: [bug description]',
-    updatedAt: 0,
   },
   {
-    briefTemplate: 'Requirements:\n\nAcceptance criteria:',
+    briefTemplate: 'Implement [feature name]. Requirements: [requirements].',
     builtIn: true,
-    createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Design', 'Implement', 'Write tests', 'Code review', 'Deploy'],
+    defaultTasks: ['Research and design', 'Implement feature', 'Write tests', 'Update documentation'],
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
     titlePattern: 'Feature: [name]',
-    updatedAt: 0,
   },
   {
-    briefTemplate: 'Review the following code for correctness, style, and best practices.',
+    briefTemplate: 'Review [PR/code] for correctness, style, and test coverage.',
     builtIn: true,
-    createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Read the code', 'Check for bugs', 'Check style/conventions', 'Write review comments'],
+    defaultTasks: ['Read the code', 'Check for bugs', 'Check style and naming', 'Verify test coverage', 'Write review summary'],
     id: 'builtin-code-review',
     name: 'Code review',
     titlePattern: 'Review: [PR/branch name]',
-    updatedAt: 0,
   },
 ];
 
@@ -90,12 +80,6 @@ function normalizeOptionalAgentId(value: unknown) {
 
   const normalized = value.trim();
   return normalized || undefined;
-}
-
-function normalizeTimestamp(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-    ? value
-    : 0;
 }
 
 /** Returns whether the template ID belongs to a built-in template. */
@@ -144,7 +128,6 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
           ? value.briefSkeleton
           : '',
     builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
-    createdAt: normalizeTimestamp(value.createdAt),
     defaultAgentId: normalizeOptionalAgentId(
       value.defaultAgentId
         ?? value.defaultAgent
@@ -157,7 +140,6 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
     id,
     name,
     titlePattern,
-    updatedAt: normalizeTimestamp(value.updatedAt),
   };
 }
 

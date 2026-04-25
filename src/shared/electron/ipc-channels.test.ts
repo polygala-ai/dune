@@ -12,9 +12,24 @@ describe('ipcChannels', () => {
     expect(unique.size).toBe(values.length);
   });
 
-  it('all channels use the dune: prefix', () => {
+  it('all channels use an allowed prefix', () => {
     for (const channel of Object.values(ipcChannels)) {
-      expect(channel).toMatch(/^dune:/);
+      expect(channel).toMatch(/^(dune:|templates:)/);
+    }
+  });
+
+  it('template channels use templates: prefix', () => {
+    const templateKeys = [
+      'templatesCreate',
+      'templatesDelete',
+      'templatesExport',
+      'templatesImport',
+      'templatesList',
+      'templatesUpdate',
+    ];
+
+    for (const key of templateKeys) {
+      expect(ipcChannels[key as keyof typeof ipcChannels]).toMatch(/^templates:/);
     }
   });
 

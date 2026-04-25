@@ -13,6 +13,7 @@ import type {
 } from '@/renderer/features/agents/types';
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
+import type { WorkItemTemplate } from '@/shared/workflow/work-item-templates';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
@@ -58,10 +59,16 @@ export interface DesktopBridge {
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
   startTelegramSetupSession?: (input: StartTelegramSetupSessionInput) => Promise<string>;
+  createWorkItemTemplate?: (template: WorkItemTemplate) => Promise<WorkItemTemplate>;
+  deleteWorkItemTemplate?: (templateId: string) => Promise<void>;
+  exportWorkItemTemplatesJson?: () => Promise<string>;
+  importWorkItemTemplatesJson?: (json: string) => Promise<WorkItemTemplate[]>;
+  listWorkItemTemplates?: () => Promise<WorkItemTemplate[]>;
   storageDelete?: (store: string, key: string) => Promise<void>;
   storageGet?: (store: string, key: string) => Promise<unknown>;
   storageKeys?: (store: string) => Promise<string[]>;
   storageSet?: (store: string, key: string, value: unknown) => Promise<void>;
+  updateWorkItemTemplate?: (template: WorkItemTemplate) => Promise<WorkItemTemplate>;
   selectProjectDirectory?: () => Promise<string | null>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;

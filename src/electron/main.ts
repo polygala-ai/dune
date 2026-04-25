@@ -44,8 +44,22 @@ import type {
   StartTelegramSetupSessionInput,
 } from '@/renderer/features/agents/types';
 import { loadNetworkSettings } from '@/renderer/features/settings/model/network-settings';
+import {
+  loadCustomWorkItemTemplates,
+  mergeWorkItemTemplates,
+  parseImportedWorkItemTemplates,
+  saveCustomWorkItemTemplates,
+  serializeCustomWorkItemTemplates,
+  upsertImportedWorkItemTemplates,
+} from '@/renderer/features/settings/model/work-item-templates';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
+import { createId } from '@/shared/id';
 import { createDefaultTasks } from '@/shared/workflow/default-tasks';
+import {
+  isBuiltInWorkItemTemplateId,
+  normalizeWorkItemTemplate,
+  type WorkItemTemplate,
+} from '@/shared/workflow/work-item-templates';
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
 import { isPlainObject } from '@/shared/is-record';
 import type {
@@ -738,6 +752,82 @@ void app.whenReady().then(async () => {
     return store;
   }
 
+  async function loadAllWorkItemTemplates() {
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    return mergeWorkItemTemplates(customTemplates);
+  }
+
+  async function createUserWorkItemTemplate(input: unknown) {
+    const normalizedTemplate = normalizeWorkItemTemplate({
+      ...(isPlainObject(input) ? input : {}),
+      builtIn: false,
+      id: isPlainObject(input) && typeof input.id === 'string' && input.id.trim()
+        ? input.id
+        : createId('template'),
+    });
+
+    if (!normalizedTemplate || normalizedTemplate.builtIn || isBuiltInWorkItemTemplateId(normalizedTemplate.id)) {
+      throw new Error('Cannot create a built-in template.');
+    }
+
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    if (customTemplates.some((template) => template.id === normalizedTemplate.id)) {
+      throw new Error(`Template already exists: ${normalizedTemplate.id}`);
+    }
+
+    const savedTemplates = await saveCustomWorkItemTemplates(stores.settings, [
+      ...customTemplates,
+      normalizedTemplate,
+    ]);
+
+    return savedTemplates.find((template) => template.id === normalizedTemplate.id) ?? normalizedTemplate;
+  }
+
+  async function updateUserWorkItemTemplate(input: unknown) {
+    const normalizedTemplate = normalizeWorkItemTemplate({
+      ...(isPlainObject(input) ? input : {}),
+      builtIn: false,
+    });
+
+    if (!normalizedTemplate || normalizedTemplate.builtIn || isBuiltInWorkItemTemplateId(normalizedTemplate.id)) {
+      throw new Error('Cannot update a built-in template.');
+    }
+
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    const existingIndex = customTemplates.findIndex((template) => template.id === normalizedTemplate.id);
+
+    if (existingIndex < 0) {
+      throw new Error(`Template not found: ${normalizedTemplate.id}`);
+    }
+
+    const nextTemplates = [...customTemplates];
+    nextTemplates[existingIndex] = normalizedTemplate;
+    const savedTemplates = await saveCustomWorkItemTemplates(stores.settings, nextTemplates);
+
+    return savedTemplates.find((template) => template.id === normalizedTemplate.id) ?? normalizedTemplate;
+  }
+
+  async function deleteUserWorkItemTemplate(templateId: string) {
+    if (isBuiltInWorkItemTemplateId(templateId)) {
+      throw new Error('Cannot delete a built-in template.');
+    }
+
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    await saveCustomWorkItemTemplates(
+      stores.settings,
+      customTemplates.filter((template) => template.id !== templateId),
+    );
+  }
+
+  async function importUserWorkItemTemplates(json: string): Promise<WorkItemTemplate[]> {
+    const importedTemplates = parseImportedWorkItemTemplates(json);
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    return saveCustomWorkItemTemplates(
+      stores.settings,
+      upsertImportedWorkItemTemplates(customTemplates, importedTemplates),
+    );
+  }
+
   let runtimeBootstrapScheduled = false;
   let runtimeBootstrapPromise: Promise<void> | null = null;
   networkProxyManager = new NetworkProxyManager({
@@ -998,6 +1088,23 @@ void app.whenReady().then(async () => {
 
     return fs.readFileSync(selectedPath, 'utf-8');
   });
+  ipcMain.handle(ipcChannels.templatesList, async () => loadAllWorkItemTemplates());
+  ipcMain.handle(ipcChannels.templatesCreate, async (_event, template: WorkItemTemplate) =>
+    createUserWorkItemTemplate(template),
+  );
+  ipcMain.handle(ipcChannels.templatesUpdate, async (_event, template: WorkItemTemplate) =>
+    updateUserWorkItemTemplate(template),
+  );
+  ipcMain.handle(ipcChannels.templatesDelete, async (_event, templateId: string) =>
+    deleteUserWorkItemTemplate(templateId),
+  );
+  ipcMain.handle(ipcChannels.templatesExport, async () => {
+    const customTemplates = await loadCustomWorkItemTemplates(stores.settings);
+    return serializeCustomWorkItemTemplates(customTemplates);
+  });
+  ipcMain.handle(ipcChannels.templatesImport, async (_event, json: string) =>
+    importUserWorkItemTemplates(json),
+  );
   ipcMain.handle(ipcChannels.selectProjectDirectory, async () => {
     const dialogTarget = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
     const dialogOptions = {
