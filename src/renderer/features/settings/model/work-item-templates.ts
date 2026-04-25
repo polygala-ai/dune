@@ -9,7 +9,8 @@ import {
 } from '@/shared/workflow/work-item-templates';
 
 /** Storage key for work item templates. */
-export const WORK_ITEM_TEMPLATES_KEY = 'workItemTemplates';
+export const WORK_ITEM_TEMPLATES_KEY = 'itemTemplates';
+const LEGACY_WORK_ITEM_TEMPLATES_KEY = 'workItemTemplates';
 
 /** Work item template store contract. */
 export interface WorkItemTemplateStore {
@@ -37,9 +38,20 @@ export async function loadCustomWorkItemTemplates(
 ) {
   const value = await settingsStore.get<unknown>(WORK_ITEM_TEMPLATES_KEY);
 
-  if (value === null && settingsStore.set) {
-    await settingsStore.set(WORK_ITEM_TEMPLATES_KEY, BUILTIN_WORK_ITEM_TEMPLATES);
-    return [];
+  if (value === null) {
+    const legacyValue = await settingsStore.get<unknown>(LEGACY_WORK_ITEM_TEMPLATES_KEY);
+    const storedTemplates = legacyValue ?? BUILTIN_WORK_ITEM_TEMPLATES;
+
+    if (settingsStore.set) {
+      await settingsStore.set(
+        WORK_ITEM_TEMPLATES_KEY,
+        legacyValue === null
+          ? BUILTIN_WORK_ITEM_TEMPLATES
+          : createStoredWorkItemTemplates(normalizeCustomWorkItemTemplates(storedTemplates)),
+      );
+    }
+
+    return normalizeCustomWorkItemTemplates(storedTemplates);
   }
 
   return normalizeCustomWorkItemTemplates(value);

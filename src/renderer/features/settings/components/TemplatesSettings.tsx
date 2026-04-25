@@ -74,7 +74,7 @@ const settingsStore = createSettingsStore();
 
 function describeTemplateAgent(
   agents: TemplateScopedAgent[],
-  defaultAgentId: string | undefined,
+  defaultAgentId: string | null | undefined,
 ) {
   if (!defaultAgentId) {
     return 'No default agent';
@@ -87,7 +87,7 @@ function describeTemplateAgent(
 
 function buildAgentOptions(
   agents: TemplateScopedAgent[],
-  defaultAgentId: string | undefined,
+  defaultAgentId: string | null | undefined,
 ) {
   const knownAgentRefs = new Set(agents.flatMap((agent) => [agent.id, agent.name]));
   const nextOptions = [...agents].sort((left, right) => left.name.localeCompare(right.name));
@@ -121,7 +121,7 @@ function TemplateFormDialog({
       return;
     }
 
-    setBrief(state?.template?.brief ?? '');
+    setBrief(state?.template?.briefTemplate ?? '');
     setDefaultAgentId(state?.template?.defaultAgentId ?? '');
     setName(state?.template?.name ?? '');
     setRawTasks(state?.template?.defaultTasks.join('\n') ?? '');
@@ -248,19 +248,16 @@ function TemplateFormDialog({
               const existingTemplate = state?.template;
               const now = Date.now();
               const nextTemplate: WorkItemTemplate = {
-                brief,
+                briefTemplate: brief,
                 builtIn: false,
                 createdAt: existingTemplate?.createdAt ?? now,
+                defaultAgentId: defaultAgentId.trim() || null,
                 defaultTasks: normalizeWorkflowTaskTitles(rawTasks.split('\n')),
                 id: existingTemplate?.id ?? createId('template'),
                 name: name.trim(),
                 titlePattern,
                 updatedAt: now,
               };
-
-              if (defaultAgentId.trim()) {
-                nextTemplate.defaultAgentId = defaultAgentId.trim();
-              }
 
               onSave(nextTemplate);
             }}
@@ -342,6 +339,10 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
   };
 
   const handleTemplateDelete = async (template: WorkItemTemplate) => {
+    if (!window.confirm(`Delete template "${template.name}"?`)) {
+      return;
+    }
+
     try {
       await persistTemplates(
         customTemplates.filter((candidate) => candidate.id !== template.id),
@@ -531,7 +532,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
                 </div>
                 <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                  {template.brief || 'No default brief.'}
+                  {template.briefTemplate || 'No default brief.'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {template.defaultTasks.map((task) => (
@@ -625,7 +626,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
 
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                    {template.brief || 'No default brief.'}
+                    {template.briefTemplate || 'No default brief.'}
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">
