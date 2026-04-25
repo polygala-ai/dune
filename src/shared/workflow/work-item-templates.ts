@@ -5,9 +5,9 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 
 /** Work item template shape. */
 export interface WorkItemTemplate {
-  briefTemplate: string;
+  brief: string;
   /** Agent ID or exact agent name to assign when the template is used. */
-  defaultAssignedAgentId?: string;
+  defaultAgentId?: string;
   defaultTasks: string[];
   id: string;
   name: string;
@@ -23,7 +23,7 @@ export interface TemplateScopedAgent {
 
 /** Prefilled work item draft shape. */
 export interface WorkItemTemplatePrefill {
-  briefTemplate: string;
+  brief: string;
   taskTitles: string[];
   title: string;
 }
@@ -31,28 +31,28 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    briefTemplate: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nSynthesis:\n\nReport:',
+    brief: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nSynthesis:\n\nReport:',
     defaultTasks: ['Understand', 'Research', 'Synthesize', 'Write report'],
     id: 'builtin-research-task',
     name: 'Research task',
     titlePattern: 'Research: ',
   },
   {
-    briefTemplate: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nFix notes:',
+    brief: 'Bug description:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nFix notes:',
     defaultTasks: ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
     id: 'builtin-bug-fix',
     name: 'Bug fix',
     titlePattern: 'Fix: ',
   },
   {
-    briefTemplate: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nAcceptance criteria:',
+    brief: 'Feature description:\n\nRequirements:\n\nDesign notes:\n\nAcceptance criteria:',
     defaultTasks: ['Design', 'Review design', 'Implement', 'Test', 'PR'],
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
     titlePattern: 'Implement: ',
   },
   {
-    briefTemplate: 'Brief:\n\nCode/PR to review:\n\nFocus areas:\n\nFeedback:',
+    brief: 'Brief:\n\nCode/PR to review:\n\nFocus areas:\n\nFeedback:',
     defaultTasks: ['Read brief', 'Review code', 'Write feedback'],
     id: 'builtin-code-review',
     name: 'Code review',
@@ -92,10 +92,10 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
   }
 
   const template: WorkItemTemplate = {
-    briefTemplate: typeof value.briefTemplate === 'string'
-      ? value.briefTemplate
-      : typeof value.brief === 'string'
-        ? value.brief
+    brief: typeof value.brief === 'string'
+      ? value.brief
+      : typeof value.briefTemplate === 'string'
+        ? value.briefTemplate
         : '',
     defaultTasks: Array.isArray(value.defaultTasks)
       ? normalizeWorkflowTaskTitles(
@@ -106,12 +106,12 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
     name,
     titlePattern: typeof value.titlePattern === 'string' ? value.titlePattern : '',
   };
-  const defaultAssignedAgentId = normalizeOptionalAgentId(
-    value.defaultAssignedAgentId ?? value.defaultAgentId,
+  const defaultAgentId = normalizeOptionalAgentId(
+    value.defaultAgentId ?? value.defaultAssignedAgentId,
   );
 
-  if (defaultAssignedAgentId) {
-    template.defaultAssignedAgentId = defaultAssignedAgentId;
+  if (defaultAgentId) {
+    template.defaultAgentId = defaultAgentId;
   }
 
   return template;
@@ -143,7 +143,7 @@ export function normalizeWorkItemTemplates(value: unknown): WorkItemTemplate[] {
 /** Creates a prefilled work item draft from a template. */
 export function createWorkItemTemplatePrefill(template: WorkItemTemplate): WorkItemTemplatePrefill {
   return {
-    briefTemplate: template.briefTemplate,
+    brief: template.brief,
     taskTitles: [...template.defaultTasks],
     title: template.titlePattern,
   };
@@ -155,14 +155,14 @@ export function resolveWorkItemTemplateDefaultAgent(
   projectId: string,
   agents: TemplateScopedAgent[],
 ) {
-  const defaultAssignedAgentId = normalizeOptionalAgentId(template?.defaultAssignedAgentId);
+  const defaultAgentId = normalizeOptionalAgentId(template?.defaultAgentId);
 
-  if (!defaultAssignedAgentId) {
+  if (!defaultAgentId) {
     return null;
   }
 
   const matchingAgent = agents.find((agent) =>
-    agent.id === defaultAssignedAgentId || agent.name === defaultAssignedAgentId,
+    agent.id === defaultAgentId || agent.name === defaultAgentId,
   );
 
   if (!matchingAgent) {

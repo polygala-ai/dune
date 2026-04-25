@@ -125,7 +125,7 @@ export function CreateWorkItemDialog({
     ? resolveWorkItemTemplateDefaultAgent(selectedTemplate, projectId, agents)
     : null;
   const isTemplateDefaultAgentUnavailable =
-    Boolean(selectedTemplate?.defaultAssignedAgentId) && !defaultAgent;
+    Boolean(selectedTemplate?.defaultAgentId) && !defaultAgent;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -159,7 +159,7 @@ export function CreateWorkItemDialog({
 
                 const prefill = createWorkItemTemplatePrefill(nextTemplate);
                 setTitle(prefill.title);
-                setBrief(prefill.briefTemplate);
+                setBrief(prefill.brief);
               }}
               value={selectedTemplateId}
             >
