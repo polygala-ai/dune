@@ -2887,7 +2887,7 @@ describe('AgentRuntime', () => {
     expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:888', messageText);
   });
 
-  it('rejects and sends a visible error notice when one of multiple outbound Telegram attachments fails to deliver', async () => {
+  it('sends an error notice when second attachment fails to send', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
     const telegramHarness = createTelegramChannelFactoryHarness();
@@ -2943,12 +2943,10 @@ describe('AgentRuntime', () => {
 
     const messageText =
       'Here are two images: (/workspace/group/attachments/photo1.jpg) (/workspace/group/attachments/photo2.jpg)';
-    await expect(
-      harness.duneChannel('partial-delivery-agent').sendMessage(
-        toAgentChatJid(agentId),
-        messageText,
-      ),
-    ).rejects.toThrow('Failed to deliver 1 Telegram attachment');
+    await harness.duneChannel('partial-delivery-agent').sendMessage(
+      toAgentChatJid(agentId),
+      messageText,
+    );
 
     // Both attachments were attempted
     expect(sendTelegramMedia).toHaveBeenCalledTimes(2);

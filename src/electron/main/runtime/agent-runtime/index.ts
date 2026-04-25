@@ -598,9 +598,6 @@ function wrapTelegramDriverForMedia(
         if (!didSendMedia) {
           // All attachments failed — fall back to plain text so the user sees something.
           await base.sendMessage(jid, text);
-          if (mediaFailure) {
-            throw mediaFailure;
-          }
           return;
         }
 
@@ -619,9 +616,6 @@ function wrapTelegramDriverForMedia(
           }
         }
 
-        if (mediaFailure) {
-          throw mediaFailure;
-        }
       },
     };
   };
