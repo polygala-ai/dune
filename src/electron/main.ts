@@ -10,7 +10,7 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { createQuitCoordinator } from '@/electron/main/quit-coordinator';
-import { AuditDatabase } from '@/electron/main/audit/audit-db';
+import { AuditLog } from '@/electron/main/audit/audit-log';
 import {
   openDuneDatabase,
   resolveDuneDatabasePath,
@@ -75,7 +75,7 @@ void app.whenReady().then(async () => {
   const agentLiteRuntimeRoot = resolveAgentLiteRuntimeRoot(agentLiteHomeDir);
   const userDataDir = app.getPath('userData');
   const sqlite = openDuneDatabase(resolveDuneDatabasePath(userDataDir));
-  const auditDb = new AuditDatabase(userDataDir);
+  const auditLog = new AuditLog(sqlite);
   const stores = {
     agents: new JsonFileStorage(userDataDir, 'agents'),
     secrets: new EncryptedFileStorage(userDataDir, 'secrets'),
@@ -121,7 +121,7 @@ void app.whenReady().then(async () => {
   runtimeBootstrap = createRuntimeBootstrap({
     agentStore: stores.agents,
     app,
-    auditLog: auditDb,
+    auditLog,
     ...(agentLiteHomeDir ? { agentLiteHomeDir } : {}),
     onAgentIdle: workflowCoordinator.onAgentIdle,
     onItemActivityChanged: (payload) => {
@@ -142,7 +142,6 @@ void app.whenReady().then(async () => {
     workflowCoordinator.stop();
     telegramPowerCoordinator.shutdown();
     await runtimeBootstrap?.shutdown();
-    auditDb.close();
     sqlite.close();
   };
 
@@ -165,7 +164,7 @@ void app.whenReady().then(async () => {
 
   registerMainIpcHandlers({
     applyPersistedNetworkSettings,
-    auditLog: auditDb,
+    auditLog,
     createInitialRuntimeSnapshot,
     deleteLocalData: async () => {
       await shutdownMainProcess();

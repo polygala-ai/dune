@@ -11,8 +11,8 @@ import type { OpenDialogOptions } from 'electron';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage';
-import type { AuditEvent } from '@/shared/audit-log';
-import type { AuditDatabase, QueryAuditParams } from '@/electron/main/audit/audit-db';
+import type { AuditLog } from '@/electron/main/audit/audit-log';
+import { registerAuditIpcHandlers } from '@/electron/main/ipc/audit-ipc';
 import {
   assertEmptyProjectRootDirectory,
   ensureProjectArtifactFolder,
@@ -51,7 +51,7 @@ interface RegisterMainIpcHandlersOptions {
   deleteLocalData: () => Promise<void>;
   dialog?: DialogLike;
   ensureRuntime: () => Promise<void>;
-  auditLog?: AuditDatabase;
+  auditLog?: AuditLog;
   getFocusedWindow?: () => BrowserWindow | null;
   getMainWindow: () => BrowserWindow | null;
   getProjectActivityPage: (
@@ -81,6 +81,11 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     return action(options.requireRuntimeController());
   };
 
+  registerAuditIpcHandlers({
+    auditLog: options.auditLog,
+    ipcMain,
+  });
+
   // Runtime handlers.
   ipcMain.handle(ipcChannels.getRuntimeSnapshot, async () =>
     getBootstrappedRuntimeSnapshot({
@@ -97,20 +102,6 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     ipcChannels.getProjectActivityPage,
     async (_event, projectId: string, pageOptions?: { beforeEntryId?: string | null; limit?: number }) =>
       options.getProjectActivityPage(projectId, pageOptions),
-  );
-  ipcMain.handle(
-    ipcChannels.getAuditLog,
-    async (_event, params: QueryAuditParams) => options.auditLog?.query(params) ?? { rows: [], total: 0 },
-  );
-  ipcMain.handle(
-    ipcChannels.exportAuditCsv,
-    async (_event, params: QueryAuditParams) => options.auditLog?.exportCsv(params) ?? '',
-  );
-  ipcMain.handle(
-    ipcChannels.recordAuditEvent,
-    async (_event, event: AuditEvent) => {
-      options.auditLog?.record(event);
-    },
   );
   ipcMain.handle(
     ipcChannels.applyNetworkSettings,

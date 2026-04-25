@@ -5,6 +5,7 @@ import type {
   AuditEventRow,
   QueryAuditParams,
 } from '@/shared/audit-log';
+import { rowsToCsv } from '@/electron/main/audit/csv-export';
 
 export type {
   AuditEvent,
@@ -111,36 +112,4 @@ export class AuditLog {
     const { rows } = this.query({ ...params, limit: 10_000, offset: 0 });
     return rowsToCsv(rows);
   }
-}
-
-export function rowsToCsv(rows: AuditEventRow[]): string {
-  const headers = [
-    'id',
-    'timestamp',
-    'actor',
-    'actor_type',
-    'event_type',
-    'item_id',
-    'item_title',
-    'project_id',
-    'summary',
-    'details',
-  ];
-  const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-
-  return [
-    headers.join(','),
-    ...rows.map((row) => [
-      row.id,
-      new Date(row.ts).toISOString(),
-      escape(row.actor),
-      escape(row.actor_type),
-      escape(row.event_type),
-      escape(row.item_id),
-      escape(row.item_title),
-      escape(row.project_id),
-      escape(row.summary),
-      escape(row.details),
-    ].join(',')),
-  ].join('\n');
 }

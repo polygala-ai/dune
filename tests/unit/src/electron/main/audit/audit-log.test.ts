@@ -7,10 +7,8 @@ import {
 } from 'vitest';
 import Database from 'better-sqlite3';
 
-import {
-  AuditLog,
-  rowsToCsv,
-} from '@/electron/main/audit/audit-log';
+import { AuditLog } from '@/electron/main/audit/audit-log';
+import { rowsToCsv } from '@/electron/main/audit/csv-export';
 
 describe('AuditLog', () => {
   let sqlite: InstanceType<typeof Database>;
