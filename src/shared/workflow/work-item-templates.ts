@@ -6,12 +6,12 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 /** Work item template shape. */
 export interface WorkItemTemplate {
   brief: string;
+  builtIn: boolean;
   createdAt: number;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId?: string;
   defaultTasks: string[];
   id: string;
-  isBuiltIn: boolean;
   name: string;
   titlePattern: string;
   updatedAt: number;
@@ -34,43 +34,43 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    brief: 'Investigate [topic]. Produce a clear research report with findings.',
+    brief: 'Research the following topic: {topic}\n\nDeliverables:\n- Summary document\n- Key findings\n- Recommendations',
+    builtIn: true,
     createdAt: 0,
-    defaultTasks: ['Define scope', 'Research', 'Synthesize findings', 'Write report'],
+    defaultTasks: ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
     id: 'builtin-research-task',
-    isBuiltIn: true,
     name: 'Research task',
-    titlePattern: 'Research: ',
+    titlePattern: 'Research: {topic}',
     updatedAt: 0,
   },
   {
-    brief: 'Bug: [description]. Steps to reproduce: ...',
+    brief: '**Bug**: {description}\n\n**Steps to reproduce**:\n1. \n\n**Expected**: \n**Actual**: ',
+    builtIn: true,
     createdAt: 0,
-    defaultTasks: ['Reproduce', 'Identify root cause', 'Fix', 'Test', 'Open PR'],
+    defaultTasks: ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write regression test', 'Verify fix'],
     id: 'builtin-bug-fix',
-    isBuiltIn: true,
     name: 'Bug fix',
-    titlePattern: 'Bug: {{description}}',
+    titlePattern: 'Bug: {description}',
     updatedAt: 0,
   },
   {
-    brief: 'Implement [feature]. Requirements: ...',
+    brief: '## Feature: {name}\n\n**Goal**: \n\n**Requirements**:\n- \n\n**Acceptance criteria**:\n- ',
+    builtIn: true,
     createdAt: 0,
-    defaultTasks: ['Understand brief', 'Research', 'Design', 'Implement', 'Test', 'Open PR'],
+    defaultTasks: ['Write design doc', 'Get design reviewed', 'Implement feature', 'Write tests', 'Open PR'],
     id: 'builtin-feature-implementation',
-    isBuiltIn: true,
     name: 'Feature implementation',
-    titlePattern: 'Implement: ',
+    titlePattern: 'Feature: {name}',
     updatedAt: 0,
   },
   {
-    brief: 'Review PR #[number]: [title]. Focus on ...',
+    brief: 'Review PR: {pr_url}\n\nFocus areas:\n- Correctness\n- Performance\n- Security\n- Code quality',
+    builtIn: true,
     createdAt: 0,
-    defaultTasks: ['Read the diff', 'Check logic', 'Check tests', 'Leave feedback'],
+    defaultTasks: ['Read the PR diff', 'Run tests locally', 'Leave review comments', 'Approve or request changes'],
     id: 'builtin-code-review',
-    isBuiltIn: true,
     name: 'Code review',
-    titlePattern: 'Review: ',
+    titlePattern: 'Review PR: {pr_url}',
     updatedAt: 0,
   },
 ];
@@ -125,7 +125,7 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
         )
       : [],
     id,
-    isBuiltIn: value.isBuiltIn === true || value.builtIn === true || isBuiltInWorkItemTemplateId(id),
+    builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
     name,
     titlePattern: typeof value.titlePattern === 'string' ? value.titlePattern : '',
     updatedAt: normalizeTimestamp(value.updatedAt),

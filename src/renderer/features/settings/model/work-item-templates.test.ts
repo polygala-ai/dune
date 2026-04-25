@@ -31,10 +31,10 @@ class MemoryStore implements WorkItemTemplateStore {
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
     brief: 'Custom brief',
+    builtIn: false,
     createdAt: 0,
     defaultTasks: ['One'],
     id: 'custom-template',
-    isBuiltIn: false,
     name: 'Custom template',
     titlePattern: 'Custom: ',
     updatedAt: 0,
@@ -52,7 +52,7 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Should be filtered',
-        isBuiltIn: true,
+        builtIn: true,
         defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
         name: 'Duplicate built-in',
@@ -89,7 +89,42 @@ describe('work item templates settings model', () => {
         titlePattern: 'Research: ',
       }),
     ]);
-    await expect(store.get(WORK_ITEM_TEMPLATES_KEY)).resolves.toEqual(saved);
+    await expect(store.get<WorkItemTemplate[]>(WORK_ITEM_TEMPLATES_KEY)).resolves.toEqual([
+      expect.objectContaining({ builtIn: true, id: 'builtin-research-task' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-bug-fix' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-feature-implementation' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-code-review' }),
+      ...saved,
+    ]);
+  });
+
+  it('seeds built-in templates on first run when the store is writable', async () => {
+    const store = new MemoryStore();
+
+    await expect(loadCustomWorkItemTemplates(store)).resolves.toEqual([]);
+    await expect(store.get<WorkItemTemplate[]>(WORK_ITEM_TEMPLATES_KEY)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          builtIn: true,
+          id: 'builtin-research-task',
+          name: 'Research task',
+        }),
+      ]),
+    );
+  });
+
+  it('stores built-in templates with custom templates when saving', async () => {
+    const store = new MemoryStore();
+
+    await saveCustomWorkItemTemplates(store, [customTemplate()]);
+
+    await expect(store.get<WorkItemTemplate[]>(WORK_ITEM_TEMPLATES_KEY)).resolves.toEqual([
+      expect.objectContaining({ builtIn: true, id: 'builtin-research-task' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-bug-fix' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-feature-implementation' }),
+      expect.objectContaining({ builtIn: true, id: 'builtin-code-review' }),
+      customTemplate(),
+    ]);
   });
 
   it('merges built-in templates ahead of custom templates', () => {
@@ -115,7 +150,7 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Built-in copy',
-        isBuiltIn: true,
+        builtIn: true,
         defaultTasks: ['Ignore'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',
@@ -149,8 +184,8 @@ describe('work item templates settings model', () => {
       }),
       {
         brief: 'Include this',
+        builtIn: true,
         createdAt: 0,
-        isBuiltIn: true,
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',

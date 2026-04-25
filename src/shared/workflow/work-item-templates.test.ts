@@ -14,10 +14,10 @@ import {
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
     brief: '',
+    builtIn: false,
     createdAt: 0,
     defaultTasks: [],
     id: 'custom-template',
-    isBuiltIn: false,
     name: 'Custom template',
     titlePattern: '',
     updatedAt: 0,
@@ -33,17 +33,17 @@ describe('work item templates', () => {
       'Feature implementation',
       'Code review',
     ]);
-    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.isBuiltIn)).toEqual([
+    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.builtIn)).toEqual([
       true,
       true,
       true,
       true,
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      ['Define scope', 'Research', 'Synthesize findings', 'Write report'],
-      ['Reproduce', 'Identify root cause', 'Fix', 'Test', 'Open PR'],
-      ['Understand brief', 'Research', 'Design', 'Implement', 'Test', 'Open PR'],
-      ['Read the diff', 'Check logic', 'Check tests', 'Leave feedback'],
+      ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
+      ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write regression test', 'Verify fix'],
+      ['Write design doc', 'Get design reviewed', 'Implement feature', 'Write tests', 'Open PR'],
+      ['Read the PR diff', 'Run tests locally', 'Leave review comments', 'Approve or request changes'],
     ]);
   });
 
@@ -60,11 +60,11 @@ describe('work item templates', () => {
       updatedAt: 456,
     })).toEqual({
       brief: 'Investigate the issue.',
+      builtIn: false,
       createdAt: 123,
       defaultAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
       id: 'template-1',
-      isBuiltIn: false,
       name: 'Research helper',
       titlePattern: 'Research: ',
       updatedAt: 456,
@@ -88,11 +88,11 @@ describe('work item templates', () => {
       titlePattern: 'Legacy: ',
     })).toEqual({
       brief: 'Legacy brief.',
+      builtIn: false,
       createdAt: 0,
       defaultAgentId: 'agent-legacy',
       defaultTasks: ['Read'],
       id: 'legacy-template',
-      isBuiltIn: false,
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
       updatedAt: 0,
@@ -128,9 +128,9 @@ describe('work item templates', () => {
     }
 
     expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
-      brief: 'Investigate [topic]. Produce a clear research report with findings.',
-      taskTitles: ['Define scope', 'Research', 'Synthesize findings', 'Write report'],
-      title: 'Research: ',
+      brief: 'Research the following topic: {topic}\n\nDeliverables:\n- Summary document\n- Key findings\n- Recommendations',
+      taskTitles: ['Define research scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
+      title: 'Research: {topic}',
     });
   });
 

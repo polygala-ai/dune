@@ -20,8 +20,15 @@ export interface WorkItemTemplateStore {
 /** Normalizes custom work item templates. */
 export function normalizeCustomWorkItemTemplates(value: unknown): WorkItemTemplate[] {
   return normalizeWorkItemTemplates(value)
-    .filter((template) => !template.isBuiltIn && !isBuiltInWorkItemTemplateId(template.id))
-    .map((template) => ({ ...template, isBuiltIn: false }));
+    .filter((template) => !template.builtIn && !isBuiltInWorkItemTemplateId(template.id))
+    .map((template) => ({ ...template, builtIn: false }));
+}
+
+function createStoredWorkItemTemplates(customTemplates: WorkItemTemplate[]) {
+  return [
+    ...BUILTIN_WORK_ITEM_TEMPLATES,
+    ...normalizeCustomWorkItemTemplates(customTemplates),
+  ];
 }
 
 /** Loads custom work item templates. */
@@ -29,6 +36,12 @@ export async function loadCustomWorkItemTemplates(
   settingsStore: WorkItemTemplateStore,
 ) {
   const value = await settingsStore.get<unknown>(WORK_ITEM_TEMPLATES_KEY);
+
+  if (value === null && settingsStore.set) {
+    await settingsStore.set(WORK_ITEM_TEMPLATES_KEY, BUILTIN_WORK_ITEM_TEMPLATES);
+    return [];
+  }
+
   return normalizeCustomWorkItemTemplates(value);
 }
 
@@ -43,7 +56,7 @@ export async function saveCustomWorkItemTemplates(
     throw new Error('Templates store does not support saving.');
   }
 
-  await settingsStore.set(WORK_ITEM_TEMPLATES_KEY, normalized);
+  await settingsStore.set(WORK_ITEM_TEMPLATES_KEY, createStoredWorkItemTemplates(normalized));
   return normalized;
 }
 
