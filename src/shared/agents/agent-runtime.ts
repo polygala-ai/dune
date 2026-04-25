@@ -1,6 +1,9 @@
 // Shared agent runtime contracts.
 
 import type {
+  AgentActivityStatus,
+} from './agent-activity';
+import type {
   Agent,
   AgentTranscriptPage,
   AgentDefinition,
@@ -84,6 +87,7 @@ export interface AgentService {
  */
 export interface AgentRuntimeContract {
   getSnapshot: () => AgentServiceSnapshot;
+  getLiveStatuses: () => AgentActivityStatus[];
   reset: () => void;
   service: AgentService;
   subscribe: (listener: AgentServiceListener) => () => void;

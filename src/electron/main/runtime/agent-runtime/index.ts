@@ -5,6 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  AgentActivityStatus,
+} from '@/shared/agents/agent-activity';
+import type {
   Agent as AgentLiteAgent,
   AgentLite,
   ChannelDriverFactory,
@@ -110,6 +113,8 @@ const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 const MAX_ACTIVITY_EVENTS = 50;
+const MAX_TOOL_RESULT_SUMMARY_LENGTH = 500;
+const MAX_TOOL_ARGS_SUMMARY_LENGTH = 200;
 const MAX_LIVE_TRANSCRIPT_MESSAGES = 40;
 const MAX_ROLLING_SUMMARY_MESSAGES = 24;
 const DEFAULT_TRANSCRIPT_PAGE_LIMIT = 80;
@@ -479,6 +484,9 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Per-agent set of currently running agentlite scheduled task IDs. */
   private readonly runningTaskIds = new Map<string, Set<string>>();
 
+  /** Runtime-event-derived status for the activity panel. */
+  private readonly agentLiveStatus = new Map<string, AgentActivityStatus>();
+
   private readonly records = new AgentRecords();
 
   private readonly lifecycle = new Lifecycle();
@@ -638,6 +646,21 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Returns snapshot. */
   getSnapshot() {
     return cloneSnapshot(this.snapshot);
+  }
+
+  getLiveStatuses(): AgentActivityStatus[] {
+    return [...this.agentLiveStatus.values()]
+      .sort((left, right) => {
+        const leftUpdatedAt = Date.parse(left.updatedAt);
+        const rightUpdatedAt = Date.parse(right.updatedAt);
+
+        if (leftUpdatedAt !== rightUpdatedAt) {
+          return rightUpdatedAt - leftUpdatedAt;
+        }
+
+        return left.agentName.localeCompare(right.agentName);
+      })
+      .map((status) => ({ ...status }));
   }
 
   /** Subscribes to agent updates. */
@@ -1707,14 +1730,7 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private async updateItemActivityForTask(taskId: string, isWorking: boolean): Promise<void> {
-    const workflowStore = this.actionServices?.workflowStore;
-
-    if (!workflowStore) {
-      return;
-    }
-
-    const snapshot = await workflowStore.get<{ items?: Array<{ id?: string; scheduledTaskId?: string | null }> }>('snapshot');
-    const itemId = snapshot?.items?.find((item) => item?.scheduledTaskId === taskId)?.id ?? null;
+    const itemId = await this.resolveWorkItemIdForTask(taskId);
 
     if (!itemId) {
       return;
@@ -1731,6 +1747,17 @@ export class AgentRuntime implements AgentRuntimeContract {
       startedAt: isWorking ? this.now() : null,
     });
     this.onItemActivityChanged?.({ itemId, isWorking });
+  }
+
+  private async resolveWorkItemIdForTask(taskId: string): Promise<string | null> {
+    const workflowStore = this.actionServices?.workflowStore;
+
+    if (!workflowStore) {
+      return null;
+    }
+
+    const snapshot = await workflowStore.get<{ items?: Array<{ id?: string; scheduledTaskId?: string | null }> }>('snapshot');
+    return snapshot?.items?.find((item) => item?.scheduledTaskId === taskId)?.id ?? null;
   }
 
   private async dispatchAgentInput(
@@ -2029,6 +2056,43 @@ export class AgentRuntime implements AgentRuntimeContract {
         };
       }),
     };
+    this.emit();
+  }
+
+  private updateLiveStatus(
+    agentId: string,
+    patch: Partial<Omit<AgentActivityStatus, 'agentId' | 'agentName' | 'schemaVersion' | 'sessionId' | 'sessionStartedAt'>>,
+  ) {
+    const previous = this.agentLiveStatus.get(agentId);
+    const agent = this.snapshot.agents.find((item) => item.id === agentId);
+    const nowIso = new Date(this.now()).toISOString();
+    const pick = <K extends keyof typeof patch>(
+      key: K,
+      fallback: AgentActivityStatus[K],
+    ): AgentActivityStatus[K] =>
+      Object.prototype.hasOwnProperty.call(patch, key)
+        ? patch[key] as AgentActivityStatus[K]
+        : fallback;
+
+    const next: AgentActivityStatus = {
+      schemaVersion: 1,
+      updatedAt: nowIso,
+      agentId,
+      agentName: agent?.name ?? previous?.agentName ?? 'Unknown Agent',
+      status: pick('status', previous?.status ?? 'idle'),
+      phase: pick('phase', previous?.phase ?? 'idle'),
+      currentTool: pick('currentTool', previous?.currentTool ?? null),
+      toolArgsSummary: pick('toolArgsSummary', previous?.toolArgsSummary ?? null),
+      lastToolDurationMs: pick('lastToolDurationMs', previous?.lastToolDurationMs ?? null),
+      lastToolResult: pick('lastToolResult', previous?.lastToolResult ?? null),
+      turnCount: pick('turnCount', previous?.turnCount ?? 0),
+      workItemId: pick('workItemId', previous?.workItemId ?? null),
+      workItemTitle: pick('workItemTitle', previous?.workItemTitle ?? null),
+      sessionId: previous?.sessionId ?? `runtime-${agentId}`,
+      sessionStartedAt: previous?.sessionStartedAt ?? nowIso,
+    };
+
+    this.agentLiveStatus.set(agentId, next);
     this.emit();
   }
 
@@ -2406,6 +2470,15 @@ export class AgentRuntime implements AgentRuntimeContract {
           detail: event.input,
           timestamp: Date.now(),
         });
+        this.updateLiveStatus(agentId, {
+          status: 'tool-calling',
+          phase: 'tool_call_start',
+          currentTool: event.toolName,
+          toolArgsSummary: String(event.input ? event.input : event.toolName).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
+          lastToolResult: null,
+          lastToolDurationMs: null,
+          turnCount: (this.agentLiveStatus.get(agentId)?.turnCount ?? 0) + 1,
+        });
       });
 
       alAgent.on('run.subagent', (event) => {
@@ -2424,6 +2497,12 @@ export class AgentRuntime implements AgentRuntimeContract {
           kind: 'status',
           label: event.status,
           timestamp: Date.now(),
+        });
+        this.updateLiveStatus(agentId, {
+          status: event.status === 'idle' ? 'idle' : 'waiting',
+          phase: 'idle',
+          currentTool: null,
+          toolArgsSummary: String(event.status).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
         });
       });
 
@@ -2458,6 +2537,12 @@ export class AgentRuntime implements AgentRuntimeContract {
                   detail: output.slice(0, 2000),
                   timestamp: Date.now(),
                 });
+                this.updateLiveStatus(agentId, {
+                  status: 'idle',
+                  phase: 'tool_call_done',
+                  currentTool: null,
+                  lastToolResult: output.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH),
+                });
               }
             }
           }
@@ -2474,6 +2559,12 @@ export class AgentRuntime implements AgentRuntimeContract {
                 detail: String(block.text).slice(0, 2000),
                 timestamp: Date.now(),
               });
+              this.updateLiveStatus(agentId, {
+                status: 'thinking',
+                phase: 'idle',
+                currentTool: null,
+                toolArgsSummary: String(block.text).trim().slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
+              });
             }
           }
         }
@@ -2486,6 +2577,12 @@ export class AgentRuntime implements AgentRuntimeContract {
             label: String(msg.status),
             timestamp: Date.now(),
           });
+          this.updateLiveStatus(agentId, {
+            status: String(msg.status) === 'idle' ? 'idle' : 'waiting',
+            phase: 'idle',
+            currentTool: null,
+            toolArgsSummary: String(msg.status).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
+          });
         }
       });
 
@@ -2493,18 +2590,49 @@ export class AgentRuntime implements AgentRuntimeContract {
       // per-item green-light activity for items whose scheduledTaskId matches.
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
+        this.updateLiveStatus(agentId, {
+          status: 'waiting',
+          phase: 'idle',
+          currentTool: null,
+          toolArgsSummary: 'scheduled task started',
+        });
+        void this.resolveWorkItemIdForTask(event.taskId).then((workItemId) => {
+          if (workItemId) {
+            this.updateLiveStatus(agentId, { workItemId });
+          }
+        });
         void this.updateItemActivityForTask(event.taskId, true);
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        this.updateLiveStatus(agentId, {
+          status: 'idle',
+          phase: 'done',
+          currentTool: null,
+          lastToolResult: event.result?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
+          toolArgsSummary: 'scheduled task completed',
+        });
         void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        this.updateLiveStatus(agentId, {
+          status: 'error',
+          phase: 'error',
+          currentTool: null,
+          lastToolResult: event.error?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
+          toolArgsSummary: 'scheduled task failed',
+        });
         void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        this.updateLiveStatus(agentId, {
+          status: 'idle',
+          phase: 'idle',
+          currentTool: null,
+          toolArgsSummary: 'scheduled task skipped',
+        });
       });
 
       if (didUpdateRecord) {

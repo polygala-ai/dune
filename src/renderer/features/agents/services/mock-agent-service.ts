@@ -907,6 +907,7 @@ export function createMockAgentRuntime(runtimeInfo?: AgentRuntimeInfo): AgentRun
   const service = new MockAgentService(runtimeInfo);
 
   return {
+    getLiveStatuses: () => [],
     getSnapshot: () => service.getSnapshot(),
     reset: () => service.reset(),
     service,

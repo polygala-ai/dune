@@ -1,6 +1,9 @@
 // Desktop runtime controller and backend fallback wiring.
 
 import type {
+  AgentActivityStatus,
+} from '@/shared/agents/agent-activity';
+import type {
   AgentRuntimeContract,
   AgentServiceListener,
   AgentServiceSnapshot,
@@ -88,6 +91,11 @@ export class DesktopRuntimeController {
   /** Returns snapshot. */
   getSnapshot(): AgentServiceSnapshot {
     return this.activeRuntime.getSnapshot();
+  }
+
+  /** Returns runtime-derived live agent statuses. */
+  getLiveStatuses(): AgentActivityStatus[] {
+    return this.activeRuntime.getLiveStatuses();
   }
 
   /** Subscribes to desktop runtime updates. */

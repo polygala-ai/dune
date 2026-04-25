@@ -5,11 +5,12 @@ export interface AgentActivityStatus {
   updatedAt: string;
   agentId: string;
   agentName: string;
-  status: 'working' | 'idle' | 'done' | 'error';
+  status: 'idle' | 'thinking' | 'tool-calling' | 'waiting' | 'done' | 'error';
   phase: 'tool_call_start' | 'tool_call_done' | 'idle' | 'done' | 'error';
   currentTool: string | null;
   toolArgsSummary: string | null;
   lastToolDurationMs: number | null;
+  lastToolResult: string | null;
   turnCount: number;
   workItemId: string | null;
   workItemTitle: string | null;

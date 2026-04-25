@@ -1,6 +1,7 @@
 // Renderer-side agent runtime adapter.
 
 import type { DesktopBridge } from '@/shared/electron/desktop-bridge';
+import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 import type {
   AgentRuntimeContract,
   AgentServiceListener,
@@ -209,6 +210,11 @@ class BridgeAgentRuntime implements AgentRuntimeContract {
       runtimeInfo: { ...this.snapshot.runtimeInfo },
       telegramSetupSessions: this.snapshot.telegramSetupSessions.map(cloneTelegramSetupSession),
     };
+  }
+
+  /** Returns the latest activity statuses exposed through the desktop bridge. */
+  getLiveStatuses(): AgentActivityStatus[] {
+    return [];
   }
 
   /** Subscribes to bridge agent updates. */

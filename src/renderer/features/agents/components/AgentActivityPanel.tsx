@@ -84,8 +84,15 @@ function getActivitySummary(status: AgentActivityStatus) {
     const durationSuffix = status.lastToolDurationMs === null
       ? ''
       : ` · ${status.lastToolDurationMs}ms`;
+    const resultSuffix = status.lastToolResult
+      ? ` · ${status.lastToolResult}`
+      : '';
 
-    return `Last: ${status.toolArgsSummary}${durationSuffix}`;
+    return `Last: ${status.toolArgsSummary}${durationSuffix}${resultSuffix}`;
+  }
+
+  if (status.lastToolResult) {
+    return `Last result: ${status.lastToolResult}`;
   }
 
   return 'Idle';
