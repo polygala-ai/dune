@@ -62,7 +62,55 @@ function getStatusDotClass(status: AgentActivityStatus, now: number) {
     return 'bg-amber-400';
   }
 
+  if (status.status === 'thinking') {
+    return 'bg-sky-500';
+  }
+
+  if (status.status === 'tool-calling') {
+    return 'bg-violet-500';
+  }
+
+  if (status.status === 'waiting') {
+    return 'bg-amber-400';
+  }
+
   return 'bg-emerald-500';
+}
+
+function getStatusLabel(status: AgentActivityStatus['status']) {
+  switch (status) {
+    case 'thinking':
+      return 'Thinking';
+    case 'tool-calling':
+      return 'Tool calling';
+    case 'waiting':
+      return 'Waiting';
+    case 'done':
+      return 'Done';
+    case 'error':
+      return 'Error';
+    case 'idle':
+    default:
+      return 'Idle';
+  }
+}
+
+function getStatusBadgeClass(status: AgentActivityStatus['status']) {
+  switch (status) {
+    case 'thinking':
+      return 'border-sky-500/30 bg-sky-500/10 text-sky-700';
+    case 'tool-calling':
+      return 'border-violet-500/30 bg-violet-500/10 text-violet-700';
+    case 'waiting':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+    case 'done':
+      return 'border-red-500/30 bg-red-500/10 text-red-700';
+    case 'error':
+      return 'border-red-500/30 bg-red-500/10 text-red-700';
+    case 'idle':
+    default:
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700';
+  }
 }
 
 function getActivitySummary(status: AgentActivityStatus) {
@@ -84,11 +132,8 @@ function getActivitySummary(status: AgentActivityStatus) {
     const durationSuffix = status.lastToolDurationMs === null
       ? ''
       : ` · ${status.lastToolDurationMs}ms`;
-    const resultSuffix = status.lastToolResult
-      ? ` · ${status.lastToolResult}`
-      : '';
 
-    return `Last: ${status.toolArgsSummary}${durationSuffix}${resultSuffix}`;
+    return `Last: ${status.toolArgsSummary}${durationSuffix}`;
   }
 
   if (status.lastToolResult) {
@@ -260,8 +305,23 @@ export function AgentActivityPanel() {
                               Work item · <span className="text-app-text">{workItemTitle}</span>
                             </div>
                           ) : null}
-                          <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-app-muted">
-                            {status.status} · turn {status.turnCount}
+                          {status.lastToolResult ? (
+                            <div className="mt-1 text-xs leading-5 text-app-muted">
+                              Result · <span className="text-app-text">{status.lastToolResult}</span>
+                            </div>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-app-muted">
+                            <span
+                              className={cn(
+                                'rounded-full border px-2 py-0.5 font-medium',
+                                getStatusBadgeClass(status.status),
+                              )}
+                            >
+                              {getStatusLabel(status.status)}
+                            </span>
+                            <span className="uppercase tracking-[0.12em]">
+                              turn {status.turnCount}
+                            </span>
                           </div>
                         </div>
                       </div>

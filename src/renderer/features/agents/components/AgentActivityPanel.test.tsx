@@ -48,7 +48,10 @@ describe('AgentActivityPanel', () => {
       ...window.duneDesktop,
       platform: window.duneDesktop?.platform ?? 'darwin',
       getAgentActivity: vi.fn(async () => [
-        createActivityStatus({ workItemId: firstItem?.id ?? null }),
+        createActivityStatus({
+          lastToolResult: '{"ok":true}',
+          workItemId: firstItem?.id ?? null,
+        }),
       ]),
       subscribeAgentActivity: vi.fn(() => () => undefined),
     };
@@ -57,6 +60,8 @@ describe('AgentActivityPanel', () => {
 
     expect(await screen.findByText('Navigator')).toBeInTheDocument();
     expect(screen.getByText('Read · file: status.json')).toBeInTheDocument();
+    expect(screen.getByText('{"ok":true}')).toBeInTheDocument();
+    expect(screen.getByText('Tool calling')).toBeInTheDocument();
     expect(screen.getByText(firstItem?.title ?? '')).toBeInTheDocument();
   });
 

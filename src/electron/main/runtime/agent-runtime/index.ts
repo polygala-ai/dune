@@ -113,7 +113,7 @@ const STREAMING_IDLE_WINDOW_MS = 320;
 const AGENTLITE_LOCK_RETRY_DELAY_MS = 250;
 const AGENTLITE_LOCK_RETRY_ATTEMPTS = 20;
 const MAX_ACTIVITY_EVENTS = 50;
-const MAX_TOOL_RESULT_SUMMARY_LENGTH = 500;
+const MAX_TOOL_RESULT_SUMMARY_LENGTH = 200;
 const MAX_TOOL_ARGS_SUMMARY_LENGTH = 200;
 const MAX_LIVE_TRANSCRIPT_MESSAGES = 40;
 const MAX_ROLLING_SUMMARY_MESSAGES = 24;
@@ -1730,7 +1730,8 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private async updateItemActivityForTask(taskId: string, isWorking: boolean): Promise<void> {
-    const itemId = await this.resolveWorkItemIdForTask(taskId);
+    const item = await this.resolveWorkItemForTask(taskId);
+    const itemId = item?.id ?? null;
 
     if (!itemId) {
       return;
@@ -1750,14 +1751,37 @@ export class AgentRuntime implements AgentRuntimeContract {
   }
 
   private async resolveWorkItemIdForTask(taskId: string): Promise<string | null> {
+    return (await this.resolveWorkItemForTask(taskId))?.id ?? null;
+  }
+
+  private async resolveWorkItemForTask(
+    taskId: string,
+  ): Promise<{ id: string; title: string | null } | null> {
     const workflowStore = this.actionServices?.workflowStore;
 
     if (!workflowStore) {
       return null;
     }
 
-    const snapshot = await workflowStore.get<{ items?: Array<{ id?: string; scheduledTaskId?: string | null }> }>('snapshot');
-    return snapshot?.items?.find((item) => item?.scheduledTaskId === taskId)?.id ?? null;
+    const snapshot = await workflowStore.get<{
+      items?: Array<{
+        id?: string;
+        scheduledTaskId?: string | null;
+        title?: string | null;
+      }>;
+    }>('snapshot');
+    const item = snapshot?.items?.find((entry) => entry?.scheduledTaskId === taskId);
+
+    if (!item?.id) {
+      return null;
+    }
+
+    return {
+      id: item.id,
+      title: typeof item.title === 'string' && item.title.trim().length > 0
+        ? item.title
+        : null,
+    };
   }
 
   private async dispatchAgentInput(
@@ -2481,6 +2505,15 @@ export class AgentRuntime implements AgentRuntimeContract {
         });
       });
 
+      alAgent.on('run.tool_progress', (event) => {
+        this.updateLiveStatus(agentId, {
+          status: 'tool-calling',
+          phase: 'tool_call_start',
+          currentTool: event.toolName,
+          lastToolDurationMs: Math.round(event.elapsedSeconds * 1000),
+        });
+      });
+
       alAgent.on('run.subagent', (event) => {
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2596,9 +2629,12 @@ export class AgentRuntime implements AgentRuntimeContract {
           currentTool: null,
           toolArgsSummary: 'scheduled task started',
         });
-        void this.resolveWorkItemIdForTask(event.taskId).then((workItemId) => {
-          if (workItemId) {
-            this.updateLiveStatus(agentId, { workItemId });
+        void this.resolveWorkItemForTask(event.taskId).then((workItem) => {
+          if (workItem) {
+            this.updateLiveStatus(agentId, {
+              workItemId: workItem.id,
+              workItemTitle: workItem.title,
+            });
           }
         });
         void this.updateItemActivityForTask(event.taskId, true);
