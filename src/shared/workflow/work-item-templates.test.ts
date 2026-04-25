@@ -41,22 +41,22 @@ describe('work item templates', () => {
       true,
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
-      ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Verify fix'],
-      ['Design', 'Implement', 'Write tests', 'Open PR'],
-      ['Read diff', 'Run tests', 'Leave review comments', 'Approve or request changes'],
+      ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
+      ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write tests', 'Verify fix'],
+      ['Design', 'Implement', 'Write tests', 'Code review', 'Deploy'],
+      ['Read the code', 'Check for bugs', 'Check style/conventions', 'Write review comments'],
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.titlePattern)).toEqual([
-      'Research [topic]',
-      'Fix [bug description]',
-      'Implement [feature]',
-      'Review [PR/branch]',
+      'Research: [topic]',
+      'Fix: [bug description]',
+      'Feature: [name]',
+      'Review: [PR/branch name]',
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.briefTemplate)).toEqual([
-      'Research [topic]. Summarize findings and produce a report.',
-      'Fix [bug description]. Steps to reproduce: [steps]. Expected: [expected].',
-      'Implement [feature]. Requirements:\n1. [req1]\n2. [req2]',
-      'Review [PR/branch]. Check for correctness, style, test coverage.',
+      'Research and summarize findings on...',
+      'Steps to reproduce:\n\nExpected behavior:\n\nActual behavior:',
+      'Requirements:\n\nAcceptance criteria:',
+      'Review the following code for correctness, style, and best practices.',
     ]);
   });
 
@@ -141,9 +141,9 @@ describe('work item templates', () => {
     }
 
     expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
-      brief: 'Research [topic]. Summarize findings and produce a report.',
-      taskTitles: ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
-      title: 'Research [topic]',
+      brief: 'Research and summarize findings on...',
+      taskTitles: ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
+      title: 'Research: [topic]',
     });
   });
 

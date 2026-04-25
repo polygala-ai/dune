@@ -231,8 +231,8 @@ describe('work item templates settings model', () => {
   it('parses the public template data model without display names', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       {
-        defaultAgentId: 'agent-research',
-        briefTemplate: 'Research this topic.',
+        defaultAgent: 'agent-research',
+        brief: 'Research this topic.',
         id: 'public-template',
         defaultTasks: ['Read', 'Summarize'],
         titlePattern: 'Research: topic',
@@ -272,16 +272,16 @@ describe('work item templates settings model', () => {
     expect(serialized).toContain('"builtin-bug-fix"');
     expect(JSON.parse(serialized)).toEqual([
       {
-        briefTemplate: 'Keep this',
-        defaultAgentId: 'agent-custom',
+        brief: 'Keep this',
+        defaultAgent: 'agent-custom',
         defaultTasks: ['One'],
         id: 'custom-template',
         name: 'Custom template',
         titlePattern: 'Custom: ',
       },
       {
-        briefTemplate: 'Include this',
-        defaultAgentId: null,
+        brief: 'Include this',
+        defaultAgent: null,
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Bug fix',

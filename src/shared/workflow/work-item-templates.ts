@@ -34,47 +34,47 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    briefTemplate: 'Research [topic]. Summarize findings and produce a report.',
+    briefTemplate: 'Research and summarize findings on...',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
+    defaultTasks: ['Define scope', 'Gather sources', 'Analyze findings', 'Write summary'],
     id: 'builtin-research-task',
     name: 'Research task',
-    titlePattern: 'Research [topic]',
+    titlePattern: 'Research: [topic]',
     updatedAt: 0,
   },
   {
-    briefTemplate: 'Fix [bug description]. Steps to reproduce: [steps]. Expected: [expected].',
+    briefTemplate: 'Steps to reproduce:\n\nExpected behavior:\n\nActual behavior:',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Verify fix'],
+    defaultTasks: ['Reproduce the bug', 'Identify root cause', 'Implement fix', 'Write tests', 'Verify fix'],
     id: 'builtin-bug-fix',
     name: 'Bug fix',
-    titlePattern: 'Fix [bug description]',
+    titlePattern: 'Fix: [bug description]',
     updatedAt: 0,
   },
   {
-    briefTemplate: 'Implement [feature]. Requirements:\n1. [req1]\n2. [req2]',
+    briefTemplate: 'Requirements:\n\nAcceptance criteria:',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Design', 'Implement', 'Write tests', 'Open PR'],
+    defaultTasks: ['Design', 'Implement', 'Write tests', 'Code review', 'Deploy'],
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
-    titlePattern: 'Implement [feature]',
+    titlePattern: 'Feature: [name]',
     updatedAt: 0,
   },
   {
-    briefTemplate: 'Review [PR/branch]. Check for correctness, style, test coverage.',
+    briefTemplate: 'Review the following code for correctness, style, and best practices.',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
-    defaultTasks: ['Read diff', 'Run tests', 'Leave review comments', 'Approve or request changes'],
+    defaultTasks: ['Read the code', 'Check for bugs', 'Check style/conventions', 'Write review comments'],
     id: 'builtin-code-review',
     name: 'Code review',
-    titlePattern: 'Review [PR/branch]',
+    titlePattern: 'Review: [PR/branch name]',
     updatedAt: 0,
   },
 ];
@@ -147,6 +147,7 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
     createdAt: normalizeTimestamp(value.createdAt),
     defaultAgentId: normalizeOptionalAgentId(
       value.defaultAgentId
+        ?? value.defaultAgent
         ?? value.defaultAssigneeId
         ?? value.assignedAgentId
         ?? value.defaultAssignedAgentId

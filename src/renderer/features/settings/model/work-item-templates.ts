@@ -19,8 +19,8 @@ export interface WorkItemTemplateStore {
 }
 
 interface ExportedWorkItemTemplate {
-  briefTemplate: string;
-  defaultAgentId: string | null;
+  brief: string;
+  defaultAgent: string | null;
   defaultTasks: string[];
   id: string;
   name: string;
@@ -128,8 +128,8 @@ export function parseImportedWorkItemTemplates(json: string) {
 export function serializeCustomWorkItemTemplates(templates: WorkItemTemplate[]) {
   const exportedTemplates: ExportedWorkItemTemplate[] = normalizeWorkItemTemplates(templates)
     .map((template) => ({
-      briefTemplate: template.briefTemplate,
-      defaultAgentId: template.defaultAgentId,
+      brief: template.briefTemplate,
+      defaultAgent: template.defaultAgentId,
       defaultTasks: [...template.defaultTasks],
       id: template.id,
       name: template.name,
