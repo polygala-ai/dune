@@ -5,14 +5,14 @@ import { normalizeWorkflowTaskTitles } from '@/shared/workflow/default-tasks';
 
 /** Work item template shape. */
 export interface WorkItemTemplate {
-  brief: string;
+  briefTemplate: string;
   builtIn: boolean;
   createdAt: number;
   /** Agent ID or exact agent name to assign when the template is used. */
   defaultAgentId: string | null;
+  defaultTasks: string[];
   id: string;
   name: string;
-  defaultTasks: string[];
   titlePattern: string;
   updatedAt: number;
 }
@@ -34,47 +34,47 @@ export interface WorkItemTemplatePrefill {
 /** Built-in work item templates. */
 export const BUILTIN_WORK_ITEM_TEMPLATES: WorkItemTemplate[] = [
   {
-    brief: 'Research {topic} and summarize findings. Identify credible sources, compare tradeoffs, and end with a concise recommendation.',
+    briefTemplate: 'Research [topic]. Summarize findings and produce a report.',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
+    defaultTasks: ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
     id: 'builtin-research-task',
     name: 'Research task',
-    defaultTasks: ['Define scope', 'Gather sources', 'Summarize findings', 'Write report'],
-    titlePattern: 'Research: {topic}',
+    titlePattern: 'Research [topic]',
     updatedAt: 0,
   },
   {
-    brief: 'Investigate the reported bug, document reproduction steps, identify the root cause, implement the fix, and add regression coverage.',
+    briefTemplate: 'Fix [bug description]. Steps to reproduce: [steps]. Expected: [expected].',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
+    defaultTasks: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Verify fix'],
     id: 'builtin-bug-fix',
     name: 'Bug fix',
-    defaultTasks: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Open PR'],
-    titlePattern: 'Fix: {bug}',
+    titlePattern: 'Fix [bug description]',
     updatedAt: 0,
   },
   {
-    brief: 'Implement the requested feature end to end. Match existing product patterns, update relevant tests, and call out any follow-up work.',
+    briefTemplate: 'Implement [feature]. Requirements:\n1. [req1]\n2. [req2]',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
+    defaultTasks: ['Design', 'Implement', 'Write tests', 'Open PR'],
     id: 'builtin-feature-implementation',
     name: 'Feature implementation',
-    defaultTasks: ['Write design doc', 'Implement feature', 'Write tests', 'Open PR'],
-    titlePattern: 'Implement: {feature}',
+    titlePattern: 'Implement [feature]',
     updatedAt: 0,
   },
   {
-    brief: 'Review the target change for correctness, regressions, maintainability, and missing tests. Prioritize actionable findings with file and line references.',
+    briefTemplate: 'Review [PR/branch]. Check for correctness, style, test coverage.',
     builtIn: true,
     createdAt: 0,
     defaultAgentId: null,
+    defaultTasks: ['Read diff', 'Run tests', 'Leave review comments', 'Approve or request changes'],
     id: 'builtin-code-review',
     name: 'Code review',
-    defaultTasks: ['Read diff', 'Run tests locally', 'Leave review comments'],
-    titlePattern: 'Review: {PR}',
+    titlePattern: 'Review [PR/branch]',
     updatedAt: 0,
   },
 ];
@@ -136,25 +136,25 @@ export function normalizeWorkItemTemplate(value: unknown): WorkItemTemplate | nu
       : [];
 
   return {
-    brief: typeof value.brief === 'string'
-      ? value.brief
-      : typeof value.briefSkeleton === 'string'
-        ? value.briefSkeleton
-        : typeof value.briefTemplate === 'string'
-          ? value.briefTemplate
+    briefTemplate: typeof value.briefTemplate === 'string'
+      ? value.briefTemplate
+      : typeof value.brief === 'string'
+        ? value.brief
+        : typeof value.briefSkeleton === 'string'
+          ? value.briefSkeleton
           : '',
     builtIn: value.builtIn === true || value.isBuiltIn === true || isBuiltInWorkItemTemplateId(id),
     createdAt: normalizeTimestamp(value.createdAt),
     defaultAgentId: normalizeOptionalAgentId(
       value.defaultAgentId
-        ?? value.assignedAgentId
         ?? value.defaultAssigneeId
+        ?? value.assignedAgentId
         ?? value.defaultAssignedAgentId
         ?? value.agentId,
     ) ?? null,
+    defaultTasks,
     id,
     name,
-    defaultTasks,
     titlePattern,
     updatedAt: normalizeTimestamp(value.updatedAt),
   };
@@ -186,7 +186,7 @@ export function normalizeWorkItemTemplates(value: unknown): WorkItemTemplate[] {
 /** Creates a prefilled work item draft from a template. */
 export function createWorkItemTemplatePrefill(template: WorkItemTemplate): WorkItemTemplatePrefill {
   return {
-    brief: template.brief,
+    brief: template.briefTemplate,
     taskTitles: [...template.defaultTasks],
     title: template.titlePattern,
   };

@@ -13,7 +13,7 @@ import {
 
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
-    brief: '',
+    briefTemplate: '',
     builtIn: false,
     createdAt: 0,
     defaultAgentId: null,
@@ -41,28 +41,28 @@ describe('work item templates', () => {
       true,
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
-      ['Define scope', 'Gather sources', 'Summarize findings', 'Write report'],
-      ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Open PR'],
-      ['Write design doc', 'Implement feature', 'Write tests', 'Open PR'],
-      ['Read diff', 'Run tests locally', 'Leave review comments'],
+      ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
+      ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Write test', 'Verify fix'],
+      ['Design', 'Implement', 'Write tests', 'Open PR'],
+      ['Read diff', 'Run tests', 'Leave review comments', 'Approve or request changes'],
     ]);
     expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.titlePattern)).toEqual([
-      'Research: {topic}',
-      'Fix: {bug}',
-      'Implement: {feature}',
-      'Review: {PR}',
+      'Research [topic]',
+      'Fix [bug description]',
+      'Implement [feature]',
+      'Review [PR/branch]',
     ]);
-    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.brief)).toEqual([
-      'Research {topic} and summarize findings. Identify credible sources, compare tradeoffs, and end with a concise recommendation.',
-      'Investigate the reported bug, document reproduction steps, identify the root cause, implement the fix, and add regression coverage.',
-      'Implement the requested feature end to end. Match existing product patterns, update relevant tests, and call out any follow-up work.',
-      'Review the target change for correctness, regressions, maintainability, and missing tests. Prioritize actionable findings with file and line references.',
+    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.briefTemplate)).toEqual([
+      'Research [topic]. Summarize findings and produce a report.',
+      'Fix [bug description]. Steps to reproduce: [steps]. Expected: [expected].',
+      'Implement [feature]. Requirements:\n1. [req1]\n2. [req2]',
+      'Review [PR/branch]. Check for correctness, style, test coverage.',
     ]);
   });
 
   it('normalizes templates and strips invalid values', () => {
     expect(normalizeWorkItemTemplate({
-      brief: 'Investigate the issue.',
+      briefTemplate: 'Investigate the issue.',
       builtIn: false,
       createdAt: 123,
       defaultAgentId: ' agent-1 ',
@@ -72,7 +72,7 @@ describe('work item templates', () => {
       titlePattern: 'Research: ',
       updatedAt: 456,
     })).toEqual({
-      brief: 'Investigate the issue.',
+      briefTemplate: 'Investigate the issue.',
       builtIn: false,
       createdAt: 123,
       defaultAgentId: 'agent-1',
@@ -93,14 +93,14 @@ describe('work item templates', () => {
 
   it('normalizes legacy template field names', () => {
     expect(normalizeWorkItemTemplate({
-      brief: 'Legacy brief.',
+      briefTemplate: 'Legacy brief.',
       defaultAssignedAgentId: ' agent-legacy ',
       defaultTasks: ['Read'],
       id: 'legacy-template',
       name: 'Legacy template',
       titlePattern: 'Legacy: ',
     })).toEqual({
-      brief: 'Legacy brief.',
+      briefTemplate: 'Legacy brief.',
       builtIn: false,
       createdAt: 0,
       defaultAgentId: 'agent-legacy',
@@ -141,9 +141,9 @@ describe('work item templates', () => {
     }
 
     expect(createWorkItemTemplatePrefill(researchTemplate)).toEqual({
-      brief: 'Research {topic} and summarize findings. Identify credible sources, compare tradeoffs, and end with a concise recommendation.',
-      taskTitles: ['Define scope', 'Gather sources', 'Summarize findings', 'Write report'],
-      title: 'Research: {topic}',
+      brief: 'Research [topic]. Summarize findings and produce a report.',
+      taskTitles: ['Define scope', 'Research sources', 'Synthesize findings', 'Write report'],
+      title: 'Research [topic]',
     });
   });
 

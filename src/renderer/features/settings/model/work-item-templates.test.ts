@@ -30,7 +30,7 @@ class MemoryStore implements WorkItemTemplateStore {
 
 function customTemplate(overrides: Partial<WorkItemTemplate> = {}): WorkItemTemplate {
   return {
-    brief: 'Custom brief',
+    briefTemplate: 'Custom brief',
     builtIn: false,
     createdAt: 0,
     defaultAgentId: null,
@@ -56,7 +56,7 @@ describe('work item templates settings model', () => {
         defaultTasks: ['First', 'Second'],
       }),
       {
-        brief: 'Should be filtered',
+        briefTemplate: 'Should be filtered',
         builtIn: true,
         defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
@@ -77,7 +77,7 @@ describe('work item templates settings model', () => {
 
     const saved = await saveCustomWorkItemTemplates(store, [
       customTemplate({
-        brief: 'Investigate',
+        briefTemplate: 'Investigate',
         defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
         id: ' custom-template ',
         name: ' Custom template ',
@@ -87,7 +87,7 @@ describe('work item templates settings model', () => {
 
     expect(saved).toEqual([
       customTemplate({
-        brief: 'Investigate',
+        briefTemplate: 'Investigate',
         defaultTasks: ['Scope', 'Write summary'],
         id: 'custom-template',
         name: 'Custom template',
@@ -123,14 +123,14 @@ describe('work item templates settings model', () => {
 
     await store.set('itemTemplates', [
       customTemplate({
-        brief: 'Legacy stored brief',
+        briefTemplate: 'Legacy stored brief',
         id: 'legacy-custom-template',
       }),
     ]);
 
     await expect(loadCustomWorkItemTemplates(store)).resolves.toEqual([
       customTemplate({
-        brief: 'Legacy stored brief',
+        briefTemplate: 'Legacy stored brief',
         id: 'legacy-custom-template',
       }),
     ]);
@@ -140,7 +140,7 @@ describe('work item templates settings model', () => {
       expect.objectContaining({ builtIn: true, id: 'builtin-feature-implementation' }),
       expect.objectContaining({ builtIn: true, id: 'builtin-code-review' }),
       customTemplate({
-        brief: 'Legacy stored brief',
+        briefTemplate: 'Legacy stored brief',
         id: 'legacy-custom-template',
       }),
     ]);
@@ -151,14 +151,14 @@ describe('work item templates settings model', () => {
 
     await store.set('workItemTemplates', [
       customTemplate({
-        brief: 'Older legacy stored brief',
+        briefTemplate: 'Older legacy stored brief',
         id: 'older-legacy-custom-template',
       }),
     ]);
 
     await expect(loadCustomWorkItemTemplates(store)).resolves.toEqual([
       customTemplate({
-        brief: 'Older legacy stored brief',
+        briefTemplate: 'Older legacy stored brief',
         id: 'older-legacy-custom-template',
       }),
     ]);
@@ -193,14 +193,14 @@ describe('work item templates settings model', () => {
   it('parses imported templates from JSON and filters built-ins', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       customTemplate({
-        brief: 'Imported brief',
+        briefTemplate: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
         titlePattern: 'Import: ',
       }),
       {
-        brief: 'Built-in copy',
+        briefTemplate: 'Built-in copy',
         builtIn: true,
         defaultTasks: ['Ignore'],
         id: 'builtin-bug-fix',
@@ -209,7 +209,7 @@ describe('work item templates settings model', () => {
       },
     ]))).toEqual([
       customTemplate({
-        brief: 'Imported brief',
+        briefTemplate: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
@@ -232,7 +232,7 @@ describe('work item templates settings model', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       {
         defaultAgentId: 'agent-research',
-        brief: 'Research this topic.',
+        briefTemplate: 'Research this topic.',
         id: 'public-template',
         defaultTasks: ['Read', 'Summarize'],
         titlePattern: 'Research: topic',
@@ -240,7 +240,7 @@ describe('work item templates settings model', () => {
     ]))).toEqual([
       customTemplate({
         defaultAgentId: 'agent-research',
-        brief: 'Research this topic.',
+        briefTemplate: 'Research this topic.',
         id: 'public-template',
         name: 'Research: topic',
         defaultTasks: ['Read', 'Summarize'],
@@ -252,10 +252,11 @@ describe('work item templates settings model', () => {
   it('serializes all normalized templates', () => {
     const serialized = serializeCustomWorkItemTemplates([
       customTemplate({
-        brief: 'Keep this',
+        defaultAgentId: 'agent-custom',
+        briefTemplate: 'Keep this',
       }),
       {
-        brief: 'Include this',
+        briefTemplate: 'Include this',
         builtIn: true,
         createdAt: 0,
         defaultAgentId: null,
@@ -269,13 +270,34 @@ describe('work item templates settings model', () => {
 
     expect(serialized).toContain('"custom-template"');
     expect(serialized).toContain('"builtin-bug-fix"');
+    expect(JSON.parse(serialized)).toEqual([
+      {
+        briefTemplate: 'Keep this',
+        defaultAgentId: 'agent-custom',
+        defaultTasks: ['One'],
+        id: 'custom-template',
+        name: 'Custom template',
+        titlePattern: 'Custom: ',
+      },
+      {
+        briefTemplate: 'Include this',
+        defaultAgentId: null,
+        defaultTasks: ['Ignored'],
+        id: 'builtin-bug-fix',
+        name: 'Bug fix',
+        titlePattern: 'Fix: ',
+      },
+    ]);
+    expect(serialized).not.toContain('builtIn');
+    expect(serialized).not.toContain('createdAt');
+    expect(serialized).not.toContain('updatedAt');
   });
 
   it('upserts imported templates by ID and preserves order', () => {
     expect(upsertImportedWorkItemTemplates(
       [
         customTemplate({
-          brief: 'Original brief',
+          briefTemplate: 'Original brief',
           defaultTasks: ['One'],
           id: 'template-a',
           name: 'Template A',
@@ -284,14 +306,14 @@ describe('work item templates settings model', () => {
       ],
       [
         customTemplate({
-          brief: 'Updated brief',
+          briefTemplate: 'Updated brief',
           defaultTasks: ['Two'],
           id: 'template-a',
           name: 'Template A',
           titlePattern: 'Updated: ',
         }),
         customTemplate({
-          brief: 'New brief',
+          briefTemplate: 'New brief',
           defaultTasks: ['Three'],
           id: 'template-b',
           name: 'Template B',
@@ -300,14 +322,14 @@ describe('work item templates settings model', () => {
       ],
     )).toEqual([
       customTemplate({
-        brief: 'Updated brief',
+        briefTemplate: 'Updated brief',
         defaultTasks: ['Two'],
         id: 'template-a',
         name: 'Template A',
         titlePattern: 'Updated: ',
       }),
       customTemplate({
-        brief: 'New brief',
+        briefTemplate: 'New brief',
         defaultTasks: ['Three'],
         id: 'template-b',
         name: 'Template B',

@@ -18,6 +18,15 @@ export interface WorkItemTemplateStore {
   set?: <T>(key: string, value: T) => Promise<void>;
 }
 
+interface ExportedWorkItemTemplate {
+  briefTemplate: string;
+  defaultAgentId: string | null;
+  defaultTasks: string[];
+  id: string;
+  name: string;
+  titlePattern: string;
+}
+
 /** Normalizes custom work item templates. */
 export function normalizeCustomWorkItemTemplates(value: unknown): WorkItemTemplate[] {
   return normalizeWorkItemTemplates(value)
@@ -117,7 +126,17 @@ export function parseImportedWorkItemTemplates(json: string) {
 
 /** Serializes work item templates to JSON. */
 export function serializeCustomWorkItemTemplates(templates: WorkItemTemplate[]) {
-  return JSON.stringify(normalizeWorkItemTemplates(templates), null, 2);
+  const exportedTemplates: ExportedWorkItemTemplate[] = normalizeWorkItemTemplates(templates)
+    .map((template) => ({
+      briefTemplate: template.briefTemplate,
+      defaultAgentId: template.defaultAgentId,
+      defaultTasks: [...template.defaultTasks],
+      id: template.id,
+      name: template.name,
+      titlePattern: template.titlePattern,
+    }));
+
+  return JSON.stringify(exportedTemplates, null, 2);
 }
 
 /** Upserts imported work item templates into the current custom set. */

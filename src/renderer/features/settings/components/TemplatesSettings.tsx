@@ -124,7 +124,7 @@ function TemplateFormDialog({
 
     const template = state?.template ?? null;
 
-    setBrief(template?.brief ?? '');
+    setBrief(template?.briefTemplate ?? '');
     setDefaultAgentId(template?.defaultAgentId ?? '');
     setName(template?.name ?? '');
     setRawTasks(template?.defaultTasks.join('\n') ?? '');
@@ -251,7 +251,7 @@ function TemplateFormDialog({
               const existingTemplate = state?.template;
               const now = Date.now();
               const nextTemplate: WorkItemTemplate = {
-                brief,
+                briefTemplate: brief,
                 builtIn: false,
                 createdAt: existingTemplate?.createdAt ?? now,
                 defaultAgentId: defaultAgentId.trim() || null,
@@ -556,7 +556,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
                 </div>
                 <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                  {template.brief || 'No default brief.'}
+                  {template.briefTemplate || 'No default brief.'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {template.defaultTasks.map((task) => (
@@ -660,7 +660,7 @@ export function TemplatesSettings(props: SettingsSectionComponentProps) {
                   </div>
 
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-app-text">
-                    {template.brief || 'No default brief.'}
+                    {template.briefTemplate || 'No default brief.'}
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">
