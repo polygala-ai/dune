@@ -18,19 +18,25 @@ describe('work item templates', () => {
       'Feature implementation',
       'Code review',
     ]);
+    expect(BUILTIN_WORK_ITEM_TEMPLATES.map((template) => template.defaultTasks)).toEqual([
+      ['Understand', 'Research', 'Synthesize', 'Write report'],
+      ['Reproduce', 'Root cause analysis', 'Fix', 'Test', 'PR'],
+      ['Design', 'Review design', 'Implement', 'Test', 'PR'],
+      ['Read brief', 'Review code', 'Write feedback'],
+    ]);
   });
 
   it('normalizes templates and strips invalid values', () => {
     expect(normalizeWorkItemTemplate({
-      brief: 'Investigate the issue.',
-      defaultAgentId: ' agent-1 ',
+      briefTemplate: 'Investigate the issue.',
+      defaultAssignedAgentId: ' agent-1 ',
       defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
       id: ' template-1 ',
       name: ' Research helper ',
       titlePattern: 'Research: ',
     })).toEqual({
-      brief: 'Investigate the issue.',
-      defaultAgentId: 'agent-1',
+      briefTemplate: 'Investigate the issue.',
+      defaultAssignedAgentId: 'agent-1',
       defaultTasks: ['Scope', 'Write summary'],
       id: 'template-1',
       name: 'Research helper',
@@ -45,17 +51,35 @@ describe('work item templates', () => {
     })).toBeNull();
   });
 
+  it('normalizes legacy template field names', () => {
+    expect(normalizeWorkItemTemplate({
+      brief: 'Legacy brief.',
+      defaultAgentId: ' agent-legacy ',
+      defaultTasks: ['Read'],
+      id: 'legacy-template',
+      name: 'Legacy template',
+      titlePattern: 'Legacy: ',
+    })).toEqual({
+      briefTemplate: 'Legacy brief.',
+      defaultAssignedAgentId: 'agent-legacy',
+      defaultTasks: ['Read'],
+      id: 'legacy-template',
+      name: 'Legacy template',
+      titlePattern: 'Legacy: ',
+    });
+  });
+
   it('deduplicates templates by ID', () => {
     expect(normalizeWorkItemTemplates([
       {
-        brief: '',
+        briefTemplate: '',
         defaultTasks: ['One'],
         id: 'template-1',
         name: 'Alpha',
         titlePattern: '',
       },
       {
-        brief: '',
+        briefTemplate: '',
         defaultTasks: ['Two'],
         id: 'template-1',
         name: 'Duplicate',
@@ -63,7 +87,7 @@ describe('work item templates', () => {
       },
     ])).toEqual([
       {
-        brief: '',
+        briefTemplate: '',
         defaultTasks: ['One'],
         id: 'template-1',
         name: 'Alpha',
@@ -74,16 +98,16 @@ describe('work item templates', () => {
 
   it('creates prefill values from a template', () => {
     expect(createWorkItemTemplatePrefill(BUILTIN_WORK_ITEM_TEMPLATES[0]!)).toEqual({
-      brief: 'Research question/topic:\n\nGoal:\n\nDeliverables:',
-      taskTitles: ['Define scope', 'Gather sources', 'Synthesize findings', 'Write summary'],
+      briefTemplate: 'Research question/topic:\n\nGoal:\n\nSources to check:\n\nSynthesis:\n\nReport:',
+      taskTitles: ['Understand', 'Research', 'Synthesize', 'Write report'],
       title: 'Research: ',
     });
   });
 
   it('resolves the default agent only when it matches the project scope', () => {
     const template = {
-      brief: '',
-      defaultAgentId: 'agent-alpha',
+      briefTemplate: '',
+      defaultAssignedAgentId: 'agent-alpha',
       defaultTasks: ['Investigate'],
       id: 'custom-template',
       name: 'Scoped template',
@@ -111,8 +135,8 @@ describe('work item templates', () => {
 
   it('resolves the default agent by exact name when an ID is not stored', () => {
     const template = {
-      brief: '',
-      defaultAgentId: 'Review agent',
+      briefTemplate: '',
+      defaultAssignedAgentId: 'Review agent',
       defaultTasks: ['Review'],
       id: 'custom-review-template',
       name: 'Review template',

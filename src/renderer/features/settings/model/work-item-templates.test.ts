@@ -31,14 +31,14 @@ describe('work item templates settings model', () => {
 
     await store.set(WORK_ITEM_TEMPLATES_KEY, [
       {
-        brief: 'Custom brief',
+        briefTemplate: 'Custom brief',
         defaultTasks: ['First', 'Second'],
         id: 'custom-template',
         name: 'Custom template',
         titlePattern: 'Custom: ',
       },
       {
-        brief: 'Should be filtered',
+        briefTemplate: 'Should be filtered',
         defaultTasks: ['Ignore me'],
         id: 'builtin-research-task',
         name: 'Duplicate built-in',
@@ -48,7 +48,7 @@ describe('work item templates settings model', () => {
 
     await expect(loadCustomWorkItemTemplates(store)).resolves.toEqual([
       {
-        brief: 'Custom brief',
+        briefTemplate: 'Custom brief',
         defaultTasks: ['First', 'Second'],
         id: 'custom-template',
         name: 'Custom template',
@@ -62,7 +62,7 @@ describe('work item templates settings model', () => {
 
     const saved = await saveCustomWorkItemTemplates(store, [
       {
-        brief: 'Investigate',
+        briefTemplate: 'Investigate',
         defaultTasks: [' Scope ', '', 'Scope', 'Write summary'],
         id: ' custom-template ',
         name: ' Custom template ',
@@ -72,7 +72,7 @@ describe('work item templates settings model', () => {
 
     expect(saved).toEqual([
       {
-        brief: 'Investigate',
+        briefTemplate: 'Investigate',
         defaultTasks: ['Scope', 'Write summary'],
         id: 'custom-template',
         name: 'Custom template',
@@ -85,7 +85,7 @@ describe('work item templates settings model', () => {
   it('merges built-in templates ahead of custom templates', () => {
     expect(mergeWorkItemTemplates([
       {
-        brief: 'Custom brief',
+        briefTemplate: 'Custom brief',
         defaultTasks: ['One'],
         id: 'custom-template',
         name: 'Custom template',
@@ -103,7 +103,7 @@ describe('work item templates settings model', () => {
   it('parses imported templates from JSON', () => {
     expect(parseImportedWorkItemTemplates(JSON.stringify([
       {
-        brief: 'Imported brief',
+        briefTemplate: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
@@ -111,7 +111,7 @@ describe('work item templates settings model', () => {
       },
     ]))).toEqual([
       {
-        brief: 'Imported brief',
+        briefTemplate: 'Imported brief',
         defaultTasks: ['Read the diff'],
         id: 'imported-template',
         name: 'Imported template',
@@ -133,14 +133,14 @@ describe('work item templates settings model', () => {
   it('serializes only custom templates', () => {
     expect(serializeCustomWorkItemTemplates([
       {
-        brief: 'Keep this',
+        briefTemplate: 'Keep this',
         defaultTasks: ['One'],
         id: 'custom-template',
         name: 'Custom template',
         titlePattern: 'Custom: ',
       },
       {
-        brief: 'Drop this',
+        briefTemplate: 'Drop this',
         defaultTasks: ['Ignored'],
         id: 'builtin-bug-fix',
         name: 'Built-in copy',
@@ -153,7 +153,7 @@ describe('work item templates settings model', () => {
     expect(upsertImportedWorkItemTemplates(
       [
         {
-          brief: 'Original brief',
+          briefTemplate: 'Original brief',
           defaultTasks: ['One'],
           id: 'template-a',
           name: 'Template A',
@@ -162,14 +162,14 @@ describe('work item templates settings model', () => {
       ],
       [
         {
-          brief: 'Updated brief',
+          briefTemplate: 'Updated brief',
           defaultTasks: ['Two'],
           id: 'template-a',
           name: 'Template A',
           titlePattern: 'Updated: ',
         },
         {
-          brief: 'New brief',
+          briefTemplate: 'New brief',
           defaultTasks: ['Three'],
           id: 'template-b',
           name: 'Template B',
@@ -178,14 +178,14 @@ describe('work item templates settings model', () => {
       ],
     )).toEqual([
       {
-        brief: 'Updated brief',
+        briefTemplate: 'Updated brief',
         defaultTasks: ['Two'],
         id: 'template-a',
         name: 'Template A',
         titlePattern: 'Updated: ',
       },
       {
-        brief: 'New brief',
+        briefTemplate: 'New brief',
         defaultTasks: ['Three'],
         id: 'template-b',
         name: 'Template B',
