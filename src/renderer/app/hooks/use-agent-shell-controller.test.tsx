@@ -40,6 +40,7 @@ function createPresentedAgent(): PresentedAgent {
     },
     updatedAt: Date.now(),
     updatedLabel: 'Now',
+    workItemId: null,
     workspace: 'Prototype agent',
   };
 }

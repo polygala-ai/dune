@@ -6,11 +6,25 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppStore } from '@/renderer/app/store/use-app-store';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
-import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
+import type { AgentActivityEvent } from '@/renderer/features/agents/types';
 
 const PANEL_OPEN_STORAGE_KEY = 'dune.agent-activity-panel.open';
 const STALE_WARNING_MS = 5 * 60_000;
 const STALE_ERROR_MS = 15 * 60_000;
+const LIVE_ACTIVITY_WINDOW_MS = 15 * 60_000;
+const MAX_SUMMARY_LENGTH = 200;
+
+type LiveActivityStatus = 'idle' | 'thinking' | 'tool-calling' | 'waiting';
+
+interface LiveActivitySummary {
+  agentId: string;
+  agentName: string;
+  lastActivity: string;
+  lastToolResult: string | null;
+  status: LiveActivityStatus;
+  timestamp: number;
+  workItemTitle: string | null;
+}
 
 function readPanelOpenPreference() {
   try {
@@ -26,13 +40,7 @@ function readPanelOpenPreference() {
   }
 }
 
-function formatLastUpdated(updatedAt: string, now: number) {
-  const updatedAtMs = Date.parse(updatedAt);
-
-  if (!Number.isFinite(updatedAtMs)) {
-    return 'Unknown';
-  }
-
+function formatLastUpdated(updatedAtMs: number, now: number) {
   const ageMs = Math.max(0, now - updatedAtMs);
 
   if (ageMs < 60_000) {
@@ -50,11 +58,10 @@ function formatLastUpdated(updatedAt: string, now: number) {
   return `${Math.floor(ageMs / (24 * 60 * 60_000))}d ago`;
 }
 
-function getStatusDotClass(status: AgentActivityStatus, now: number) {
-  const updatedAtMs = Date.parse(status.updatedAt);
-  const ageMs = Number.isFinite(updatedAtMs) ? Math.max(0, now - updatedAtMs) : Number.POSITIVE_INFINITY;
+function getStatusDotClass(summary: LiveActivitySummary, now: number) {
+  const ageMs = Math.max(0, now - summary.timestamp);
 
-  if (status.status === 'error' || status.status === 'done' || ageMs >= STALE_ERROR_MS) {
+  if (ageMs >= STALE_ERROR_MS) {
     return 'bg-red-500';
   }
 
@@ -62,22 +69,22 @@ function getStatusDotClass(status: AgentActivityStatus, now: number) {
     return 'bg-amber-400';
   }
 
-  if (status.status === 'thinking') {
+  if (summary.status === 'thinking') {
     return 'bg-sky-500';
   }
 
-  if (status.status === 'tool-calling') {
+  if (summary.status === 'tool-calling') {
     return 'bg-violet-500';
   }
 
-  if (status.status === 'waiting') {
+  if (summary.status === 'waiting') {
     return 'bg-amber-400';
   }
 
   return 'bg-emerald-500';
 }
 
-function getStatusLabel(status: AgentActivityStatus['status']) {
+function getStatusLabel(status: LiveActivityStatus) {
   switch (status) {
     case 'thinking':
       return 'Thinking';
@@ -85,17 +92,13 @@ function getStatusLabel(status: AgentActivityStatus['status']) {
       return 'Tool calling';
     case 'waiting':
       return 'Waiting';
-    case 'done':
-      return 'Done';
-    case 'error':
-      return 'Error';
     case 'idle':
     default:
       return 'Idle';
   }
 }
 
-function getStatusBadgeClass(status: AgentActivityStatus['status']) {
+function getStatusBadgeClass(status: LiveActivityStatus) {
   switch (status) {
     case 'thinking':
       return 'border-sky-500/30 bg-sky-500/10 text-sky-700';
@@ -103,95 +106,42 @@ function getStatusBadgeClass(status: AgentActivityStatus['status']) {
       return 'border-violet-500/30 bg-violet-500/10 text-violet-700';
     case 'waiting':
       return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
-    case 'done':
-      return 'border-red-500/30 bg-red-500/10 text-red-700';
-    case 'error':
-      return 'border-red-500/30 bg-red-500/10 text-red-700';
     case 'idle':
     default:
       return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700';
   }
 }
 
-function getActivitySummary(status: AgentActivityStatus) {
-  if (status.currentTool) {
-    return status.toolArgsSummary
-      ? `${status.currentTool} · ${status.toolArgsSummary}`
-      : status.currentTool;
-  }
-
-  if (status.status === 'error') {
-    return 'Run ended with an error';
-  }
-
-  if (status.status === 'done') {
-    return 'Session finished';
-  }
-
-  if (status.toolArgsSummary) {
-    const durationSuffix = status.lastToolDurationMs === null
-      ? ''
-      : ` · ${status.lastToolDurationMs}ms`;
-
-    return `Last: ${status.toolArgsSummary}${durationSuffix}`;
-  }
-
-  if (status.lastToolResult) {
-    return `Last result: ${status.lastToolResult}`;
-  }
-
-  return 'Idle';
+function truncate(value: string, maxLength = MAX_SUMMARY_LENGTH) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
 }
 
-function getWorkItemTitle(
-  status: AgentActivityStatus,
-  titlesById: Map<string, string>,
-) {
-  if (status.workItemTitle) {
-    return status.workItemTitle;
+function describeEvent(event: AgentActivityEvent) {
+  const detail = event.detail?.trim();
+  return truncate(detail ? `${event.label} · ${detail}` : event.label);
+}
+
+function deriveStatus(event: AgentActivityEvent): LiveActivityStatus {
+  if (event.kind === 'tool' && !event.label.startsWith('result:')) {
+    return 'tool-calling';
   }
 
-  if (!status.workItemId) {
-    return null;
+  if (event.kind === 'status' && event.label === 'thinking') {
+    return 'thinking';
   }
 
-  return titlesById.get(status.workItemId) ?? null;
+  if (event.kind === 'status' && event.label === 'waiting') {
+    return 'waiting';
+  }
+
+  return 'idle';
 }
 
 export function AgentActivityPanel() {
+  const agents = useAppStore((state) => state.agents);
   const items = useAppStore((state) => state.items);
-  const [statuses, setStatuses] = useState<AgentActivityStatus[]>([]);
   const [isOpen, setIsOpen] = useState(() => readPanelOpenPreference());
   const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    let isDisposed = false;
-    let didReceiveLiveUpdate = false;
-
-    const load = async () => {
-      const initialStatuses = await window.duneDesktop?.getAgentActivity?.();
-
-      if (isDisposed || didReceiveLiveUpdate || !initialStatuses) {
-        return;
-      }
-
-      setStatuses(initialStatuses);
-      setNow(Date.now());
-    };
-
-    void load();
-
-    const unsubscribe = window.duneDesktop?.subscribeAgentActivity?.((nextStatuses) => {
-      didReceiveLiveUpdate = true;
-      setStatuses(nextStatuses);
-      setNow(Date.now());
-    });
-
-    return () => {
-      isDisposed = true;
-      unsubscribe?.();
-    };
-  }, []);
 
   useEffect(() => {
     try {
@@ -202,43 +152,47 @@ export function AgentActivityPanel() {
   }, [isOpen]);
 
   useEffect(() => {
-    const nextRefreshInMs = statuses
-      .map((status) => {
-        const updatedAtMs = Date.parse(status.updatedAt);
-
-        if (!Number.isFinite(updatedAtMs)) {
-          return null;
-        }
-
-        const ageMs = Math.max(0, now - updatedAtMs);
-
-        if (ageMs < STALE_WARNING_MS) {
-          return STALE_WARNING_MS - ageMs;
-        }
-
-        if (ageMs < STALE_ERROR_MS) {
-          return STALE_ERROR_MS - ageMs;
-        }
-
-        return null;
-      })
-      .filter((value): value is number => value !== null)
-      .sort((left, right) => left - right)[0];
-
-    if (nextRefreshInMs === undefined) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
+    const intervalId = window.setInterval(() => {
       setNow(Date.now());
-    }, Math.max(50, nextRefreshInMs + 50));
+    }, 30_000);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
     };
-  }, [now, statuses]);
+  }, []);
 
   const itemTitlesById = new Map(items.map((item) => [item.id, item.title] as const));
+  const summaries: LiveActivitySummary[] = agents
+    .map((agent) => {
+      const recentEvents = agent.activityEvents
+        .filter((event) => now - event.timestamp <= LIVE_ACTIVITY_WINDOW_MS)
+        .sort((left, right) => right.timestamp - left.timestamp);
+      const latestEvent = recentEvents[0];
+
+      if (!latestEvent) {
+        return null;
+      }
+
+      const latestToolResult = recentEvents.find(
+        (event) => event.kind === 'tool' && event.label.startsWith('result:'),
+      );
+
+      return {
+        agentId: agent.id,
+        agentName: agent.name,
+        lastActivity: describeEvent(latestEvent),
+        lastToolResult: latestToolResult?.detail
+          ? truncate(latestToolResult.detail)
+          : null,
+        status: deriveStatus(latestEvent),
+        timestamp: latestEvent.timestamp,
+        workItemTitle: agent.workItemId
+          ? itemTitlesById.get(agent.workItemId) ?? null
+          : null,
+      };
+    })
+    .filter((summary): summary is LiveActivitySummary => summary !== null)
+    .sort((left, right) => right.timestamp - left.timestamp);
 
   return (
     <section
@@ -251,7 +205,7 @@ export function AgentActivityPanel() {
           <div className="mt-1 flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-app-text">Agent activity</h2>
             <span className="rounded-full border border-app-border bg-app-card/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-app-muted">
-              {statuses.length}
+              {summaries.length}
             </span>
           </div>
         </div>
@@ -270,69 +224,62 @@ export function AgentActivityPanel() {
 
       {isOpen ? (
         <div className="max-h-56 overflow-y-auto px-6 pb-4">
-          {statuses.length === 0 ? (
+          {summaries.length === 0 ? (
             <div className="rounded-[18px] border border-dashed border-app-border bg-app-card/40 px-4 py-4 text-sm text-app-muted">
               No live agent activity yet.
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {statuses.map((status) => {
-                const workItemTitle = getWorkItemTitle(status, itemTitlesById);
-
-                return (
-                  <article
-                    className="rounded-[18px] border border-app-border bg-app-card/70 px-4 py-3"
-                    key={status.agentId}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full',
-                            getStatusDotClass(status, now),
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-app-text">
-                            {status.agentName}
-                          </div>
+              {summaries.map((summary) => (
+                <article
+                  className="rounded-[18px] border border-app-border bg-app-card/70 px-4 py-3"
+                  key={summary.agentId}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full',
+                          getStatusDotClass(summary, now),
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-app-text">
+                          {summary.agentName}
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-app-muted">
+                          {summary.lastActivity}
+                        </div>
+                        {summary.workItemTitle ? (
                           <div className="mt-1 text-xs leading-5 text-app-muted">
-                            {getActivitySummary(status)}
+                            Work item · <span className="text-app-text">{summary.workItemTitle}</span>
                           </div>
-                          {workItemTitle ? (
-                            <div className="mt-1 text-xs leading-5 text-app-muted">
-                              Work item · <span className="text-app-text">{workItemTitle}</span>
-                            </div>
-                          ) : null}
-                          {status.lastToolResult ? (
-                            <div className="mt-1 text-xs leading-5 text-app-muted">
-                              Result · <span className="text-app-text">{status.lastToolResult}</span>
-                            </div>
-                          ) : null}
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-app-muted">
-                            <span
-                              className={cn(
-                                'rounded-full border px-2 py-0.5 font-medium',
-                                getStatusBadgeClass(status.status),
-                              )}
-                            >
-                              {getStatusLabel(status.status)}
-                            </span>
-                            <span className="uppercase tracking-[0.12em]">
-                              turn {status.turnCount}
-                            </span>
+                        ) : null}
+                        {summary.lastToolResult ? (
+                          <div className="mt-1 text-xs leading-5 text-app-muted">
+                            Result: <span className="text-app-text">{summary.lastToolResult}</span>
                           </div>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-app-muted">
+                          <span
+                            className={cn(
+                              'rounded-full border px-2 py-0.5 font-medium',
+                              getStatusBadgeClass(summary.status),
+                            )}
+                          >
+                            {getStatusLabel(summary.status)}
+                          </span>
                         </div>
                       </div>
-
-                      <div className="shrink-0 text-[11px] text-app-muted">
-                        {formatLastUpdated(status.updatedAt, now)}
-                      </div>
                     </div>
-                  </article>
-                );
-              })}
+
+                    <div className="shrink-0 text-[11px] text-app-muted">
+                      {formatLastUpdated(summary.timestamp, now)}
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </div>

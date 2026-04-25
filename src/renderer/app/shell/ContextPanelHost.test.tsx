@@ -44,6 +44,7 @@ function createAgent(
     },
     updatedAt: Date.now(),
     updatedLabel: 'Now',
+    workItemId: null,
     workspace: 'Prototype agent',
     ...overrides,
   };

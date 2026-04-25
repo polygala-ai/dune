@@ -65,6 +65,7 @@ function createAgent(
     },
     updatedAt: 1,
     updatedLabel: 'Now',
+    workItemId: null,
     workspace: 'AgentLite agent',
     ...overrides,
   };

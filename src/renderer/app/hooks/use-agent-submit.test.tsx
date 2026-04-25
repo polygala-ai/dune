@@ -37,6 +37,7 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
       totalMessageCount: 0,
     },
     updatedAt: Date.now(),
+    workItemId: null,
     workspace: 'Prototype agent',
     ...overrides,
   };

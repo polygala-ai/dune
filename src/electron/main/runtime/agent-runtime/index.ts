@@ -1754,6 +1754,36 @@ export class AgentRuntime implements AgentRuntimeContract {
     return (await this.resolveWorkItemForTask(taskId))?.id ?? null;
   }
 
+  private async setAgentWorkItem(agentId: string, taskId: string): Promise<void> {
+    const item = await this.resolveWorkItemForTask(taskId);
+
+    if (!item?.id) {
+      return;
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? { ...agent, workItemId: item.id, updatedAt: this.now() }
+          : agent,
+      ),
+    };
+    this.emit();
+  }
+
+  private clearAgentWorkItem(agentId: string): void {
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? { ...agent, workItemId: null, updatedAt: this.now() }
+          : agent,
+      ),
+    };
+    this.emit();
+  }
+
   private async resolveWorkItemForTask(
     taskId: string,
   ): Promise<{ id: string; title: string | null } | null> {
@@ -2623,24 +2653,19 @@ export class AgentRuntime implements AgentRuntimeContract {
       // per-item green-light activity for items whose scheduledTaskId matches.
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
+        void this.updateItemActivityForTask(event.taskId, true);
+        void this.setAgentWorkItem(agentId, event.taskId);
         this.updateLiveStatus(agentId, {
           status: 'waiting',
           phase: 'idle',
           currentTool: null,
           toolArgsSummary: 'scheduled task started',
         });
-        void this.resolveWorkItemForTask(event.taskId).then((workItem) => {
-          if (workItem) {
-            this.updateLiveStatus(agentId, {
-              workItemId: workItem.id,
-              workItemTitle: workItem.title,
-            });
-          }
-        });
-        void this.updateItemActivityForTask(event.taskId, true);
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        void this.updateItemActivityForTask(event.taskId, false);
+        this.clearAgentWorkItem(agentId);
         this.updateLiveStatus(agentId, {
           status: 'idle',
           phase: 'done',
@@ -2648,10 +2673,11 @@ export class AgentRuntime implements AgentRuntimeContract {
           lastToolResult: event.result?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
           toolArgsSummary: 'scheduled task completed',
         });
-        void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        void this.updateItemActivityForTask(event.taskId, false);
+        this.clearAgentWorkItem(agentId);
         this.updateLiveStatus(agentId, {
           status: 'error',
           phase: 'error',
@@ -2659,7 +2685,6 @@ export class AgentRuntime implements AgentRuntimeContract {
           lastToolResult: event.error?.slice(0, MAX_TOOL_RESULT_SUMMARY_LENGTH) ?? null,
           toolArgsSummary: 'scheduled task failed',
         });
-        void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);

@@ -1,34 +1,58 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resetAppStore, useAppStore } from '@/renderer/app/store/use-app-store';
 import { createSeedWorkflowSnapshot } from '@/renderer/features/workflow/model/workflow-seed';
-import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
+import type { Agent, AgentActivityEvent } from '@/renderer/features/agents/types';
 
 import { AgentActivityPanel } from './AgentActivityPanel';
 
 const PANEL_OPEN_STORAGE_KEY = 'dune.agent-activity-panel.open';
 
-function createActivityStatus(
-  overrides: Partial<AgentActivityStatus> = {},
-): AgentActivityStatus {
+function createActivityEvent(
+  overrides: Partial<AgentActivityEvent> = {},
+): AgentActivityEvent {
   return {
-    schemaVersion: 1,
-    updatedAt: new Date().toISOString(),
-    agentId: 'agent-1',
-    agentName: 'Navigator',
-    status: 'tool-calling',
-    phase: 'tool_call_start',
-    currentTool: 'Read',
-    toolArgsSummary: 'file: status.json',
-    lastToolDurationMs: null,
-    lastToolResult: null,
-    turnCount: 3,
+    id: 'activity-1',
+    kind: 'tool',
+    label: 'Read',
+    detail: 'file: status.json',
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}
+
+function createAgent(overrides: Partial<Agent> = {}): Agent {
+  return {
+    activityEvents: [createActivityEvent()],
+    channel: {
+      canCompose: true,
+      id: 'dune-chat',
+      kind: 'built-in',
+      label: 'Dune chat',
+      status: 'ready',
+    },
+    codingEngineEvents: [],
+    contextCards: [],
+    definition: { archetype: 'custom', responsibilities: [] },
+    id: 'agent-1',
+    messages: [],
+    name: 'Navigator',
+    note: 'A durable agent workspace.',
+    preview: 'Ready for a first instruction.',
+    projectId: 'project-1',
+    status: 'ready',
+    telegram: null,
+    transcript: {
+      archivedMessageCount: 0,
+      hasOlderMessages: false,
+      rollingSummary: null,
+      totalMessageCount: 0,
+    },
+    updatedAt: Date.now(),
     workItemId: null,
-    workItemTitle: null,
-    sessionId: 'session-1',
-    sessionStartedAt: '2026-04-19T10:00:00.000Z',
+    workspace: 'AgentLite agent',
     ...overrides,
   };
 }
@@ -44,17 +68,23 @@ describe('AgentActivityPanel', () => {
     const [firstItem] = workflowSnapshot.items;
 
     useAppStore.getState().hydrateWorkflow(workflowSnapshot);
-    window.duneDesktop = {
-      ...window.duneDesktop,
-      platform: window.duneDesktop?.platform ?? 'darwin',
-      getAgentActivity: vi.fn(async () => [
-        createActivityStatus({
-          lastToolResult: '{"ok":true}',
+    useAppStore.setState({
+      agents: [
+        createAgent({
+          activityEvents: [
+            createActivityEvent({ id: 'tool-1', label: 'Read', detail: 'file: status.json' }),
+            createActivityEvent({
+              id: 'result-1',
+              kind: 'tool',
+              label: 'result:tool-1',
+              detail: '{"ok":true}',
+              timestamp: Date.now() - 1,
+            }),
+          ],
           workItemId: firstItem?.id ?? null,
         }),
-      ]),
-      subscribeAgentActivity: vi.fn(() => () => undefined),
-    };
+      ],
+    });
 
     render(<AgentActivityPanel />);
 
@@ -68,12 +98,7 @@ describe('AgentActivityPanel', () => {
   it('persists the open and closed state in local storage', async () => {
     const user = userEvent.setup();
 
-    window.duneDesktop = {
-      ...window.duneDesktop,
-      platform: window.duneDesktop?.platform ?? 'darwin',
-      getAgentActivity: vi.fn(async () => [createActivityStatus()]),
-      subscribeAgentActivity: vi.fn(() => () => undefined),
-    };
+    useAppStore.setState({ agents: [createAgent()] });
 
     render(<AgentActivityPanel />);
 
@@ -89,25 +114,13 @@ describe('AgentActivityPanel', () => {
     ).toBeInTheDocument();
   });
 
-  it('applies live updates from the desktop bridge subscription', async () => {
-    let listener: ((statuses: AgentActivityStatus[]) => void) | null = null;
-
-    window.duneDesktop = {
-      ...window.duneDesktop,
-      platform: window.duneDesktop?.platform ?? 'darwin',
-      getAgentActivity: vi.fn(async () => []),
-      subscribeAgentActivity: vi.fn((nextListener) => {
-        listener = nextListener;
-        return () => undefined;
-      }),
-    };
-
+  it('applies live updates from the agent store', async () => {
     render(<AgentActivityPanel />);
 
     expect(await screen.findByText('No live agent activity yet.')).toBeInTheDocument();
 
     act(() => {
-      listener?.([createActivityStatus()]);
+      useAppStore.setState({ agents: [createAgent()] });
     });
 
     expect(await screen.findByText('Navigator')).toBeInTheDocument();

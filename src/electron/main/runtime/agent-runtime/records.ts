@@ -202,6 +202,7 @@ export function createDraftAgent(
       : null,
     transcript: createAgentTranscriptSummary(),
     updatedAt: now,
+    workItemId: null,
     workspace: 'AgentLite agent',
   };
 }
@@ -278,6 +279,7 @@ export function normalizePersistedAgentRecord(
         rollingSummary: transcriptArchive.rollingSummary,
         totalMessageCount,
       }),
+      workItemId: typeof record.agent.workItemId === 'string' ? record.agent.workItemId : null,
     },
     groupFolder,
     projectName: typeof record.projectName === 'string' && record.projectName.trim()

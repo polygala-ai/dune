@@ -258,6 +258,7 @@ export interface Agent extends Pick<AgentSummary, 'id' | 'name' | 'preview'> {
   status: AgentStatus;
   telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;
+  workItemId: string | null;
   workspace: string;
   contextCards: AgentContextCard[];
   transcript: AgentTranscriptSummary;
@@ -276,6 +277,7 @@ export interface PresentedAgent extends AgentSummary {
   status: AgentStatus;
   telegram: TelegramAgentRuntimeState | null;
   updatedAt: number;
+  workItemId: string | null;
   workspace: string;
   contextCards: AgentContextCard[];
   transcript: AgentTranscriptSummary;

@@ -106,6 +106,7 @@ function createDraftAgent(
     telegram: telegramState,
     updatedAt: now,
     status: 'draft',
+    workItemId: null,
     workspace: 'Prototype agent',
     contextCards: [],
     messages: [],
