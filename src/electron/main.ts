@@ -37,6 +37,8 @@ import {
 } from '@/electron/main/runtime/runtime-snapshot';
 import { resetLocalData } from '@/electron/main/reset-local-data';
 import { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
+import { AgentActivityWatcher } from '@/electron/main/runtime/agent-activity-watcher';
+import { createGroupFolder } from '@/electron/main/runtime/agent-runtime/utils';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
 import type {
   CreateAgentInput,
@@ -74,6 +76,7 @@ import {
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
 } from '@/shared/workflow/activity';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
+import type { AgentActivityStatus } from '@/shared/agents/agent-activity';
 
 if (started) {
   app.quit();
@@ -87,6 +90,7 @@ let nudgeIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let taskSweepIntervalHandle: ReturnType<typeof setInterval> | null = null;
 let powerBlockerId: number | null = null;
 let telegramReconnectPromise: Promise<void> | null = null;
+let agentActivityWatcher: AgentActivityWatcher | null = null;
 const NUDGE_INTERVAL_MS = 60_000;
 const TASK_SWEEP_INTERVAL_MS = 120_000;
 
@@ -294,6 +298,7 @@ const quitCoordinator = createQuitCoordinator({
     }
     stopPowerBlocker();
     await runtimeController?.shutdown();
+    agentActivityWatcher?.stop();
   },
 });
 
@@ -385,6 +390,46 @@ function createInitialRuntimeSnapshot() {
   };
 }
 
+function resolveAgentActivityDataDirs(
+  snapshot: AgentServiceSnapshot,
+  runtimeRoot: string,
+) {
+  return snapshot.agents.map((agent) =>
+    path.join(
+      runtimeRoot,
+      'agents',
+      createGroupFolder(agent.name, agent.id),
+      'data',
+    ),
+  );
+}
+
+function mergeAgentActivityStatuses(
+  fileStatuses: AgentActivityStatus[],
+  runtimeStatuses: AgentActivityStatus[],
+) {
+  const statusesByAgentId = new Map<string, AgentActivityStatus>();
+
+  for (const status of fileStatuses) {
+    statusesByAgentId.set(status.agentId, status);
+  }
+
+  for (const status of runtimeStatuses) {
+    statusesByAgentId.set(status.agentId, status);
+  }
+
+  return [...statusesByAgentId.values()].sort((left, right) => {
+    const leftUpdatedAt = Date.parse(left.updatedAt);
+    const rightUpdatedAt = Date.parse(right.updatedAt);
+
+    if (leftUpdatedAt !== rightUpdatedAt) {
+      return rightUpdatedAt - leftUpdatedAt;
+    }
+
+    return left.agentName.localeCompare(right.agentName);
+  });
+}
+
 function cloneStoredWorkflowEvent(event: StoredWorkflowEvent): StoredWorkflowEvent {
   return {
     ...(event.actor ? { actor: event.actor } : {}),
@@ -442,6 +487,7 @@ void app.whenReady().then(async () => {
   const duneHomeDir = agentLiteHomeDir ?? os.homedir();
   const agentLiteRuntimeRoot = resolveAgentLiteRuntimeRoot(agentLiteHomeDir);
   const userDataDir = app.getPath('userData');
+  agentActivityWatcher = new AgentActivityWatcher();
   const stores = {
     agents: new JsonFileStorage(userDataDir, 'agents'),
     secrets: new EncryptedFileStorage(userDataDir, 'secrets'),
@@ -822,6 +868,9 @@ void app.whenReady().then(async () => {
 
       runtimeController.subscribe((snapshot) => {
         syncTelegramPowerBlocker(snapshot);
+        agentActivityWatcher?.start(
+          resolveAgentActivityDataDirs(snapshot, agentLiteRuntimeRoot),
+        );
         const liveStatuses = runtimeController?.getLiveStatuses() ?? [];
         for (const window of BrowserWindow.getAllWindows()) {
           window.webContents.send(ipcChannels.runtimeSnapshotUpdated, snapshot);
@@ -873,7 +922,10 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle(ipcChannels.getAgentActivity, async () => {
     await ensureRuntime();
-    return requireRuntimeController().getLiveStatuses();
+    return mergeAgentActivityStatuses(
+      agentActivityWatcher?.getStatuses() ?? [],
+      requireRuntimeController().getLiveStatuses(),
+    );
   });
   ipcMain.handle(
     ipcChannels.getAgentTranscriptPage,
@@ -921,6 +973,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.handle(ipcChannels.deleteLocalData, async () => {
     await runtimeController?.shutdown();
+    agentActivityWatcher?.stop();
     await Promise.allSettled([
       session.defaultSession.clearCache(),
       session.defaultSession.clearStorageData(),

@@ -2579,6 +2579,11 @@ export class AgentRuntime implements AgentRuntimeContract {
       });
 
       alAgent.on('run.status', (event) => {
+        const status = event.status === 'done' || event.status === 'error' || event.status === 'idle'
+          ? event.status
+          : 'waiting';
+        const phase = status === 'waiting' ? 'waiting' : status;
+
         this.pushActivityEvent(agentId, {
           id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           kind: 'status',
@@ -2586,8 +2591,8 @@ export class AgentRuntime implements AgentRuntimeContract {
           timestamp: Date.now(),
         });
         this.updateLiveStatus(agentId, {
-          status: event.status === 'idle' ? 'idle' : 'waiting',
-          phase: 'idle',
+          status,
+          phase,
           currentTool: null,
           toolArgsSummary: String(event.status).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
         });
@@ -2644,6 +2649,17 @@ export class AgentRuntime implements AgentRuntimeContract {
         // Assistant text blocks (non-tool-use content)
         if (sdkType === 'assistant' && Array.isArray(msg?.message?.content)) {
           for (const block of msg.message.content as Array<Record<string, unknown>>) {
+            if (block.type === 'thinking') {
+              this.updateLiveStatus(agentId, {
+                status: 'thinking',
+                phase: 'thinking',
+                currentTool: null,
+                toolArgsSummary: typeof block.thinking === 'string'
+                  ? String(block.thinking).trim().slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH)
+                  : 'thinking',
+              });
+            }
+
             if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
               this.pushActivityEvent(agentId, {
                 id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2654,7 +2670,7 @@ export class AgentRuntime implements AgentRuntimeContract {
               });
               this.updateLiveStatus(agentId, {
                 status: 'thinking',
-                phase: 'idle',
+                phase: 'thinking',
                 currentTool: null,
                 toolArgsSummary: String(block.text).trim().slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
               });
@@ -2672,7 +2688,7 @@ export class AgentRuntime implements AgentRuntimeContract {
           });
           this.updateLiveStatus(agentId, {
             status: String(msg.status) === 'idle' ? 'idle' : 'waiting',
-            phase: 'idle',
+            phase: String(msg.status) === 'idle' ? 'idle' : 'waiting',
             currentTool: null,
             toolArgsSummary: String(msg.status).slice(0, MAX_TOOL_ARGS_SUMMARY_LENGTH),
           });
@@ -2685,7 +2701,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.markTaskRunning(agentId, event.taskId, true);
         this.updateLiveStatus(agentId, {
           status: 'waiting',
-          phase: 'idle',
+          phase: 'waiting',
           currentTool: null,
           currentTaskId: event.taskId,
           toolArgsSummary: 'scheduled task started',
@@ -2703,7 +2719,7 @@ export class AgentRuntime implements AgentRuntimeContract {
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
         this.updateLiveStatus(agentId, {
-          status: 'idle',
+          status: 'done',
           phase: 'done',
           currentTool: null,
           currentTaskId: null,
