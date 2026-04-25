@@ -29,6 +29,7 @@ import {
 } from '@/electron/main/dune-paths';
 import type { DuneChannel } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
+import { extractWorkspaceAttachmentPaths } from '@/shared/agents/message-content';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
 /** Agent lite module shape. */
@@ -2728,5 +2729,233 @@ describe('AgentRuntime', () => {
     expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Alpha'))).toBe(true);
     expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Beta'))).toBe(true);
     expect(scheduledTasks.some((task) => task.prompt.includes('You are merging isolated research results.'))).toBe(true);
+  });
+
+  it('rejects path traversal in outbound Telegram attachment paths and falls back to plain text', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+    const sendTelegramMedia = vi.fn();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:999', { isGroup: false, name: 'Alice' });
+    telegramHarness.emitIncomingMessage('tg:999', {
+      content: `/pair ${pairCode}`,
+      sender: 'alice',
+      senderName: 'Alice',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Traversal test agent',
+      projectId: 'project-traversal',
+      telegramSetupSessionId: sessionId,
+    });
+
+    // A message containing a path traversal attempt
+    const traversalText = 'File: (/workspace/group/attachments/../../../etc/passwd)';
+    await harness.duneChannel('traversal-test-agent').sendMessage(
+      toAgentChatJid(agentId),
+      traversalText,
+    );
+
+    // sendTelegramMedia must NOT be called — the traversal path is rejected before any upload
+    expect(sendTelegramMedia).not.toHaveBeenCalled();
+    // The message should have been forwarded as plain text (no extracted attachment paths)
+    expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:999', traversalText);
+  });
+
+  it('rejects relative traversal attachment paths and falls back to plain text', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+    const sendTelegramMedia = vi.fn();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:777', { isGroup: false, name: 'Mallory' });
+    telegramHarness.emitIncomingMessage('tg:777', {
+      content: `/pair ${pairCode}`,
+      sender: 'mallory',
+      senderName: 'Mallory',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Relative traversal agent',
+      projectId: 'project-relative-traversal',
+      telegramSetupSessionId: sessionId,
+    });
+
+    const traversalText = 'File: (../../etc/passwd)';
+    await harness.duneChannel('relative-traversal-agent').sendMessage(
+      toAgentChatJid(agentId),
+      traversalText,
+    );
+
+    expect(extractWorkspaceAttachmentPaths(traversalText).paths).toEqual([]);
+    expect(sendTelegramMedia).not.toHaveBeenCalled();
+    expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:777', traversalText);
+  });
+
+  it('blocks outbound Telegram attachment symlinks that escape the attachments directory', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+    const sendTelegramMedia = vi.fn();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:888', { isGroup: false, name: 'Symlink Test' });
+    telegramHarness.emitIncomingMessage('tg:888', {
+      content: `/pair ${pairCode}`,
+      sender: 'symlink-test',
+      senderName: 'Symlink Test',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Symlink escape agent',
+      projectId: 'project-symlink',
+      telegramSetupSessionId: sessionId,
+    });
+
+    const runtimeRoot = path.join(homeDir, '.dune', 'agentlite');
+    const groupFolder = `symlink-escape-agent-${agentId.split(':').pop()?.slice(0, 8) ?? 'agent'}`;
+    const attachmentsDir = path.join(runtimeRoot, 'groups', groupFolder, 'attachments');
+    fs.mkdirSync(attachmentsDir, { recursive: true });
+    const outsideFile = path.join(homeDir, 'outside-secret.txt');
+    fs.writeFileSync(outsideFile, 'do-not-upload');
+    fs.symlinkSync(outsideFile, path.join(attachmentsDir, 'secret.txt'));
+
+    const messageText = 'Secret: (/workspace/group/attachments/secret.txt)';
+    await harness.duneChannel('symlink-escape-agent').sendMessage(toAgentChatJid(agentId), messageText);
+
+    expect(sendTelegramMedia).not.toHaveBeenCalled();
+    expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:888', messageText);
+  });
+
+  it('sends an error notice when second attachment fails to send', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+
+    let sendMediaCallCount = 0;
+    const sendTelegramMedia = vi.fn(async () => {
+      sendMediaCallCount += 1;
+      if (sendMediaCallCount === 2) {
+        throw new Error('Simulated Telegram API failure');
+      }
+    });
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:456', { isGroup: false, name: 'Bob' });
+    telegramHarness.emitIncomingMessage('tg:456', {
+      content: `/pair ${pairCode}`,
+      sender: 'bob',
+      senderName: 'Bob',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Partial delivery agent',
+      projectId: 'project-partial',
+      telegramSetupSessionId: sessionId,
+    });
+
+    // Create real attachment files in the expected runtime location
+    const runtimeRoot = path.join(homeDir, '.dune', 'agentlite');
+    const groupFolder = `partial-delivery-agent-${agentId.split(':').pop()?.slice(0, 8) ?? 'agent'}`;
+    const attachmentsDir = path.join(runtimeRoot, 'groups', groupFolder, 'attachments');
+    fs.mkdirSync(attachmentsDir, { recursive: true });
+    fs.writeFileSync(path.join(attachmentsDir, 'photo1.jpg'), 'fake-image-1');
+    fs.writeFileSync(path.join(attachmentsDir, 'photo2.jpg'), 'fake-image-2');
+
+    const messageText =
+      'Here are two images: (/workspace/group/attachments/photo1.jpg) (/workspace/group/attachments/photo2.jpg)';
+    await harness.duneChannel('partial-delivery-agent').sendMessage(
+      toAgentChatJid(agentId),
+      messageText,
+    );
+
+    // Both attachments were attempted
+    expect(sendTelegramMedia).toHaveBeenCalledTimes(2);
+    // A visible error notice must have been sent for the failed second attachment
+    const sentTexts = (telegramHarness.sendMessage.mock.calls as [string, string][]).map(
+      ([, text]) => text,
+    );
+    const errorNotice = sentTexts.find((text) => text.includes('⚠️'));
+    expect(errorNotice).toBeDefined();
+    expect(errorNotice).toContain('photo2.jpg');
   });
 });
