@@ -17,7 +17,7 @@ import { ToolHandlerError, type RegisteredTool } from './types';
 
 /** Returns the actor label for audit events emitted by agent actions. */
 function auditActor(agentContext: { agentId?: string; agentName?: string }) {
-  return agentContext.agentName || agentContext.agentId || 'user';
+  return agentContext.agentName ?? 'user';
 }
 
 /** Lists task tools. */

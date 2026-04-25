@@ -16,7 +16,7 @@ import type { Agent as AgentLiteAgent } from '@boxlite-ai/agentlite';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
 import type { AppStorage } from '@/electron/main/storage/app-storage';
-import type { AuditLog } from '@/electron/main/audit/audit-log';
+import type { AuditDatabase } from '@/electron/main/audit/audit-db';
 
 import { agentTools } from '@/electron/main/agent-actions/handlers/agents';
 import { itemTools } from '@/electron/main/agent-actions/handlers/items';
@@ -32,7 +32,7 @@ import type {
 
 /** Services captured by every action handler closure. */
 export interface ActionHostServices {
-  auditLog?: AuditLog;
+  auditLog?: AuditDatabase;
   getRuntimeController: () => DesktopRuntimeController;
   onWorkflowChanged: () => void;
   workflowStore: AppStorage;
