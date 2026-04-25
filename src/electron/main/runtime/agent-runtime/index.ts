@@ -526,6 +526,7 @@ function wrapTelegramDriverForMedia(
         const safeBaseReal = fs.existsSync(safeBase) ? fs.realpathSync(safeBase) : safeBase;
 
         let didSendMedia = false;
+        let attemptedMediaCount = 0;
         const failedFilenames: string[] = [];
 
         const caption = strippedText.trim().length > 0 && strippedText.trim().length <= 1024
@@ -568,6 +569,7 @@ function wrapTelegramDriverForMedia(
           const mediaKind: 'image' | 'file' = kind === 'image' ? 'image' : 'file';
 
           try {
+            attemptedMediaCount += 1;
             await sendMedia(token, chatId, localPath, filename, mediaKind, caption);
             didSendMedia = true;
           } catch (err) {
@@ -577,11 +579,12 @@ function wrapTelegramDriverForMedia(
         }
 
         const mediaFailure = failedFilenames.length > 0
+          && attemptedMediaCount > 0
           ? new Error(`Failed to deliver ${failedFilenames.length} Telegram attachment(s): ${failedFilenames.join(', ')}`)
           : null;
 
         // Report partial failures with a visible user-facing notice.
-        if (failedFilenames.length > 0) {
+        if (mediaFailure) {
           try {
             await base.sendMessage(
               jid,

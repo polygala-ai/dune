@@ -30,7 +30,12 @@ const AUDIO_EXTENSIONS = new Set([
   '.wav',
 ]);
 
-const WORKSPACE_ATTACHMENT_PATTERN = /\((\/workspace\/group\/attachments\/[^)\s]+)\)/g;
+const WORKSPACE_ATTACHMENT_RELATIVE_PATTERN =
+  String.raw`(?!file:\/\/)(?!\/)(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^)\\\s]+`;
+const WORKSPACE_ATTACHMENT_PATTERN = new RegExp(
+  String.raw`\((\/workspace\/group\/attachments\/${WORKSPACE_ATTACHMENT_RELATIVE_PATTERN})\)`,
+  'g',
+);
 
 /** Extensions from value. */
 function extensionFromValue(value: string) {
@@ -113,16 +118,11 @@ export function inferAttachmentKind(input: {
   return 'file' as const;
 }
 
-/** Extracts workspace attachment paths. Rejects any path containing '..' traversal components. */
+/** Extracts workspace attachment paths. Rejects absolute, file URL, and traversal paths. */
 export function extractWorkspaceAttachmentPaths(content: string) {
   const paths: string[] = [];
-  const nextContent = content.replace(WORKSPACE_ATTACHMENT_PATTERN, (match, attachmentPath) => {
-    const p = String(attachmentPath);
-    // Reject path traversal: any segment that is '..' is a security violation
-    if (p.split('/').some((seg) => seg === '..')) {
-      return match; // leave traversal paths in text, do not extract
-    }
-    paths.push(p);
+  const nextContent = content.replace(WORKSPACE_ATTACHMENT_PATTERN, (_match, attachmentPath) => {
+    paths.push(String(attachmentPath));
     return '';
   });
 

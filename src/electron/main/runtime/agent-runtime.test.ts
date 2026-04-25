@@ -29,6 +29,7 @@ import {
 } from '@/electron/main/dune-paths';
 import type { DuneChannel } from './dune-channel';
 import { toAgentChatJid } from '@/shared/agents/agent-id';
+import { extractWorkspaceAttachmentPaths } from '@/shared/agents/message-content';
 import { createProjectMainAgentName } from '@/shared/agents/project-main-name';
 
 /** Agent lite module shape. */
@@ -2782,6 +2783,56 @@ describe('AgentRuntime', () => {
     expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:999', traversalText);
   });
 
+  it('rejects relative traversal attachment paths and falls back to plain text', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const telegramHarness = createTelegramChannelFactoryHarness();
+    const telegramSecretsStore = createMemorySecretsStore();
+    const sendTelegramMedia = vi.fn();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      createTelegramChannelFactory: telegramHarness.createTelegramChannelFactory,
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => ({}),
+      resolveTelegramBotUsername: async () => 'test_bot',
+      sendTelegramMedia,
+      telegramSecretsStore,
+    });
+
+    await host.start();
+    const sessionId = await host.service.startTelegramSetupSession({ token: 'tg-bot-token' });
+    const pairCode = host.getSnapshot().telegramSetupSessions[0]?.pairCode ?? '';
+
+    telegramHarness.emitChatMetadata('tg:777', { isGroup: false, name: 'Mallory' });
+    telegramHarness.emitIncomingMessage('tg:777', {
+      content: `/pair ${pairCode}`,
+      sender: 'mallory',
+      senderName: 'Mallory',
+    });
+    await flushMicrotasks();
+
+    const agentId = await host.service.createAgent({
+      channelId: 'telegram',
+      name: 'Relative traversal agent',
+      projectId: 'project-relative-traversal',
+      telegramSetupSessionId: sessionId,
+    });
+
+    const traversalText = 'File: (../../etc/passwd)';
+    await harness.duneChannel('relative-traversal-agent').sendMessage(
+      toAgentChatJid(agentId),
+      traversalText,
+    );
+
+    expect(extractWorkspaceAttachmentPaths(traversalText).paths).toEqual([]);
+    expect(sendTelegramMedia).not.toHaveBeenCalled();
+    expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:777', traversalText);
+  });
+
   it('blocks outbound Telegram attachment symlinks that escape the attachments directory', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -2830,15 +2881,10 @@ describe('AgentRuntime', () => {
     fs.symlinkSync(outsideFile, path.join(attachmentsDir, 'secret.txt'));
 
     const messageText = 'Secret: (/workspace/group/attachments/secret.txt)';
-    await expect(
-      harness.duneChannel('symlink-escape-agent').sendMessage(toAgentChatJid(agentId), messageText),
-    ).rejects.toThrow('Failed to deliver 1 Telegram attachment');
+    await harness.duneChannel('symlink-escape-agent').sendMessage(toAgentChatJid(agentId), messageText);
 
     expect(sendTelegramMedia).not.toHaveBeenCalled();
-    const sentTexts = (telegramHarness.sendMessage.mock.calls as [string, string][]).map(
-      ([, text]) => text,
-    );
-    expect(sentTexts.some((text) => text.includes('secret.txt'))).toBe(true);
+    expect(telegramHarness.sendMessage).toHaveBeenCalledWith('tg:888', messageText);
   });
 
   it('rejects and sends a visible error notice when one of multiple outbound Telegram attachments fails to deliver', async () => {
