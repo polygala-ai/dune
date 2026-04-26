@@ -119,7 +119,6 @@ function formatDetailedTimestamp(timestamp: number) {
 function buildExportMarkdown(
   agentName: string,
   events: TimelineEvent[],
-  expandedEventIds: Set<string>,
 ) {
   const lines = [
     `# Agent Timeline: ${agentName}`,
@@ -140,7 +139,7 @@ function buildExportMarkdown(
 
     lines.push(event.description);
 
-    if (expandedEventIds.has(event.eventId) && event.detail) {
+    if (event.detail) {
       lines.push('');
       lines.push(`> ${event.detail.replace(/\n/g, '\n> ')}`);
     }
@@ -160,21 +159,23 @@ export function AgentTimeline({ agent }: { agent: PresentedAgent }) {
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
 
   const allEvents = [
-    ...items.flatMap((item) =>
-      item.workflowEvents
-        .filter((event) => event.actor === agent.name)
-        .map<TimelineEvent>((event) => ({
-          actor: event.actor ?? agent.name,
-          description: event.description,
-          eventId: `workflow:${event.id}`,
-          kind: event.kind,
-          itemId: item.id,
-          itemTitle: item.title,
-          projectId: item.projectId,
-          source: 'workflow',
-          timestamp: event.createdAt,
-        })),
-    ),
+    ...items.flatMap((item) => {
+      if (item.primaryAgentId !== agent.id) {
+        return [];
+      }
+
+      return item.workflowEvents.map<TimelineEvent>((event) => ({
+        actor: event.actor ?? agent.name,
+        description: event.description,
+        eventId: `workflow:${event.id}`,
+        kind: event.kind,
+        itemId: item.id,
+        itemTitle: item.title,
+        projectId: item.projectId,
+        source: 'workflow',
+        timestamp: event.createdAt,
+      }));
+    }),
     ...agent.activityEvents.map<TimelineEvent>((event) => ({
       actor: agent.name,
       description: event.label,
@@ -258,7 +259,7 @@ export function AgentTimeline({ agent }: { agent: PresentedAgent }) {
       return;
     }
 
-    const markdown = buildExportMarkdown(agent.name, filteredEvents, expandedEventIdSet);
+    const markdown = buildExportMarkdown(agent.name, filteredEvents);
 
     try {
       if (typeof window.duneDesktop?.copyText === 'function') {
@@ -326,6 +327,7 @@ export function AgentTimeline({ agent }: { agent: PresentedAgent }) {
 
                 return (
                   <button
+                    aria-pressed={isActive}
                     className={cn(
                       'pill-key border transition-colors',
                       isActive

@@ -95,11 +95,18 @@ describe('AgentTimeline', () => {
               kind: 'assignment',
             },
             {
-              actor: 'Other agent',
+              actor: 'Human PM',
               createdAt: Date.parse('2026-04-11T09:00:00.000Z'),
-              description: 'This should be ignored.',
-              id: 'workflow-ignored',
-              kind: 'note',
+              description: 'Assigned the follow-up to Navigator.',
+              id: 'workflow-human-assignment',
+              kind: 'assignment',
+            },
+            {
+              actor: 'Human reviewer',
+              createdAt: Date.parse('2026-04-11T10:00:00.000Z'),
+              description: 'Reviewer asked for clearer auth copy.',
+              id: 'workflow-human-feedback',
+              kind: 'feedback',
             },
           ],
         }),
@@ -113,6 +120,20 @@ describe('AgentTimeline', () => {
               createdAt: Date.parse('2026-04-13T11:00:00.000Z'),
               description: 'Closed the billing checklist.',
               id: 'workflow-2',
+              kind: 'task',
+            },
+          ],
+        }),
+        createItem({
+          id: 'item-3',
+          primaryAgentId: 'agent-2',
+          title: 'Owned by another agent',
+          workflowEvents: [
+            {
+              actor: 'Navigator',
+              createdAt: Date.parse('2026-04-15T09:00:00.000Z'),
+              description: 'This belongs to another agent-owned item.',
+              id: 'workflow-other-owned',
               kind: 'task',
             },
           ],
@@ -137,19 +158,25 @@ describe('AgentTimeline', () => {
     );
 
     const events = screen.getAllByTestId('agent-timeline-event');
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(5);
     const firstEvent = events[0];
     const secondEvent = events[1];
     const thirdEvent = events[2];
+    const fourthEvent = events[3];
+    const fifthEvent = events[4];
 
-    if (!firstEvent || !secondEvent || !thirdEvent) {
-      throw new Error('Expected three timeline events.');
+    if (!firstEvent || !secondEvent || !thirdEvent || !fourthEvent || !fifthEvent) {
+      throw new Error('Expected five timeline events.');
     }
 
     expect(within(firstEvent).getByText('Executed pnpm test')).toBeInTheDocument();
     expect(within(secondEvent).getByText('Closed the billing checklist.')).toBeInTheDocument();
+    expect(screen.getByText('Assigned the follow-up to Navigator.')).toBeInTheDocument();
+    expect(screen.getByText('Reviewer asked for clearer auth copy.')).toBeInTheDocument();
     expect(within(thirdEvent).getByText('Picked up the auth refactor.')).toBeInTheDocument();
-    expect(screen.queryByText('This should be ignored.')).not.toBeInTheDocument();
+    expect(within(fourthEvent).getByText('Reviewer asked for clearer auth copy.')).toBeInTheDocument();
+    expect(within(fifthEvent).getByText('Assigned the follow-up to Navigator.')).toBeInTheDocument();
+    expect(screen.queryByText('This belongs to another agent-owned item.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Ship billing UI/i })).toBeInTheDocument();
   });
 
@@ -194,7 +221,11 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /^Tool$/i }));
+    const toolFilter = screen.getByRole('button', { name: /^Tool$/i });
+    expect(toolFilter).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(toolFilter);
+    expect(toolFilter).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByText('Executed pnpm test')).not.toBeInTheDocument();
     expect(screen.getByText('Marked the handoff complete')).toBeInTheDocument();
 
@@ -203,7 +234,7 @@ describe('AgentTimeline', () => {
     expect(screen.getByText('Marked the handoff complete')).toBeInTheDocument();
   });
 
-  it('exports the filtered timeline as markdown and includes expanded detail', async () => {
+  it('exports the filtered timeline as markdown and includes collapsed detail', async () => {
     const user = userEvent.setup();
     const copyText = vi.fn((value: string) => {
       void value;
@@ -249,7 +280,6 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Toggle timeline event Executed pnpm test/i }));
     await user.click(screen.getByRole('button', { name: /Export as Markdown/i }));
 
     expect(copyText).toHaveBeenCalledTimes(1);
