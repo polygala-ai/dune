@@ -244,7 +244,7 @@ async function processPullRequest(
   const createResult = await createItemHandler(toolServices, {
     brief: buildBrief(repoConfig, pr, diff),
     note: `Dune detected GitHub review request ${repoKey}#${pr.number}.`,
-    status: 'ready',
+    status: 'inbox',
     title,
   }) as { itemId?: unknown };
 
