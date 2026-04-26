@@ -1,0 +1,21 @@
+name: Dune Review Trigger
+on:
+  pull_request:
+    types: [opened, reopened]
+permissions:
+  pull-requests: write
+  contents: read
+  issues: write
+jobs:
+  label-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add dune-review-requested label
+        run: |
+          if ! gh pr edit "${{ github.event.pull_request.number }}" --add-label "dune-review-requested" --repo "${{ github.repository }}" 2>/dev/null; then
+            gh label create "dune-review-requested" --color "0075ca" --description "Dune AI review requested" --repo "${{ github.repository }}" --force 2>/dev/null || true
+            gh label create "dune-review-in-progress" --color "e4e669" --description "Dune AI review in progress" --repo "${{ github.repository }}" --force 2>/dev/null || true
+            gh pr edit "${{ github.event.pull_request.number }}" --add-label "dune-review-requested" --repo "${{ github.repository }}"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

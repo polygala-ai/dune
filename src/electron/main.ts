@@ -14,6 +14,7 @@ import { resolveAgentLiteRuntimeRoot } from '@/electron/main/dune-paths';
 import { registerMainIpcHandlers } from '@/electron/main/ipc/register-main-ipc-handlers';
 import { createTelegramPowerCoordinator } from '@/electron/main/lifecycle/telegram-power-coordinator';
 import { NetworkProxyManager } from '@/electron/main/network/network-proxy-manager';
+import { startPrReviewer, type PrReviewerController } from '@/electron/main/pr-reviewer';
 import { resetLocalData } from '@/electron/main/reset-local-data';
 import { createRuntimeBootstrap } from '@/electron/main/runtime/runtime-bootstrap';
 import { EncryptedFileStorage, JsonFileStorage, type AppStorage } from '@/electron/main/storage';
@@ -79,7 +80,9 @@ void app.whenReady().then(async () => {
     session: session.defaultSession,
   });
   let mainWindow: BrowserWindow | null = null;
+  let prReviewer: PrReviewerController | null = null;
   let runtimeBootstrap: ReturnType<typeof createRuntimeBootstrap> | null = null;
+  const hostActionHandlers = new Map<string, () => Promise<void>>();
   const broadcast = (channel: string, payload?: unknown) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (typeof payload === 'undefined') {
@@ -131,6 +134,7 @@ void app.whenReady().then(async () => {
   });
 
   shutdownMainProcess = async () => {
+    prReviewer?.stop();
     workflowCoordinator.stop();
     telegramPowerCoordinator.shutdown();
     await runtimeBootstrap?.shutdown();
@@ -180,6 +184,17 @@ void app.whenReady().then(async () => {
   });
 
   await applyPersistedNetworkSettings();
+
+  prReviewer = startPrReviewer({
+    app,
+    ensureRuntime: () => runtimeBootstrap.ensureRuntime(),
+    getRuntimeController: () => runtimeBootstrap.requireRuntimeController(),
+    onWorkflowChanged: workflowCoordinator.onWorkflowChanged,
+    registerAction: (name, handler) => {
+      hostActionHandlers.set(name, handler);
+    },
+    workflowStore: workflowCoordinator.workflowStore,
+  });
 
   mainWindow = createMainWindow({
     getRuntimeController,
