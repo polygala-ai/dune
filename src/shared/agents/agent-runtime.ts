@@ -53,6 +53,7 @@ export interface AgentService {
   getTelegramSetupSession: (sessionId: string) => Promise<TelegramSetupSession | null>;
   getSnapshot: () => AgentServiceSnapshot;
   listAgents: () => Agent[];
+  callAction?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
   selectAgent: (agentId: string) => void;
   runIsolatedResearch: (
     agentId: string,

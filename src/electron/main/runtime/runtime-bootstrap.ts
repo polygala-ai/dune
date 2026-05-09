@@ -12,6 +12,8 @@ interface RuntimeBootstrapOptions {
   agentStore: AppStorage;
   app: Pick<App, 'getAppPath'>;
   onAgentIdle: (agentId: string) => void;
+  onBudgetExceeded: (payload: unknown) => void;
+  onBudgetWarning: (payload: unknown) => void;
   onItemActivityChanged: (payload: { isWorking: boolean; itemId: string }) => void;
   onRuntimeSnapshot: (snapshot: AgentServiceSnapshot) => void;
   onStarted?: () => void;
@@ -67,6 +69,8 @@ export function createRuntimeBootstrap(options: RuntimeBootstrapOptions) {
         bundledAgentDir: path.join(options.app.getAppPath(), 'agent'),
         ...(options.agentLiteHomeDir ? { homeDir: options.agentLiteHomeDir } : {}),
         onAgentIdle: options.onAgentIdle,
+        onBudgetExceeded: options.onBudgetExceeded,
+        onBudgetWarning: options.onBudgetWarning,
         onItemActivityChanged: options.onItemActivityChanged,
         resolveModelCredentials: () => resolveDefaultModelCredentials({
           secretsStore: options.secretsStore,

@@ -5,6 +5,7 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
+import { toAgentChatJid } from '@/shared/agents/agent-id';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
@@ -162,6 +163,38 @@ export class DesktopRuntimeController {
   /** Cancels a previously scheduled work-item assignment task. */
   async cancelItemAssignment(agentId: string, taskId: string): Promise<void> {
     await this.activeRuntime.service.cancelItemAssignment(agentId, taskId);
+  }
+
+  /** Gets budget config and state for an agent. */
+  async getBudget(agentId: string): Promise<unknown> {
+    try {
+      if (typeof this.activeRuntime.service.callAction !== 'function') return null;
+      return await this.activeRuntime.service.callAction('budget_get', {
+        group_jid: toAgentChatJid(agentId),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /** Sets budget config for an agent. */
+  async setBudget(
+    agentId: string,
+    config: { daily_limit_usd?: number | null; total_limit_usd?: number | null; reset_hour?: number },
+  ): Promise<void> {
+    if (typeof this.activeRuntime.service.callAction !== 'function') return;
+    await this.activeRuntime.service.callAction('budget_set', {
+      group_jid: toAgentChatJid(agentId),
+      ...config,
+    });
+  }
+
+  /** Resumes a paused agent. */
+  async resumeBudget(agentId: string): Promise<void> {
+    if (typeof this.activeRuntime.service.callAction !== 'function') return;
+    await this.activeRuntime.service.callAction('budget_resume', {
+      group_jid: toAgentChatJid(agentId),
+    });
   }
 
   /** Returns true when the task still exists and remains active in agentlite. */

@@ -116,6 +116,12 @@ void app.whenReady().then(async () => {
     app,
     ...(agentLiteHomeDir ? { agentLiteHomeDir } : {}),
     onAgentIdle: workflowCoordinator.onAgentIdle,
+    onBudgetExceeded: (payload) => {
+      broadcast(ipcChannels.budgetExceeded, payload);
+    },
+    onBudgetWarning: (payload) => {
+      broadcast(ipcChannels.budgetWarning, payload);
+    },
     onItemActivityChanged: (payload) => {
       broadcast(ipcChannels.itemActivityUpdated, payload);
     },
