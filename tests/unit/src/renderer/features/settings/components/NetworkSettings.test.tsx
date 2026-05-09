@@ -46,6 +46,7 @@ function renderNetworkSettings() {
   render(
     <NetworkSettings
       agents={[]}
+      codingEngines={[]}
       externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}

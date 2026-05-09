@@ -13,6 +13,7 @@ function renderNuclearSettings() {
   render(
     <NuclearSettings
       agents={[]}
+      codingEngines={[]}
       externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}

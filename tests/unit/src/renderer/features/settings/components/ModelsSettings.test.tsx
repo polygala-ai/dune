@@ -30,6 +30,7 @@ function renderModelsSettings() {
   render(
     <ModelsSettings
       agents={[]}
+      codingEngines={[]}
       externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}

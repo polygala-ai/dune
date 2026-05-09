@@ -10,12 +10,14 @@ import type {
 import type {
   Agent,
   AgentRuntimeInfo,
+  CodingEngineStatus,
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
 
 /** Settings workspace props. */
 interface SettingsWorkspaceProps {
   agents: Agent[];
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isCompactShell: boolean;
   isSidebarOpen: boolean;
@@ -31,6 +33,7 @@ interface SettingsWorkspaceProps {
 /** Renders the settings workspace UI. */
 export function SettingsWorkspace({
   agents,
+  codingEngines,
   externalChannels,
   isCompactShell,
   isSidebarOpen,
@@ -55,6 +58,7 @@ export function SettingsWorkspace({
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <SettingsView
           agents={agents}
+          codingEngines={codingEngines}
           externalChannels={externalChannels}
           isCompactShell={isCompactShell}
           onSelectRoute={onSelectRoute}

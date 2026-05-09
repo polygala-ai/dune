@@ -719,6 +719,35 @@ describe('AgentRuntime', () => {
     }
   });
 
+  it('skips ACP peer wiring when coding engine delegation is disabled in settings', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveCodingEngineSettings: async () => ({
+        enabled: false,
+        selectedEngine: 'codex',
+      }),
+      resolveModelCredentials: async () => ({
+        OPENAI_API_KEY: 'test-openai-key',
+      }),
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Disabled ACP Agent',
+      projectId: 'project-1',
+    });
+
+    expect((harness.mockAgent()._options as AgentOptions & { acp?: DuneAcpOptions }).acp).toBeUndefined();
+  });
+
   it('starts without saved credentials and reports that replies will fail', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -1076,7 +1105,7 @@ describe('AgentRuntime', () => {
       sendSettled = true;
     });
 
-    await Promise.resolve();
+    await flushMicrotasks();
 
     expect(sendSettled).toBe(false);
     expect(harness.createAgent).toHaveBeenCalledTimes(1);

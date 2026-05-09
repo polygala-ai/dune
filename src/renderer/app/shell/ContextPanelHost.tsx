@@ -249,7 +249,6 @@ export function ContextPanelHost({
   const resetAgentCustomization = useAppStore((state) => state.resetAgentCustomization);
   const upsertAgentCustomization = useAppStore((state) => state.upsertAgentCustomization);
   const artifactsPath = useAppStore((state) => state.runtimeInfo.artifactsPath);
-  const codingEngines = useAppStore((state) => state.codingEngines);
   const deleteAgentProps = onDeleteAgent ? { onDeleteAgent } : {};
   const [isEditingCustomization, setEditingCustomization] = useState(false);
   const [isApplyingTelegramChannel, setApplyingTelegramChannel] = useState(false);
@@ -382,7 +381,6 @@ export function ContextPanelHost({
         <AgentContextPanel
           agent={agent}
           className="h-full border-l border-app-border"
-          codingEngines={codingEngines}
           customization={customization}
           onClose={onClose}
           onEditCustomization={openCustomizationEditor}
@@ -492,7 +490,6 @@ export function ContextPanelHost({
             <AgentContextPanel
               agent={agent}
               className="app-no-drag h-full"
-              codingEngines={codingEngines}
               customization={customization}
               onClose={onClose}
               onEditCustomization={openCustomizationEditor}
