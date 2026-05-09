@@ -4,6 +4,7 @@
 export type SettingsRoute =
   | 'appearance'
   | 'artifacts'
+  | 'budget'
   | 'models'
   | 'network'
   | 'shortcuts'

@@ -434,6 +434,8 @@ export interface AgentRuntimeOptions {
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
+  onBudgetExceeded?: (payload: unknown) => void;
+  onBudgetWarning?: (payload: unknown) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
   resolveProjectName?: (projectId: string) => Promise<string | null>;
   resolveProjectRootPath?: (projectId: string) => Promise<string | null>;
@@ -497,6 +499,10 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private readonly onAgentIdle: AgentRuntimeOptions['onAgentIdle'];
 
+  private readonly onBudgetExceeded: AgentRuntimeOptions['onBudgetExceeded'];
+
+  private readonly onBudgetWarning: AgentRuntimeOptions['onBudgetWarning'];
+
   private readonly onItemActivityChanged: AgentRuntimeOptions['onItemActivityChanged'];
 
   /** Per-item ephemeral run state driven by AgentLite task.run.* events. */
@@ -539,6 +545,8 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.actionServices = options.actionServices;
     this.homeDir = options.homeDir ?? os.homedir();
     this.onAgentIdle = options.onAgentIdle;
+    this.onBudgetExceeded = options.onBudgetExceeded;
+    this.onBudgetWarning = options.onBudgetWarning;
     this.onItemActivityChanged = options.onItemActivityChanged;
     this.runtimeRoot = resolveAgentLiteRuntimeRoot(options.homeDir);
     this.bundledAgentDir = options.bundledAgentDir ?? resolveBundledAgentDir();
@@ -617,6 +625,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         this.telegram.getSetupSession(sessionId),
       getSnapshot: () => this.getSnapshot(),
       listAgents: () => this.getSnapshot().agents,
+      callAction: async (name, input) => this.callAgentLiteAction(name, input),
       selectAgent: (agentId) => {
         this.selectAgent(agentId);
       },
@@ -2354,6 +2363,37 @@ export class AgentRuntime implements AgentRuntimeContract {
     }
   }
 
+  private async callAgentLiteAction(
+    name: string,
+    input: Record<string, unknown>,
+  ): Promise<unknown> {
+    const groupJid = typeof input.group_jid === 'string' ? input.group_jid : null;
+    const agentId = groupJid
+      ? toAgentPathId(groupJid)
+      : this.snapshot.selectedAgentId ?? this.snapshot.agents[0]?.id ?? null;
+
+    if (!agentId) {
+      return null;
+    }
+
+    const record = this.records.get(agentId);
+
+    if (!record) {
+      return null;
+    }
+
+    const duneAgent = await this.ensureAgentRuntime(record);
+    const alAgent = duneAgent.agentLiteAgent as AgentLiteAgent & {
+      callAction?: (actionName: string, actionInput: Record<string, unknown>) => Promise<unknown>;
+    };
+
+    if (typeof alAgent.callAction !== 'function') {
+      return null;
+    }
+
+    return alAgent.callAction(name, input);
+  }
+
   private async ensureAgentRuntime(record: PersistedAgentRecord): Promise<DuneAgent> {
     const agentId = record.agent.id;
     const existing = this.lifecycle.getRuntime(agentId);
@@ -2454,6 +2494,22 @@ export class AgentRuntime implements AgentRuntimeContract {
           label: `${event.subtype}: ${event.description}`,
           detail: event.summary,
           timestamp: Date.now(),
+        });
+      });
+
+      alAgent.on('budget.exceeded', (event: Record<string, unknown>) => {
+        this.onBudgetExceeded?.({
+          agentId,
+          jid: toAgentChatJid(agentId),
+          ...event,
+        });
+      });
+
+      alAgent.on('budget.warning', (event: Record<string, unknown>) => {
+        this.onBudgetWarning?.({
+          agentId,
+          jid: toAgentChatJid(agentId),
+          ...event,
         });
       });
 

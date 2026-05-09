@@ -4,6 +4,7 @@ import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
 import { ArtifactsSettings } from '@/renderer/features/settings/components/ArtifactsSettings';
+import { BudgetSettings } from '@/renderer/features/settings/components/BudgetSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
@@ -65,6 +66,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Shortcuts',
     description: 'Keyboard-first reference',
     Component: ShortcutsSettings,
+  },
+  {
+    id: 'budget',
+    title: 'Budget',
+    description: 'Token spend limits per agent',
+    Component: BudgetSettings,
   },
   {
     id: 'nuclear',

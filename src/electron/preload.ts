@@ -30,6 +30,7 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
   getAgentTranscriptPage: (agentId, options) =>
     ipcRenderer.invoke(ipcChannels.getAgentTranscriptPage, agentId, options),
+  getBudget: (agentId) => ipcRenderer.invoke(ipcChannels.getBudget, agentId),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
   getTelegramSetupSession: (sessionId) =>
     ipcRenderer.invoke(ipcChannels.getTelegramSetupSession, sessionId),
@@ -41,10 +42,12 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(ipcChannels.prepareProjectRootPath, rootPath, artifactFolderNames),
   reloadExternalChannels: () => ipcRenderer.invoke(ipcChannels.reloadExternalChannels),
   resetRuntime: () => ipcRenderer.invoke(ipcChannels.resetRuntime),
+  resumeBudget: (agentId) => ipcRenderer.invoke(ipcChannels.resumeBudget, agentId),
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
   runIsolatedResearch: (agentId, input) =>
     ipcRenderer.invoke(ipcChannels.runIsolatedResearch, agentId, input),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
+  setBudget: (agentId, config) => ipcRenderer.invoke(ipcChannels.setBudget, agentId, config),
   updateAgentChannel: (input) => ipcRenderer.invoke(ipcChannels.updateAgentChannel, input),
   updateAgentDefinition: (agentId, definition) =>
     ipcRenderer.invoke(ipcChannels.updateAgentDefinition, agentId, definition),
@@ -91,6 +94,34 @@ const bridge: DesktopBridge = {
 
     return () => {
       ipcRenderer.removeListener(ipcChannels.itemActivityUpdated, handler);
+    };
+  },
+  subscribeBudgetExceeded: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: Parameters<typeof listener>[0],
+    ) => {
+      listener(payload);
+    };
+
+    ipcRenderer.on(ipcChannels.budgetExceeded, handler);
+
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.budgetExceeded, handler);
+    };
+  },
+  subscribeBudgetWarning: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: Parameters<typeof listener>[0],
+    ) => {
+      listener(payload);
+    };
+
+    ipcRenderer.on(ipcChannels.budgetWarning, handler);
+
+    return () => {
+      ipcRenderer.removeListener(ipcChannels.budgetWarning, handler);
     };
   },
 };

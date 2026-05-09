@@ -1,16 +1,23 @@
 // Agent panel UI.
 
-import { type KeyboardEvent, type RefObject, useState } from 'react';
+import { type KeyboardEvent, type RefObject, useEffect, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 
 import { Wrench, Bot, Info } from 'lucide-react';
 
 import { AgentMessageContent } from '@/renderer/features/agents/components/AgentMessageContent';
+import { BudgetExceededBanner } from '@/renderer/features/agents/components/BudgetExceededBanner';
+import { BudgetWarningBadge } from '@/renderer/features/agents/components/BudgetWarningBadge';
 import { CodingEngineCard, groupEngineRuns } from '@/renderer/features/agents/components/CodingEngineCard';
 import type { AgentActivityEvent, PresentedAgent } from '@/renderer/features/agents/types';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
+import type {
+  BudgetExceededPayload,
+  BudgetResult,
+  BudgetWarningPayload,
+} from '@/shared/electron/desktop-bridge';
 
 /** Agent panel props. */
 interface AgentPanelProps {
@@ -193,6 +200,37 @@ function formatUsageCost(costUsd: number) {
   return `$${costUsd.toFixed(costUsd >= 0.01 ? 4 : 6).replace(/0+$/, '').replace(/\.$/, '')}`;
 }
 
+function deriveBudgetExceededPayload(
+  agentId: string,
+  budget: BudgetResult,
+): BudgetExceededPayload | null {
+  if (!budget.state.paused) {
+    return null;
+  }
+
+  const dailyPct = budget.usage.daily_pct ?? -1;
+  const totalPct = budget.usage.total_pct ?? -1;
+  const pausedReason = budget.state.paused_reason?.toLowerCase() ?? '';
+  const limitType = pausedReason.includes('total') || totalPct > dailyPct ? 'total' : 'daily';
+  const limitUsd = limitType === 'daily'
+    ? budget.config.daily_limit_usd
+    : budget.config.total_limit_usd;
+  const usedUsd = limitType === 'daily'
+    ? budget.usage.daily_cost_usd
+    : budget.usage.total_cost_usd;
+
+  return {
+    agentId,
+    jid: `dune:agent:${agentId}`,
+    limitType,
+    limitUsd: limitUsd ?? usedUsd,
+    timestamp: budget.state.paused_at
+      ? new Date(budget.state.paused_at).toISOString()
+      : new Date().toISOString(),
+    usedUsd,
+  };
+}
+
 /** Renders the agent panel UI. */
 export function AgentPanel({
   agent,
@@ -206,6 +244,47 @@ export function AgentPanel({
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
   const composerHint = `${modifierLabel} Enter to send · Shift Enter for a new line`;
+  const [budgetExceeded, setBudgetExceeded] = useState<BudgetExceededPayload | null>(null);
+  const [budgetWarning, setBudgetWarning] = useState<BudgetWarningPayload | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBudget = async () => {
+      const budget = await window.duneDesktop?.getBudget?.(agent.id) ?? null;
+
+      if (!isMounted || !budget) {
+        return;
+      }
+
+      setBudgetExceeded(deriveBudgetExceededPayload(agent.id, budget));
+    };
+
+    void loadBudget();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [agent.id]);
+
+  useEffect(() => {
+    const unsubExceeded = window.duneDesktop?.subscribeBudgetExceeded?.((payload) => {
+      if (payload.jid === `dune:agent:${agent.id}`) {
+        setBudgetExceeded(payload);
+        setBudgetWarning(null);
+      }
+    });
+    const unsubWarning = window.duneDesktop?.subscribeBudgetWarning?.((payload) => {
+      if (payload.jid === `dune:agent:${agent.id}`) {
+        setBudgetWarning(payload);
+      }
+    });
+
+    return () => {
+      unsubExceeded?.();
+      unsubWarning?.();
+    };
+  }, [agent.id]);
 
   /** Handles key down composer. */
   const handleComposerKeyDown = async (
@@ -247,6 +326,25 @@ export function AgentPanel({
               {agent.name}
             </h2>
           </div>
+
+          {budgetExceeded ? (
+            <BudgetExceededBanner
+              agentId={agent.id}
+              limitType={budgetExceeded.limitType}
+              limitUsd={budgetExceeded.limitUsd}
+              onResume={() => {
+                setBudgetExceeded(null);
+              }}
+              usedUsd={budgetExceeded.usedUsd}
+            />
+          ) : null}
+
+          {budgetWarning && !budgetExceeded ? (
+            <BudgetWarningBadge
+              limitType={budgetWarning.limitType}
+              pctUsed={budgetWarning.pctUsed}
+            />
+          ) : null}
 
           {buildTimeline(agent).map((item) => {
             if (item.type === 'message') {

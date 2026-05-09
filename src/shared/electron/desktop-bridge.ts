@@ -14,9 +14,64 @@ import type {
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
+/** Budget config shape. */
+export interface BudgetConfig {
+  daily_limit_usd: number | null;
+  total_limit_usd: number | null;
+  reset_hour: number;
+}
+
+/** Budget state shape. */
+export interface BudgetState {
+  paused: boolean;
+  paused_at: number | null;
+  paused_reason: string | null;
+}
+
+/** Budget usage shape. */
+export interface BudgetUsage {
+  daily_cost_usd: number;
+  total_cost_usd: number;
+  daily_pct: number | null;
+  total_pct: number | null;
+}
+
+/** Budget result shape from AgentLite budget_get action. */
+export interface BudgetResult {
+  config: BudgetConfig;
+  state: BudgetState;
+  usage: BudgetUsage;
+}
+
+/** Budget exceeded event payload. */
+export interface BudgetExceededPayload {
+  agentId: string;
+  jid: string;
+  limitType: 'daily' | 'total';
+  limitUsd: number;
+  usedUsd: number;
+  timestamp: string;
+}
+
+/** Budget warning event payload. */
+export interface BudgetWarningPayload {
+  agentId: string;
+  jid: string;
+  pctUsed: number;
+  limitType: 'daily' | 'total';
+  limitUsd: number;
+  usedUsd: number;
+  timestamp: string;
+}
+
 /** Methods are optional to support browser-only fallback (no Electron preload). */
 export interface DesktopBridge {
   applyNetworkSettings?: () => Promise<void>;
+  getBudget?: (agentId: string) => Promise<BudgetResult | null>;
+  setBudget?: (agentId: string, config: Partial<BudgetConfig>) => Promise<void>;
+  resumeBudget?: (agentId: string) => Promise<void>;
+  subscribeBudgetExceeded?: (listener: (payload: BudgetExceededPayload) => void) => () => void;
+  subscribeBudgetWarning?: (listener: (payload: BudgetWarningPayload) => void) => () => void;
   cancelTelegramSetupSession?: (sessionId: string) => Promise<void>;
   copyText?: (text: string) => Promise<void>;
   platform: NodeJS.Platform;
