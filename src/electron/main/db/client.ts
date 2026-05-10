@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 
 import { duneSchema } from '@/electron/main/orm';
+import { runDuneDatabaseMigrations } from './migrations';
 
 /** Resolves the app database file path. */
 export function resolveDuneDatabasePath(userDataDir: string) {
@@ -26,6 +27,7 @@ export function openDuneDatabase(databasePath: string) {
 /** Creates the Drizzle database wrapper and exposes the raw client for migrations. */
 export function createDuneDatabase(databasePath: string) {
   const sqlite = openDuneDatabase(databasePath);
+  runDuneDatabaseMigrations(sqlite);
 
   return {
     db: drizzle(sqlite, { schema: duneSchema }),

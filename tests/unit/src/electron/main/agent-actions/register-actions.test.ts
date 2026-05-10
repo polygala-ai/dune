@@ -15,10 +15,12 @@ describe('registerDuneActions', () => {
       getRuntimeController: () => ({}),
       onWorkflowChanged: () => undefined,
       workflowStore: {
-        delete: async () => undefined,
-        get: async () => null,
-        keys: async () => [],
-        set: async () => undefined,
+        deleteActivityArchive: async () => undefined,
+        deleteActivityArchivesExcept: async () => undefined,
+        readActivityArchive: async () => ({ events: [], lastCompactedAt: null, rollingSummary: null }),
+        readSnapshot: async () => null,
+        writeActivityArchive: async () => undefined,
+        writeSnapshot: async () => undefined,
       },
     } as unknown as ActionHostServices;
 

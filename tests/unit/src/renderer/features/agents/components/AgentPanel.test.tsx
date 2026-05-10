@@ -76,7 +76,7 @@ function getTranscriptItems(container: HTMLElement) {
 }
 
 describe('AgentPanel', () => {
-  it('renders pills and messages in chronological order even when source arrays are shuffled', () => {
+  it('renders activity and messages in chronological order even when source arrays are shuffled', () => {
     const { container } = render(
       <AgentPanel
         agent={createAgent({
@@ -110,6 +110,45 @@ describe('AgentPanel', () => {
     expect(items[3]).toContain('Follow-up request');
     expect(items[4]).toContain('thinking');
     expect(items[5]).toContain('Second answer');
+  });
+
+  it('renders tool calls and agent activity details inline in the chat timeline', () => {
+    const { container } = render(
+      <AgentPanel
+        agent={createAgent({
+          activityEvents: [
+            createActivityEvent({
+              detail: '{"query":"repo docs"}',
+              id: 'activity-tool',
+              kind: 'tool',
+              label: 'search_docs',
+              timestamp: 200,
+            }),
+            createActivityEvent({
+              detail: 'I found the renderer entry point.',
+              id: 'activity-agent-response',
+              kind: 'status',
+              label: 'thinking',
+              timestamp: 300,
+            }),
+          ],
+        })}
+        composerRef={createRef<HTMLTextAreaElement>()}
+        draft=""
+        isLoadingOlderMessages={false}
+        onDraftChange={vi.fn()}
+        onLoadOlderMessages={vi.fn(() => Promise.resolve(undefined))}
+        onSubmit={vi.fn(() => Promise.resolve(undefined))}
+        transcriptRef={createRef<HTMLDivElement>()}
+      />,
+    );
+
+    const text = container.textContent ?? '';
+
+    expect(text).toContain('Tool call: search_docs');
+    expect(text).toContain('{"query":"repo docs"}');
+    expect(text).toContain('Agent response');
+    expect(text).toContain('I found the renderer entry point.');
   });
 
   it('keeps the user message ahead of the assistant message when timestamps match', () => {

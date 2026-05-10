@@ -8,6 +8,7 @@ import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { createDefaultExternalChannelsState } from '@/renderer/features/agents/model/channels';
 
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
+import { normalizeNetworkSettings, validateNetworkSettings } from '@/renderer/features/settings/model/network-settings';
 
 /** Creates runtime snapshot. */
 function createRuntimeSnapshot(): AgentServiceSnapshot {
@@ -33,10 +34,12 @@ function createDesktopBridge(
   return {
     applyNetworkSettings: vi.fn(async () => undefined),
     getRuntimeSnapshot: vi.fn(async () => runtimeSnapshot),
+    loadNetworkSettings: vi.fn(async () => normalizeNetworkSettings(storedSettings.network)),
     platform: 'darwin' as const,
-    storageGet: vi.fn(async (_store: string, key: string) => storedSettings[key] ?? null),
-    storageSet: vi.fn(async (_store: string, key: string, value: unknown) => {
-      storedSettings[key] = value;
+    saveNetworkSettings: vi.fn(async (settings) => {
+      const validated = validateNetworkSettings(settings);
+      storedSettings.network = validated;
+      return validated;
     }),
   };
 }
@@ -46,6 +49,7 @@ function renderNetworkSettings() {
   render(
     <NetworkSettings
       agents={[]}
+      codingEngines={[]}
       externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}
@@ -80,9 +84,9 @@ describe('NetworkSettings', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => {
-      expect(duneDesktop.storageSet).toHaveBeenCalledWith('settings', 'network', {
+      expect(duneDesktop.saveNetworkSettings).toHaveBeenCalledWith({
         bypassRules: ['internal.example', 'localhost'],
-        manualProxyUrl: 'http://127.0.0.1:7890/',
+        manualProxyUrl: 'http://127.0.0.1:7890',
         mode: 'manual',
       });
       expect(duneDesktop.applyNetworkSettings).toHaveBeenCalledTimes(1);

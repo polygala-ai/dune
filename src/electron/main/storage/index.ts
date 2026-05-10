@@ -1,5 +1,3 @@
 // Main-process storage exports.
 
-export type { AppStorage } from './app-storage';
-export { EncryptedFileStorage } from './encrypted-file-storage';
-export { JsonFileStorage } from './json-file-storage';
+export { migrateLegacyStorageToSqlite } from './legacy-storage-migration';

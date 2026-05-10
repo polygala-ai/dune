@@ -88,6 +88,12 @@ export const itemTools: RegisteredTool[] = [
       const artifactFolderName = createArtifactFolderName(title, itemId);
 
       assertProjectExists(snapshot, projectId);
+      if (!isWorkflowItemStatus(status)) {
+        throw new ToolHandlerError(
+          'validation-error',
+          `Work item status must be one of: ${workflowItemStatuses.join(', ')}.`,
+        );
+      }
       assertAgentCanCreateItem(status);
       const project = snapshot.projects.find((candidate) => candidate.id === projectId)!;
 

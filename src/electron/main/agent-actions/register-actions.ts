@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { Agent as AgentLiteAgent } from '@boxlite-ai/agentlite';
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import type { AppStorage } from '@/electron/main/storage/app-storage';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
 
 import { agentTools } from '@/electron/main/agent-actions/handlers/agents';
 import { itemTools } from '@/electron/main/agent-actions/handlers/items';
@@ -33,7 +33,7 @@ import type {
 export interface ActionHostServices {
   getRuntimeController: () => DesktopRuntimeController;
   onWorkflowChanged: () => void;
-  workflowStore: AppStorage;
+  workflowStore: WorkflowSnapshotStore;
 }
 
 /**
@@ -103,7 +103,7 @@ export function registerDuneActions(
       toActionName(toolName),
       tool.definition.description,
       schema,
-      async (args) => tool.handler(toolServices, args as Record<string, unknown>),
+      async (args) => tool.handler(toolServices, args),
     );
   }
 

@@ -2,12 +2,13 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AppStorage } from '@/electron/main/storage';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
 import { createWorkflowCoordinator } from '@/electron/main/workflow/workflow-coordinator';
 import {
   MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS,
-  createWorkflowItemActivityArchiveKey,
+  createPersistedWorkflowItemActivityArchive,
   createWorkflowItemActivitySummary,
+  type PersistedWorkflowItemActivityArchive,
 } from '@/shared/workflow/activity';
 
 /** Flushes pending microtasks. */
@@ -38,18 +39,30 @@ async function waitForAssertion(assertion: () => void, attempts = 10) {
 /** Creates an in-memory app storage implementation. */
 function createMemoryStore(initial: Record<string, unknown> = {}) {
   const values = new Map<string, unknown>(Object.entries(initial));
-  const store: AppStorage = {
-    delete: async (key) => {
-      values.delete(key);
+  const archives = new Map<string, PersistedWorkflowItemActivityArchive>();
+  const store: WorkflowSnapshotStore = {
+    deleteActivityArchive: async (itemId) => {
+      archives.delete(itemId);
     },
-    get: async <T,>(key: string) => (values.get(key) as T | undefined) ?? null,
-    keys: async () => [...values.keys()],
-    set: async <T,>(key: string, value: T) => {
-      values.set(key, value);
+    deleteActivityArchivesExcept: async (activeItemIds) => {
+      for (const itemId of archives.keys()) {
+        if (!activeItemIds.has(itemId)) {
+          archives.delete(itemId);
+        }
+      }
+    },
+    readActivityArchive: async (itemId) =>
+      archives.get(itemId) ?? createPersistedWorkflowItemActivityArchive(),
+    readSnapshot: async () => (values.get('snapshot') as any) ?? null,
+    writeActivityArchive: async (itemId, archive) => {
+      archives.set(itemId, archive);
+    },
+    writeSnapshot: async (value) => {
+      values.set('snapshot', value);
     },
   };
 
-  return { store, values };
+  return { archives, store, values };
 }
 
 /** Creates a stored workflow event. */
@@ -92,7 +105,7 @@ function createSnapshot(itemOverrides: Record<string, unknown> = {}) {
 
 describe('createWorkflowCoordinator', () => {
   it('compacts overflow workflow activity into the archive store', async () => {
-    const { store, values } = createMemoryStore();
+    const { archives, store, values } = createMemoryStore();
     const coordinator = createWorkflowCoordinator({
       getRuntimeController: () => null,
       notifyWorkflowChanged: vi.fn(),
@@ -103,10 +116,10 @@ describe('createWorkflowCoordinator', () => {
       (_value, index) => createStoredEvent(`event-${index}`, index + 1),
     );
 
-    await coordinator.workflowStore.set('snapshot', createSnapshot({ workflowEvents }) as any);
+    await coordinator.workflowStore.writeSnapshot(createSnapshot({ workflowEvents }) as any);
 
     const storedSnapshot = values.get('snapshot') as any;
-    const storedArchive = values.get(createWorkflowItemActivityArchiveKey('item-1')) as any;
+    const storedArchive = archives.get('item-1') as any;
 
     expect(storedSnapshot.items[0].workflowEvents).toHaveLength(MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS);
     expect(storedSnapshot.items[0].activity).toEqual(expect.objectContaining({
@@ -136,7 +149,7 @@ describe('createWorkflowCoordinator', () => {
       workflowStore: store,
     });
 
-    await coordinator.workflowStore.set('snapshot', createSnapshot() as any);
+    await coordinator.workflowStore.writeSnapshot(createSnapshot() as any);
 
     expect((values.get('snapshot') as any).items[0].scheduledTaskId).toBe('task-prev');
     expect(runtimeController.cancelItemAssignment).not.toHaveBeenCalled();
@@ -169,6 +182,35 @@ describe('createWorkflowCoordinator', () => {
     await waitForAssertion(() => {
       expect(notifyWorkflowChanged).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('does not recreate assignment tasks for review items during the periodic sweep', async () => {
+    const notifyWorkflowChanged = vi.fn();
+    const scheduleItemAssignment = vi.fn(async () => 'task-recreated');
+    const { store, values } = createMemoryStore({
+      snapshot: createSnapshot({
+        scheduledTaskId: 'task-completed',
+        status: 'review',
+      }) as any,
+    });
+    const coordinator = createWorkflowCoordinator({
+      getRuntimeController: () => ({
+        cancelItemAssignment: vi.fn(),
+        getSnapshot: vi.fn(() => ({ agents: [], telegramSetupSessions: [] })),
+        isItemTaskKnown: vi.fn(() => false),
+        scheduleItemAssignment,
+      }) as any,
+      notifyWorkflowChanged,
+      workflowStore: store,
+    });
+
+    coordinator.start();
+    await flushMicrotasks();
+    coordinator.stop();
+
+    expect(scheduleItemAssignment).not.toHaveBeenCalled();
+    expect((values.get('snapshot') as any).items[0].scheduledTaskId).toBe('task-completed');
+    expect(notifyWorkflowChanged).not.toHaveBeenCalled();
   });
 
   it('creates one auto-review nudge and does not duplicate it while pending', async () => {

@@ -191,7 +191,7 @@ describe('preload bridge', () => {
     );
   });
 
-  it('proxies storage calls through ipcRenderer', async () => {
+  it('proxies workflow and settings calls through ipcRenderer', async () => {
     invoke.mockResolvedValue(null);
 
     await import('@/electron/preload');
@@ -200,17 +200,28 @@ describe('preload bridge', () => {
       | DesktopBridge
       | undefined;
 
-    await bridge?.storageGet?.('settings', 'theme');
-    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageGet, 'settings', 'theme');
+    await bridge?.getWorkflowSnapshot?.();
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.getWorkflowSnapshot);
 
-    await bridge?.storageSet?.('settings', 'theme', 'dark');
-    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageSet, 'settings', 'theme', 'dark');
+    await bridge?.saveWorkflowSnapshot?.({
+      items: [],
+      projects: [],
+      selectedItemId: null,
+      selectedProjectFilter: 'all',
+      selectedProjectId: null,
+      selectedProjectView: 'board',
+    });
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.saveWorkflowSnapshot, expect.any(Object));
 
-    await bridge?.storageDelete?.('settings', 'theme');
-    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageDelete, 'settings', 'theme');
+    await bridge?.loadNetworkSettings?.();
+    expect(invoke).toHaveBeenCalledWith(ipcChannels.loadNetworkSettings);
 
-    await bridge?.storageKeys?.('settings');
-    expect(invoke).toHaveBeenCalledWith(ipcChannels.storageKeys, 'settings');
+    await bridge?.writeModelProviderSecret?.('provider-1', 'secret');
+    expect(invoke).toHaveBeenCalledWith(
+      ipcChannels.writeModelProviderSecret,
+      'provider-1',
+      'secret',
+    );
   });
 
   it('exposes all expected bridge methods', async () => {
@@ -232,7 +243,11 @@ describe('preload bridge', () => {
       'getProjectActivityPage',
       'getRuntimeSnapshot',
       'getTelegramSetupSession',
+      'getWorkflowSnapshot',
       'listProjectArtifactEntries',
+      'loadCodingEngineSettings',
+      'loadModelProviders',
+      'loadNetworkSettings',
       'openExternal',
       'openPath',
       'prepareProjectRootPath',
@@ -240,15 +255,18 @@ describe('preload bridge', () => {
       'resetRuntime',
       'restartApp',
       'runIsolatedResearch',
+      'saveCodingEngineSettings',
+      'saveModelProviders',
+      'saveNetworkSettings',
+      'saveWorkflowSnapshot',
       'selectProjectDirectory',
       'selectAgent',
       'sendAgentMessage',
       'startTelegramSetupSession',
+      'deleteModelProviderSecret',
+      'readModelProviderSecret',
       'updateAgentChannel',
-      'storageDelete',
-      'storageGet',
-      'storageKeys',
-      'storageSet',
+      'writeModelProviderSecret',
       'subscribe',
     ];
 

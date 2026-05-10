@@ -22,9 +22,6 @@ import {
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 import { isPlainObject } from '@/shared/is-record';
 
-const STORE_NAME = 'workflow';
-const STORE_KEY = 'snapshot';
-
 /** Normalizes task. */
 function normalizeTask(value: unknown): WorkflowTask | null {
   if (!isPlainObject(value)) {
@@ -296,7 +293,7 @@ export function useWorkflowPersistence() {
 
     /** Loads . */
     const load = async () => {
-      const rawSnapshot = await window.duneDesktop?.storageGet?.(STORE_NAME, STORE_KEY);
+      const rawSnapshot = await window.duneDesktop?.getWorkflowSnapshot?.();
       const normalizedSnapshot = normalizeWorkflowSnapshot(rawSnapshot);
       const snapshot = normalizedSnapshot ?? createEmptyWorkflowSnapshot();
 
@@ -307,7 +304,7 @@ export function useWorkflowPersistence() {
       hydrateWorkflow(snapshot);
 
       if (!normalizedSnapshot) {
-        await window.duneDesktop?.storageSet?.(STORE_NAME, STORE_KEY, snapshot);
+        await window.duneDesktop?.saveWorkflowSnapshot?.(snapshot);
       }
     };
 
@@ -333,7 +330,7 @@ export function useWorkflowPersistence() {
       return;
     }
 
-    void window.duneDesktop?.storageSet?.(STORE_NAME, STORE_KEY, {
+    void window.duneDesktop?.saveWorkflowSnapshot?.({
       items,
       projects,
       selectedItemId,

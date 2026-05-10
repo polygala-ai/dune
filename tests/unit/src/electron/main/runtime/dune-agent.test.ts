@@ -12,7 +12,14 @@ import { DuneAgent, type DuneAcpOptions } from '@/electron/main/runtime/dune-age
 /** Creates mock agent. */
 function createMockAgent(): AgentLiteAgent {
   return {
+    getBackend: vi.fn(() => ({ type: 'claudeCode' })),
     registerGroup: vi.fn(async () => {}),
+    setBackend: vi.fn(async (backend) => ({
+      applies: 'nextTurn' as const,
+      current: backend,
+      handoff: 'skipped' as const,
+      previous: { type: 'claudeCode' as const },
+    })),
     start: vi.fn(async () => {}),
   } as unknown as AgentLiteAgent;
 }
@@ -97,5 +104,33 @@ describe('DuneAgent', () => {
       acp?: DuneAcpOptions;
     }];
     expect(runtimeOptions.acp).toEqual(acp);
+  });
+
+  it('applies the configured AgentLite backend after getting the persisted agent', async () => {
+    const agent = createMockAgent();
+    const getOrCreateAgent = vi.fn((_name: string, _options?: AgentOptions) => agent);
+
+    const duneAgent = new DuneAgent({
+      agentLite: {
+        agents: new Map(),
+        createAgent: vi.fn(),
+        deleteAgent: vi.fn(async () => {}),
+        getOrCreateAgent,
+        stop: vi.fn(async () => {}),
+      } as unknown as AgentLite,
+      backend: { type: 'codex' },
+      credentials: async () => ({}),
+      groupFolder: 'stilgar-PNDOmbNq',
+      name: 'Stilgar',
+      onOutboundMessage: vi.fn(),
+      primaryChatJid: 'dune:agent:PNDOmbNq',
+    });
+
+    await duneAgent.start();
+
+    const [, runtimeOptions] = getOrCreateAgent.mock.calls[0] as [string, AgentOptions];
+    expect(runtimeOptions.backend).toBeUndefined();
+    expect(agent.setBackend).toHaveBeenCalledWith({ type: 'codex' }, { context: 'fresh' });
+    expect(agent.start).toHaveBeenCalledTimes(1);
   });
 });

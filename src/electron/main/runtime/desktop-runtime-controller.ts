@@ -5,6 +5,7 @@ import type {
   AgentServiceListener,
   AgentServiceSnapshot,
 } from '@/shared/agents/agent-runtime';
+import type { AgentBackendOptions } from '@boxlite-ai/agentlite';
 import { createMockAgentRuntime } from '@/renderer/features/agents/services/mock-agent-service';
 import type {
   AgentDefinition,
@@ -21,6 +22,8 @@ import {
 
 /** Active runtime shape. */
 type ActiveRuntime = AgentRuntimeContract & {
+  applyAgentBackendOptions?: (backend: AgentBackendOptions) => Promise<void>;
+  reloadModelCredentials?: () => Promise<void>;
   reloadExternalChannels?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 };
@@ -142,6 +145,16 @@ export class DesktopRuntimeController {
   /** Reloads external channels. */
   async reloadExternalChannels() {
     await this.activeRuntime.reloadExternalChannels?.();
+  }
+
+  /** Applies backend/model options to running agents when supported. */
+  async applyAgentBackendOptions(backend: AgentBackendOptions) {
+    await this.activeRuntime.applyAgentBackendOptions?.(backend);
+  }
+
+  /** Reloads saved model credentials in the active runtime. */
+  async reloadModelCredentials() {
+    await this.activeRuntime.reloadModelCredentials?.();
   }
 
   /** Runs an isolated multi-target research pass and reduces the results. */

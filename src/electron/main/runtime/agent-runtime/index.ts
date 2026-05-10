@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import type {
   Agent as AgentLiteAgent,
+  AgentBackendOptions,
   AgentLite,
   ChannelDriverFactory,
   RegisterGroupOptions,
@@ -24,6 +25,7 @@ import type {
   AgentTranscriptPage,
   AgentRuntimeInfo,
   AgentStatus,
+  CodingEngineId,
   CodingEngineStatus,
   CreateAgentInput,
   ExternalChannelsState,
@@ -102,6 +104,8 @@ import {
 } from './records';
 import {
   createDuneMountLayout,
+  seedAgentRunnerSource,
+  seedCodexAuth,
   seedAgentSupportSources,
 } from './paths';
 import {
@@ -129,6 +133,8 @@ const RESEARCH_RUN_TIMEOUT_MS = 3 * 60 * 1000;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
 const TRANSCRIPT_SUMMARY_CARD_ID = 'transcript-rolling-summary';
 const ISOLATED_RESEARCH_GROUP_FOLDER_PREFIX = 'isolated-research-slot-';
+
+type MaybePromise<T> = T | Promise<T>;
 
 function cloneAgentMessage(message: AgentMessage): AgentMessage {
   return {
@@ -318,6 +324,34 @@ function asFiniteNumber(value: unknown): number | null {
   return value;
 }
 
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function extractSdkTextDelta(message: unknown): string | null {
+  const event = getRecord(getRecord(message)?.event);
+
+  if (!event) {
+    return null;
+  }
+
+  const delta = getRecord(event.delta);
+
+  if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+    return delta.text;
+  }
+
+  const contentBlock = getRecord(event.content_block);
+
+  if (contentBlock?.type === 'text' && typeof contentBlock.text === 'string') {
+    return contentBlock.text;
+  }
+
+  return null;
+}
+
 function captureAgentTokenUsageSnapshot(
   message: unknown,
   totals: AgentSessionTokenTotals,
@@ -408,8 +442,14 @@ export type {
 
 /** Agent store contract. */
 export interface AgentStore {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T): Promise<void>;
+  load(): Promise<{
+    agents: PersistedAgentRecord[];
+    selectedAgentId: string | null;
+  }>;
+  save(state: {
+    agents: PersistedAgentRecord[];
+    selectedAgentId: string | null;
+  }): Promise<void>;
 }
 
 /** Telegram module shape. */
@@ -432,6 +472,8 @@ export interface AgentRuntimeOptions {
   detectCodingEngines?: () => Promise<CodingEngineStatus[]>;
   homeDir?: string;
   loadAgentLiteModule?: () => Promise<typeof import('@boxlite-ai/agentlite')>;
+  loadAgentBackendOptions?: () => MaybePromise<AgentBackendOptions>;
+  loadEnabledCodingEngineIds?: () => MaybePromise<CodingEngineId[]>;
   now?: () => number;
   onAgentIdle?: (agentId: string) => void;
   onItemActivityChanged?: (payload: { itemId: string; isWorking: boolean }) => void;
@@ -456,8 +498,11 @@ import {
  */
 function createCodingEngineAcpConfig(
   env: Record<string, string>,
+  enabledEngineIds: ReadonlySet<CodingEngineId>,
 ): DuneAcpOptions | undefined {
-  const peers = autoAcpPeers();
+  const peers = autoAcpPeers().filter((peer) =>
+    enabledEngineIds.has(peer.name as CodingEngineId),
+  );
   if (peers.length === 0) return undefined;
 
   // Merge credential env into each discovered peer.
@@ -487,6 +532,12 @@ export class AgentRuntime implements AgentRuntimeContract {
   /** Per-agent set of currently running agentlite scheduled task IDs. */
   private readonly runningTaskIds = new Map<string, Set<string>>();
 
+  /** Per-agent live SDK text preview rendered as one activity entry. */
+  private readonly sdkTextActivityByAgent = new Map<string, {
+    content: string;
+    eventId: string;
+  }>();
+
   private readonly records = new AgentRecords();
 
   private readonly lifecycle = new Lifecycle();
@@ -511,6 +562,10 @@ export class AgentRuntime implements AgentRuntimeContract {
   private readonly bundledAgentDir: string;
 
   private readonly loadAgentLiteModule: () => Promise<typeof import('@boxlite-ai/agentlite')>;
+
+  private readonly loadAgentBackendOptions: () => MaybePromise<AgentBackendOptions>;
+
+  private readonly loadEnabledCodingEngineIds: () => MaybePromise<CodingEngineId[]>;
 
   private readonly resolveProjectName: ((projectId: string) => Promise<string | null>) | null;
 
@@ -549,6 +604,12 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.loadAgentLiteModule =
       options.loadAgentLiteModule ??
       (() => import('@boxlite-ai/agentlite'));
+    this.loadAgentBackendOptions =
+      options.loadAgentBackendOptions ??
+      (() => ({ type: 'claudeCode' }));
+    this.loadEnabledCodingEngineIds =
+      options.loadEnabledCodingEngineIds ??
+      (() => ['claude-code', 'codex']);
     this.resolveProjectName = options.resolveProjectName ?? null;
     this.resolveProjectRootPath = options.resolveProjectRootPath ?? null;
     this.resolveModelCredentials =
@@ -654,6 +715,36 @@ export class AgentRuntime implements AgentRuntimeContract {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /** Applies backend/model options to active AgentLite agents for future turns. */
+  async applyAgentBackendOptions(backend: AgentBackendOptions) {
+    for (const record of this.records.values()) {
+      seedAgentRunnerSource(this.runtimeRoot, record.groupFolder);
+
+      if (backend.type === 'codex') {
+        seedCodexAuth(this.homeDir, this.runtimeRoot, record.groupFolder);
+      }
+    }
+
+    await Promise.all(
+      [...this.lifecycle.allRuntimes()].map(([, runtime]) =>
+        runtime.setBackend(backend, { context: 'handoff' })),
+    );
+  }
+
+  /** Refreshes saved model credentials used by running AgentLite agents. */
+  async reloadModelCredentials() {
+    const credentials = await this.resolveModelCredentials();
+    this.startupModelCredentials = { ...credentials };
+    this.snapshot = {
+      ...this.snapshot,
+      runtimeInfo: {
+        ...this.snapshot.runtimeInfo,
+        message: createRuntimeReadyMessage(credentials),
+      },
+    };
+    this.emit();
   }
 
   /** Starts agent. */
@@ -1035,7 +1126,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
     if (didCompactTranscript) {
-      void this.rotateCompactedAgentRuntime(trimmedId);
+      this.scheduleCompactedAgentRuntimeRotation(trimmedId);
     }
 
     const duneAgent = this.lifecycle.getRuntime(trimmedId)
@@ -1609,26 +1700,12 @@ export class AgentRuntime implements AgentRuntimeContract {
     return true;
   }
 
-  private async rotateCompactedAgentRuntime(agentId: string) {
-    const record = this.records.get(agentId);
-
-    if (
-      !record
-      || record.agent.definition.archetype === 'project-main'
-      || this.messageStream.has(agentId)
-      || !this.lifecycle.hasRuntime(agentId)
-    ) {
-      return;
-    }
-
-    this.lifecycle.deleteRuntime(agentId);
-
-    try {
-      await this.lifecycle.deleteSdkAgent(record.groupFolder);
-      await this.ensureAgentRuntime(record);
-    } catch (error) {
-      console.error(`Failed to rotate compacted runtime session for "${record.agent.name}".`, error);
-    }
+  private scheduleCompactedAgentRuntimeRotation(_agentId: string) {
+    // Do not delete/recreate a live AgentLite runtime after transcript
+    // compaction. AgentLite may still be persisting session/task state after
+    // Dune receives output, and removing its database mid-run strands the
+    // worker. The compacted transcript remains persisted in Dune; a fresh
+    // runtime will be created naturally on app restart or explicit reset.
   }
 
   // -------------------------------------------------------------------------
@@ -1648,6 +1725,17 @@ export class AgentRuntime implements AgentRuntimeContract {
       return;
     }
 
+    if (this.hasRunningTask(agentId)) {
+      this.appendLocalChatExchange(agentId, {
+        assistantContent: [
+          'I am currently working on an assigned item.',
+          'Live task activity and the final result will appear here when that run finishes. I can take another direct message once the current item run is idle.',
+        ].join('\n\n'),
+        userContent: trimmedText,
+      });
+      return;
+    }
+
     await this.dispatchAgentInput(agentId, {
       attachmentSources: [],
       format: 'markdown',
@@ -1657,6 +1745,49 @@ export class AgentRuntime implements AgentRuntimeContract {
       senderName: 'You',
       timestamp: this.now(),
     });
+  }
+
+  private hasRunningTask(agentId: string) {
+    return (this.runningTaskIds.get(agentId)?.size ?? 0) > 0;
+  }
+
+  private appendLocalChatExchange(
+    agentId: string,
+    input: {
+      assistantContent: string;
+      userContent: string;
+    },
+  ) {
+    const now = this.now();
+    const userMessage = createUserMessage(input.userContent, now);
+    const assistantMessage: AgentMessage = {
+      ...createAssistantMessage(now),
+      content: input.assistantContent,
+      status: 'complete',
+    };
+    const isRunning = this.hasRunningTask(agentId) || this.messageStream.has(agentId);
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              messages: [...agent.messages, userMessage, assistantMessage],
+              preview: summarizePreview(input.assistantContent),
+              status: agent.status === 'draft' ? agent.status : isRunning ? 'live' : 'ready',
+              updatedAt: now,
+            }
+          : agent,
+      ),
+      selectedAgentId: agentId,
+    };
+    const didCompactTranscript = this.compactTranscriptForAgent(agentId);
+    this.persistState();
+    this.emit();
+    if (didCompactTranscript) {
+      this.scheduleCompactedAgentRuntimeRotation(agentId);
+    }
   }
 
   private async scheduleItemAssignment(agentId: string, itemId: string): Promise<string | null> {
@@ -1874,7 +2005,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
     if (didCompactTranscript) {
-      void this.rotateCompactedAgentRuntime(agentId);
+      this.scheduleCompactedAgentRuntimeRotation(agentId);
     }
   }
 
@@ -2049,6 +2180,140 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.emit();
   }
 
+  private isPrimaryAgentTaskRun(agentId: string, jid: string) {
+    return jid === toAgentChatJid(agentId);
+  }
+
+  private upsertSdkTextActivity(
+    agentId: string,
+    text: string,
+    options: { replace?: boolean } = {},
+  ) {
+    if (!text) {
+      return;
+    }
+
+    const now = this.now();
+    const existing = this.sdkTextActivityByAgent.get(agentId);
+    const eventId = existing?.eventId ?? `act-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    const nextContent = (options.replace ? text : `${existing?.content ?? ''}${text}`)
+      .slice(-8000);
+    const event: AgentActivityEvent = {
+      id: eventId,
+      kind: 'status',
+      label: 'response',
+      detail: nextContent,
+      timestamp: now,
+    };
+
+    this.sdkTextActivityByAgent.set(agentId, {
+      content: nextContent,
+      eventId,
+    });
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) => {
+        if (agent.id !== agentId) {
+          return agent;
+        }
+
+        const existingIndex = agent.activityEvents.findIndex((candidate) => candidate.id === eventId);
+        const activityEvents = existingIndex >= 0
+          ? agent.activityEvents.map((candidate) => candidate.id === eventId ? event : candidate)
+          : [...agent.activityEvents, event];
+
+        return {
+          ...agent,
+          activityEvents: activityEvents.length > MAX_ACTIVITY_EVENTS
+            ? activityEvents.slice(-MAX_ACTIVITY_EVENTS)
+            : activityEvents,
+          updatedAt: now,
+        };
+      }),
+    };
+    this.emit();
+  }
+
+  private clearSdkTextActivity(agentId: string) {
+    const existing = this.sdkTextActivityByAgent.get(agentId);
+
+    if (!existing) {
+      return;
+    }
+
+    this.sdkTextActivityByAgent.delete(agentId);
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              activityEvents: agent.activityEvents.filter((event) => event.id !== existing.eventId),
+            }
+          : agent,
+      ),
+    };
+    this.emit();
+  }
+
+  private appendTaskRunTranscriptMessage(
+    agentId: string,
+    input: {
+      content: string;
+      format?: AgentMessage['format'];
+      role: AgentMessage['role'];
+    },
+  ) {
+    const content = input.content.trim();
+
+    if (!content) {
+      return;
+    }
+
+    const currentAgent = this.snapshot.agents.find((agent) => agent.id === agentId) ?? null;
+    const lastMessage = currentAgent?.messages.at(-1) ?? null;
+
+    if (lastMessage?.role === input.role && lastMessage.content.trim() === content) {
+      return;
+    }
+
+    const now = this.now();
+    const isRunning = (this.runningTaskIds.get(agentId)?.size ?? 0) > 0
+      || this.messageStream.has(agentId);
+    const message: AgentMessage = {
+      attachments: [],
+      content,
+      createdAt: now,
+      format: input.format ?? 'markdown',
+      id: createMessageId(input.role, now),
+      role: input.role,
+      status: 'complete',
+    };
+
+    this.snapshot = {
+      ...this.snapshot,
+      agents: this.snapshot.agents.map((agent) =>
+        agent.id === agentId
+          ? {
+              ...agent,
+              messages: [...agent.messages, message],
+              preview: input.role === 'assistant' ? summarizePreview(content) : agent.preview,
+              status: agent.status === 'draft' ? agent.status : isRunning ? 'live' : 'ready',
+              updatedAt: now,
+            }
+          : agent,
+      ),
+      isStreaming: this.messageStream.isStreaming,
+    };
+    const didCompactTranscript = this.compactTranscriptForAgent(agentId);
+    this.persistState();
+    this.emit();
+    if (didCompactTranscript) {
+      this.scheduleCompactedAgentRuntimeRotation(agentId);
+    }
+  }
+
   private pushActivityEvent(agentId: string, event: AgentActivityEvent) {
     this.snapshot = {
       ...this.snapshot,
@@ -2130,7 +2395,7 @@ export class AgentRuntime implements AgentRuntimeContract {
     this.persistState();
     this.emit();
     if (didCompactTranscript) {
-      void this.rotateCompactedAgentRuntime(agentId);
+      this.scheduleCompactedAgentRuntimeRotation(agentId);
     }
     this.onAgentIdle?.(agentId);
 
@@ -2391,13 +2656,27 @@ export class AgentRuntime implements AgentRuntimeContract {
       const ownerProjectId = record.agent.projectId;
       const duneMountHostDir = mounts.find((m) => m.containerPath === 'dune')?.hostPath ?? '';
       const duneMountContainerDir = '/workspace/extra/dune/';
+      const loadedEnabledCodingEngineIds = this.loadEnabledCodingEngineIds();
+      const enabledCodingEngineIds = new Set(
+        Array.isArray(loadedEnabledCodingEngineIds)
+          ? loadedEnabledCodingEngineIds
+          : await loadedEnabledCodingEngineIds,
+      );
       const acp = createCodingEngineAcpConfig(
         this.startupModelCredentials,
+        enabledCodingEngineIds,
       );
+      const loadedBackendOptions = this.loadAgentBackendOptions();
+      const backend = loadedBackendOptions instanceof Promise
+        ? await loadedBackendOptions
+        : loadedBackendOptions;
+      seedAgentRunnerSource(this.runtimeRoot, record.groupFolder);
+      seedCodexAuth(this.homeDir, this.runtimeRoot, record.groupFolder);
 
       const duneAgent = new DuneAgent({
         ...(acp ? { acp } : {}),
         agentLite,
+        backend,
         boundExternalJid,
         credentials: () => Promise.resolve({ ...this.startupModelCredentials }),
         decorateOutboundMessage: (chatJid, text) => this.decorateOutboundMessage(chatJid, text),
@@ -2470,11 +2749,20 @@ export class AgentRuntime implements AgentRuntimeContract {
         const msg = event.message;
         const sdkType = event.sdkType;
         const sdkSubtype = event.sdkSubtype;
+        const isPrimaryRun = this.isPrimaryAgentTaskRun(agentId, event.jid);
 
         if (sdkType === 'result') {
           this.pendingTokenUsage.delete(agentId);
           this.pendingTokenUsageSummaries.delete(agentId);
           this.captureTokenUsageSummary(agentId, msg);
+        }
+
+        if (isPrimaryRun && sdkType === 'stream_event') {
+          const textDelta = extractSdkTextDelta(msg);
+
+          if (textDelta) {
+            this.upsertSdkTextActivity(agentId, textDelta);
+          }
         }
 
         // Tool result feedback (user messages contain tool results)
@@ -2506,13 +2794,7 @@ export class AgentRuntime implements AgentRuntimeContract {
         if (sdkType === 'assistant' && Array.isArray(msg?.message?.content)) {
           for (const block of msg.message.content as Array<Record<string, unknown>>) {
             if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
-              this.pushActivityEvent(agentId, {
-                id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                kind: 'status',
-                label: 'thinking',
-                detail: String(block.text).slice(0, 2000),
-                timestamp: Date.now(),
-              });
+              this.upsertSdkTextActivity(agentId, String(block.text), { replace: true });
             }
           }
         }
@@ -2532,18 +2814,50 @@ export class AgentRuntime implements AgentRuntimeContract {
       // per-item green-light activity for items whose scheduledTaskId matches.
       alAgent.on('task.run.started', (event) => {
         this.markTaskRunning(agentId, event.taskId, true);
+        if (this.isPrimaryAgentTaskRun(agentId, event.jid)) {
+          this.clearSdkTextActivity(agentId);
+          this.pushActivityEvent(agentId, {
+            id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            kind: 'status',
+            label: 'working on item',
+            timestamp: Date.now(),
+          });
+        }
         void this.updateItemActivityForTask(event.taskId, true, record.agent.name);
       });
       alAgent.on('task.run.succeeded', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        if (this.isPrimaryAgentTaskRun(agentId, event.jid)) {
+          this.clearSdkTextActivity(agentId);
+          this.appendTaskRunTranscriptMessage(agentId, {
+            content: event.result ?? 'Finished working on the item.',
+            role: 'assistant',
+          });
+        }
         void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.failed', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        if (this.isPrimaryAgentTaskRun(agentId, event.jid)) {
+          this.clearSdkTextActivity(agentId);
+          this.appendTaskRunTranscriptMessage(agentId, {
+            content: `Task failed: ${event.error || 'Unknown error.'}`,
+            role: 'system',
+          });
+        }
         void this.updateItemActivityForTask(event.taskId, false);
       });
       alAgent.on('task.run.skipped', (event) => {
         this.markTaskRunning(agentId, event.taskId, false);
+        if (this.isPrimaryAgentTaskRun(agentId, event.jid)) {
+          this.clearSdkTextActivity(agentId);
+          this.appendTaskRunTranscriptMessage(agentId, {
+            content: event.detail
+              ? `Task skipped: ${event.reason} (${event.detail}).`
+              : `Task skipped: ${event.reason}.`,
+            role: 'system',
+          });
+        }
       });
 
       if (didUpdateRecord) {
@@ -2696,8 +3010,9 @@ export class AgentRuntime implements AgentRuntimeContract {
 
   private async loadPersistedState() {
     try {
-      const agents = (await this.agentStore.get<PersistedAgentRecord[]>('agents')) ?? [];
-      const selectedAgentId = await this.agentStore.get<string | null>('selectedAgentId');
+      const persistedState = await this.agentStore.load();
+      const agents = persistedState.agents;
+      const selectedAgentId = persistedState.selectedAgentId;
       let didCompactPersistedTranscript = false;
 
       this.records.clear();
@@ -2766,8 +3081,10 @@ export class AgentRuntime implements AgentRuntimeContract {
       }
     }
 
-    void this.agentStore.set('agents', [...this.records.values()]);
-    void this.agentStore.set('selectedAgentId', this.snapshot.selectedAgentId);
+    void this.agentStore.save({
+      agents: [...this.records.values()],
+      selectedAgentId: this.snapshot.selectedAgentId,
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -25,7 +25,7 @@ describe('DesktopRuntimeController', () => {
     tempDirs.push(homeDir);
 
     const controller = new DesktopRuntimeController({
-      agentStore: { get: async () => null, set: async () => {} },
+      agentStore: { load: async () => ({ agents: [], selectedAgentId: null }), save: async () => {} },
       createRealRuntime: () => ({
         ...createMockAgentRuntime(),
         start: async () => {
@@ -67,7 +67,7 @@ describe('DesktopRuntimeController', () => {
         }),
     );
     const controller = new DesktopRuntimeController({
-      agentStore: { get: async () => null, set: async () => {} },
+      agentStore: { load: async () => ({ agents: [], selectedAgentId: null }), save: async () => {} },
       createRealRuntime: () => ({
         ...createMockAgentRuntime(),
         shutdown,
@@ -98,7 +98,7 @@ describe('DesktopRuntimeController', () => {
     mockRuntime.service.scheduleItemAssignment = scheduleItemAssignment;
     mockRuntime.service.cancelItemAssignment = cancelItemAssignment;
     const controller = new DesktopRuntimeController({
-      agentStore: { get: async () => null, set: async () => {} },
+      agentStore: { load: async () => ({ agents: [], selectedAgentId: null }), save: async () => {} },
       createRealRuntime: () => ({
         ...mockRuntime,
         start: async () => undefined,

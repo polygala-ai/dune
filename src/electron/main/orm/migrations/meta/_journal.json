@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1777445210113,
+      "tag": "0000_mysterious_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777448636961,
+      "tag": "0001_agent_context_cards_composite_pk",
+      "breakpoints": true
+    }
+  ]
+}

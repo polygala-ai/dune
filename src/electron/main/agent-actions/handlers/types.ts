@@ -1,7 +1,7 @@
 // Dune action handler types shared by the action-registration layer.
 
-import type { AppStorage } from '@/electron/main/storage/app-storage';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
 
 /** MCP-style tool definition. Used internally by RegisteredTool. */
 export interface ToolDefinition {
@@ -23,7 +23,7 @@ export interface ToolHandlerContext {
 export interface ToolHandlerOptions {
   getRuntimeController: () => DesktopRuntimeController;
   onWorkflowChanged: () => void;
-  workflowStore: AppStorage;
+  workflowStore: WorkflowSnapshotStore;
 }
 
 /** Tool services shape. */

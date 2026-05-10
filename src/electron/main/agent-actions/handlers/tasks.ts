@@ -1,6 +1,7 @@
 // Tasks IPC tool handlers.
 
 import { createId } from '@/shared/id';
+import type { WorkflowTaskStatus } from '@/renderer/features/workflow/types';
 
 import { optionalString, requireString } from './helpers';
 import {
@@ -102,7 +103,7 @@ export const taskTools: RegisteredTool[] = [
       }
 
       if (args.status !== undefined) {
-        task.status = requireString(args.status, 'status');
+        task.status = requireString(args.status, 'status') as WorkflowTaskStatus;
       }
 
       task.updatedAt = Date.now();

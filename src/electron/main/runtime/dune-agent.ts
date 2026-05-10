@@ -2,6 +2,7 @@
 
 import type {
   Agent as AgentLiteAgent,
+  AgentBackendOptions,
   AgentLite,
   ChannelDriverFactory,
   McpServerConfig,
@@ -27,6 +28,7 @@ export interface DuneAcpOptions {
 /** Dune agent options. */
 export interface DuneAgentOptions {
   agentLite: AgentLite;
+  backend?: AgentBackendOptions | undefined;
   boundExternalJid?: string | undefined;
   credentials: () => Promise<Record<string, string>>;
   decorateOutboundMessage?: (chatJid: string, text: string) => Promise<string> | string;
@@ -138,6 +140,10 @@ export class DuneAgent {
 
     this.agent = options.agentLite.getOrCreateAgent(options.groupFolder, agentOptions);
 
+    if (options.backend) {
+      await this.agent.setBackend(options.backend, { context: 'fresh' });
+    }
+
     if (options.registerActions) {
       options.registerActions(this.agent);
     }
@@ -149,6 +155,14 @@ export class DuneAgent {
   /** The underlying AgentLite agent instance for event subscriptions. */
   get agentLiteAgent(): AgentLiteAgent {
     return this.agent;
+  }
+
+  /** Applies backend/model options for future turns. */
+  async setBackend(
+    backend: AgentBackendOptions,
+    options?: Parameters<AgentLiteAgent['setBackend']>[1],
+  ) {
+    await this.agent.setBackend(backend, options);
   }
 
   /** Pushes user message. */

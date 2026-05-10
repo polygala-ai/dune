@@ -1,7 +1,7 @@
 // Workflow persistence, activity compaction, and assignment coordination.
 
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import type { AppStorage } from '@/electron/main/storage';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
 import {
   createWorkflowEvent,
   recordWorkflowItemEvents,
@@ -16,11 +16,8 @@ import {
   buildRollingWorkflowItemActivitySummary,
   clampWorkflowProjectActivityPageLimit,
   compareWorkflowProjectActivityEntries,
-  createPersistedWorkflowItemActivityArchive,
-  createWorkflowItemActivityArchiveKey,
   createWorkflowItemActivitySummary,
   createWorkflowProjectActivityEntry,
-  getWorkflowItemActivityArchiveItemId,
 } from '@/shared/workflow/activity';
 import { shouldScheduleItemAssignmentTask } from '@/shared/workflow/item-assignment';
 
@@ -39,7 +36,7 @@ interface WorkflowCoordinatorOptions {
   notifyWorkflowChanged: () => void;
   setInterval?: typeof globalThis.setInterval;
   setTimeout?: typeof globalThis.setTimeout;
-  workflowStore: AppStorage;
+  workflowStore: WorkflowSnapshotStore;
 }
 
 /** Creates workflow-specific storage and timer coordination. */
@@ -108,26 +105,17 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
 
   async function compactWorkflowActivity(snapshot: StoredWorkflowSnapshot): Promise<void> {
     const activeItemIds = new Set(snapshot.items.map((item) => item.id));
-    const workflowKeys = await options.workflowStore.keys();
-    const staleArchiveKeys = workflowKeys.filter((key) => {
-      const itemId = getWorkflowItemActivityArchiveItemId(key);
-      return itemId !== null && !activeItemIds.has(itemId);
-    });
-
-    await Promise.all(staleArchiveKeys.map((key) => options.workflowStore.delete(key)));
+    await options.workflowStore.deleteActivityArchivesExcept(activeItemIds);
 
     for (const item of snapshot.items) {
-      const archiveKey = createWorkflowItemActivityArchiveKey(item.id);
-      const existingArchive = createPersistedWorkflowItemActivityArchive(
-        await options.workflowStore.get(archiveKey) ?? {},
-      );
+      const existingArchive = await options.workflowStore.readActivityArchive(item.id);
       const liveEvents = Array.isArray(item.workflowEvents)
         ? item.workflowEvents.map((event) => cloneStoredWorkflowEvent(event))
         : [];
       const liveWindow = liveEvents.slice(0, MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS);
       const overflow = liveEvents.slice(MAX_LIVE_WORKFLOW_ITEM_ACTIVITY_EVENTS).reverse();
       const archivedEvents = dedupeWorkflowEventsChronologically([
-        ...existingArchive.events,
+        ...existingArchive.events.map((event) => cloneStoredWorkflowEvent(event as StoredWorkflowEvent)),
         ...overflow,
       ]);
       const rollingSummary = buildRollingWorkflowItemActivitySummary(item.title, archivedEvents);
@@ -143,12 +131,12 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
 
       if (archivedEvents.length === 0) {
         if (existingArchive.events.length > 0 || existingArchive.rollingSummary) {
-          await options.workflowStore.delete(archiveKey);
+          await options.workflowStore.deleteActivityArchive(item.id);
         }
         continue;
       }
 
-      await options.workflowStore.set(archiveKey, {
+      await options.workflowStore.writeActivityArchive(item.id, {
         events: archivedEvents,
         lastCompactedAt: Date.now(),
         rollingSummary,
@@ -160,7 +148,7 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
     projectId: string,
     optionsForPage?: { beforeEntryId?: string | null; limit?: number },
   ) {
-    const snapshot = await options.workflowStore.get<StoredWorkflowSnapshot>('snapshot');
+    const snapshot = await options.workflowStore.readSnapshot();
 
     if (!snapshot || !Array.isArray(snapshot.items)) {
       return {
@@ -179,9 +167,7 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
         entries.set(event.id, createWorkflowProjectActivityEntry(item, event));
       }
 
-      const archive = createPersistedWorkflowItemActivityArchive(
-        await options.workflowStore.get(createWorkflowItemActivityArchiveKey(item.id)) ?? {},
-      );
+      const archive = await options.workflowStore.readActivityArchive(item.id);
 
       for (const event of archive.events) {
         entries.set(event.id, createWorkflowProjectActivityEntry(item, event));
@@ -303,7 +289,7 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
       return;
     }
 
-    const snapshot = await options.workflowStore.get<StoredWorkflowSnapshot>('snapshot');
+    const snapshot = await options.workflowStore.readSnapshot();
     if (!isWorkflowSnapshotLike(snapshot)) {
       return;
     }
@@ -345,36 +331,14 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
 
     if (dirty) {
       await compactWorkflowActivity(snapshot);
-      await options.workflowStore.set('snapshot', snapshot);
+      await options.workflowStore.writeSnapshot(snapshot);
       options.notifyWorkflowChanged();
     }
   }
 
-  async function nudgeIdleMainAgents(store: AppStorage) {
+  async function nudgeIdleMainAgents(store: WorkflowSnapshotStore) {
     try {
-      const workflow = await store.get<{
-        agents: Array<{ id: string; projectId: string | null; role: string; status: string }>;
-        items: Array<{
-          id: string;
-          primaryAgentId: string | null;
-          projectId: string;
-          status: string;
-          tasks: Array<{ id: string; status: string; title: string }>;
-          title: string;
-        }>;
-        projects: Array<{ id: string }>;
-      }>('snapshot') as {
-        agents?: Array<{ id: string; projectId: string | null; role: string; status: string }>;
-        items: Array<{
-          id: string;
-          primaryAgentId: string | null;
-          projectId: string;
-          status: string;
-          tasks: Array<{ id: string; status: string; title: string }>;
-          title: string;
-        }>;
-        projects: Array<{ id: string }>;
-      } | null;
+      const workflow = await store.readSnapshot();
       if (!workflow) {
         return;
       }
@@ -404,18 +368,14 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
         );
 
         if (hasAnyItems && !hasInboxItems && !hasPendingNudge) {
-          const fullSnapshot = await store.get<Record<string, unknown>>('snapshot') as Record<string, unknown> | null;
-          if (!fullSnapshot) {
-            continue;
-          }
-
           const now = Date.now();
           const activeCount = projectItems.filter((item) => item.status === 'active').length;
           const reviewCount = projectItems.filter((item) => item.status === 'review').length;
           const acceptanceCount = projectItems.filter((item) => item.status === 'acceptance').length;
           const doneCount = projectItems.filter((item) => item.status === 'done').length;
 
-          const items = (fullSnapshot.items ?? []) as Array<Record<string, unknown>>;
+          const fullSnapshot = workflow as unknown as Record<string, unknown>;
+          const items = fullSnapshot.items as Array<Record<string, unknown>>;
           items.push({
             artifactFolderName: '',
             brief: [
@@ -482,7 +442,7 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
           });
 
           fullSnapshot.items = items;
-          await store.set('snapshot', fullSnapshot);
+          await store.writeSnapshot(fullSnapshot as unknown as StoredWorkflowSnapshot);
           options.notifyWorkflowChanged();
         }
       }
@@ -492,23 +452,22 @@ export function createWorkflowCoordinator(options: WorkflowCoordinatorOptions) {
   }
 
   const workflowStore = {
-    delete: async (key) => options.workflowStore.delete(key),
-    get: async <T,>(key: string) => options.workflowStore.get<T>(key),
-    keys: async () => options.workflowStore.keys(),
-    set: async <T,>(key: string, value: T) => {
-      if (key !== 'snapshot') {
-        await options.workflowStore.set(key, value);
-        return;
-      }
-
-      const previous = await options.workflowStore.get('snapshot');
+    deleteActivityArchive: (itemId) => options.workflowStore.deleteActivityArchive(itemId),
+    deleteActivityArchivesExcept: (activeItemIds) =>
+      options.workflowStore.deleteActivityArchivesExcept(activeItemIds),
+    readActivityArchive: (itemId) => options.workflowStore.readActivityArchive(itemId),
+    readSnapshot: () => options.workflowStore.readSnapshot(),
+    writeActivityArchive: (itemId, archive) =>
+      options.workflowStore.writeActivityArchive(itemId, archive),
+    writeSnapshot: async (value) => {
+      const previous = await options.workflowStore.readSnapshot();
       await reconcileAssignments(previous, value);
       if (isWorkflowSnapshotLike(value)) {
         await compactWorkflowActivity(value);
       }
-      await options.workflowStore.set(key, value);
+      await options.workflowStore.writeSnapshot(value);
     },
-  } satisfies AppStorage;
+  } satisfies WorkflowSnapshotStore;
 
   function onWorkflowChanged() {
     options.notifyWorkflowChanged();

@@ -26,6 +26,7 @@ export function createQuitCoordinator({
 }: QuitCoordinatorOptions) {
   let allowsQuit = false;
   let isQuitRequested = false;
+  let isRestartRequested = false;
   let shutdownPromise: Promise<void> | null = null;
 
   /** Ensures shutdown. */
@@ -68,6 +69,11 @@ export function createQuitCoordinator({
       requestQuit();
     },
     restart: () => {
+      if (isRestartRequested) {
+        return;
+      }
+
+      isRestartRequested = true;
       app.relaunch();
       requestQuit();
     },

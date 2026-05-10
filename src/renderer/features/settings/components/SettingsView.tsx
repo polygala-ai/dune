@@ -11,6 +11,7 @@ import type {
 } from '@/renderer/features/settings/types';
 import type {
   Agent,
+  CodingEngineStatus,
   AgentRuntimeInfo,
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
@@ -18,6 +19,7 @@ import type {
 /** Settings view props. */
 interface SettingsViewProps {
   agents: Agent[];
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   isCompactShell: boolean;
   onSelectRoute: (route: SettingsRoute) => void;
@@ -30,6 +32,7 @@ interface SettingsViewProps {
 /** Renders the settings view UI. */
 export function SettingsView({
   agents,
+  codingEngines,
   externalChannels,
   isCompactShell,
   onSelectRoute,
@@ -64,6 +67,7 @@ export function SettingsView({
         >
           <SectionComponent
             agents={agents}
+            codingEngines={codingEngines}
             externalChannels={externalChannels}
             onThemeChange={onThemeChange}
             runtimeInfo={runtimeInfo}

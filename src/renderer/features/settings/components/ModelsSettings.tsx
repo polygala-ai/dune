@@ -7,13 +7,9 @@ import { createId } from '@/shared/id';
 
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
 import {
-  deleteModelProviderSecret,
-  loadModelProviders,
-  readModelProviderSecret,
-  saveModelProviders,
   type ModelAuthType,
   type ModelProvider,
-  writeModelProviderSecret,
+  type ModelProviderKind,
 } from '@/renderer/features/settings/model/model-providers';
 import { Button } from '@/renderer/shared/ui/button';
 import { cn } from '@/renderer/shared/lib/utils';
@@ -27,13 +23,15 @@ import { Input } from '@/renderer/shared/ui/input';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
 
-const STORE_NAME = 'settings';
-const SECRETS_STORE_NAME = 'secrets';
-
 /** Masks secret. */
 function maskSecret(key: string) {
   if (key.length <= 8) return '••••••••';
   return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
+/** Returns provider kind label. */
+function providerKindLabel(providerKind: ModelProviderKind) {
+  return providerKind === 'openai' ? 'OpenAI' : 'Anthropic';
 }
 
 /** Default switch props. */
@@ -78,25 +76,6 @@ function DefaultSwitch({ checked, onToggle, providerName }: DefaultSwitchProps) 
   );
 }
 
-/** Creates bridge store. */
-function createBridgeStore(storeName: string) {
-  return {
-    delete: async (key: string) => {
-      await window.duneDesktop?.storageDelete?.(storeName, key);
-    },
-    get: async <T,>(key: string): Promise<T | null> => {
-      const value = await window.duneDesktop?.storageGet?.(storeName, key);
-      return (value as T | null | undefined) ?? null;
-    },
-    set: async <T,>(key: string, value: T) => {
-      await window.duneDesktop?.storageSet?.(storeName, key, value);
-    },
-  };
-}
-
-const settingsStore = createBridgeStore(STORE_NAME);
-const secretsStore = createBridgeStore(SECRETS_STORE_NAME);
-
 /** Finds default provider ID. */
 function findDefaultProviderId(providers: ModelProvider[]) {
   return providers.find((provider) => provider.isDefault)?.id ?? null;
@@ -104,12 +83,15 @@ function findDefaultProviderId(providers: ModelProvider[]) {
 
 /** Loads providers with secrets. */
 async function loadProvidersWithSecrets() {
-  const providers = await loadModelProviders({ secretsStore, settingsStore });
+  const providers = await window.duneDesktop?.loadModelProviders?.();
+  if (!providers) {
+    throw new Error('Desktop settings API is unavailable.');
+  }
   const secrets = Object.fromEntries(
     await Promise.all(
       providers.map(async (provider) => [
         provider.id,
-        await readModelProviderSecret(secretsStore, provider.id),
+        await window.duneDesktop?.readModelProviderSecret?.(provider.id) ?? '',
       ]),
     ),
   );
@@ -123,6 +105,7 @@ interface ProviderFormProps {
     authType: ModelAuthType;
     baseUrl: string;
     name: string;
+    providerKind: ModelProviderKind;
     secret: string;
   };
   onCancel: () => void;
@@ -130,6 +113,7 @@ interface ProviderFormProps {
     authType: ModelAuthType;
     baseUrl: string;
     name: string;
+    providerKind: ModelProviderKind;
     secret: string;
   }) => void;
 }
@@ -140,16 +124,34 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
     authType: 'api-key' as ModelAuthType,
     baseUrl: '',
     name: '',
+    providerKind: 'openai' as ModelProviderKind,
     secret: '',
   });
-  const secretLabel = form.authType === 'oauth-token' ? 'Claude Code OAuth token' : 'API key';
+  const secretLabel = form.authType === 'oauth-token'
+    ? 'Claude Code OAuth token'
+    : form.providerKind === 'openai'
+      ? 'OpenAI API key'
+      : 'Anthropic API key';
   const canSave = form.authType === 'oauth-token'
     ? form.name.trim() && form.secret.trim()
-    : form.name.trim() && form.baseUrl.trim() && form.secret.trim();
+    : form.name.trim() && form.secret.trim();
 
   return (
     <section className="rounded-[20px] border border-app-accent/30 bg-app-card/60 p-5">
       <div className="space-y-3">
+        <select
+          aria-label="Provider type"
+          className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
+          disabled={form.authType === 'oauth-token'}
+          onChange={(e) => setForm({
+            ...form,
+            providerKind: e.target.value as ModelProviderKind,
+          })}
+          value={form.providerKind}
+        >
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
         <select
           aria-label="Auth type"
           className="focus-ring-app h-11 w-full rounded-[16px] border border-app-border bg-app-panel px-4 py-2 text-sm text-app-text outline-none transition-colors focus-visible:border-app-border-strong focus-visible:ring-2"
@@ -157,6 +159,7 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
             ...form,
             authType: e.target.value as ModelAuthType,
             baseUrl: e.target.value === 'oauth-token' ? '' : form.baseUrl,
+            providerKind: e.target.value === 'oauth-token' ? 'anthropic' : form.providerKind,
           })}
           value={form.authType}
         >
@@ -172,7 +175,7 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
         {form.authType === 'api-key' ? (
           <Input
             onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-            placeholder="Base URL (e.g. https://api.openai.com/v1)"
+            placeholder="Base URL (optional)"
             value={form.baseUrl}
           />
         ) : null}
@@ -190,6 +193,7 @@ function ProviderForm({ initial, onCancel, onSave }: ProviderFormProps) {
             authType: form.authType,
             baseUrl: form.authType === 'oauth-token' ? '' : form.baseUrl.trim(),
             name: form.name.trim(),
+            providerKind: form.authType === 'oauth-token' ? 'anthropic' : form.providerKind,
             secret: form.secret.trim(),
           })}
           type="button"
@@ -224,7 +228,10 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
 
   /** Persists . */
   const persist = async (next: ModelProvider[], nextSecrets: Record<string, string> = providerSecrets) => {
-    const persistedProviders = await saveModelProviders(settingsStore, next);
+    const persistedProviders = await window.duneDesktop?.saveModelProviders?.(next);
+    if (!persistedProviders) {
+      throw new Error('Desktop settings API is unavailable.');
+    }
     setProviders(persistedProviders);
     setProviderSecrets(nextSecrets);
   };
@@ -234,16 +241,18 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     authType: ModelAuthType;
     baseUrl: string;
     name: string;
+    providerKind: ModelProviderKind;
     secret: string;
   }) => {
     const id = createId('provider');
-    await writeModelProviderSecret(secretsStore, id, data.secret);
+    await window.duneDesktop?.writeModelProviderSecret?.(id, data.secret);
     await persist([...providers, {
       authType: data.authType,
       baseUrl: data.baseUrl,
       id,
       isDefault: false,
       name: data.name,
+      providerKind: data.providerKind,
     }], {
       ...providerSecrets,
       [id]: data.secret,
@@ -256,15 +265,17 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
     authType: ModelAuthType;
     baseUrl: string;
     name: string;
+    providerKind: ModelProviderKind;
     secret: string;
   }) => {
-    await writeModelProviderSecret(secretsStore, id, data.secret);
+    await window.duneDesktop?.writeModelProviderSecret?.(id, data.secret);
     await persist(
       providers.map((p) => (p.id === id ? {
         ...p,
         authType: data.authType,
         baseUrl: data.baseUrl,
         name: data.name,
+        providerKind: data.providerKind,
       } : p)),
       {
         ...providerSecrets,
@@ -295,7 +306,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
 
   /** Handles remove. */
   const handleRemove = async (id: string) => {
-    await deleteModelProviderSecret(secretsStore, id);
+    await window.duneDesktop?.deleteModelProviderSecret?.(id);
     const nextSecrets = { ...providerSecrets };
     delete nextSecrets[id];
     await persist(providers.filter((p) => p.id !== id), nextSecrets);
@@ -317,6 +328,7 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
                 authType: provider.authType,
                 name: provider.name,
                 baseUrl: provider.baseUrl,
+                providerKind: provider.providerKind,
                 secret: providerSecrets[provider.id] ?? '',
               }}
               key={provider.id}
@@ -333,6 +345,9 @@ export function ModelsSettings(props: SettingsSectionComponentProps) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-app-text">{provider.name}</h3>
+                    <span className="pill-key shrink-0">
+                      {providerKindLabel(provider.providerKind)}
+                    </span>
                     <span className="pill-key shrink-0">
                       {provider.authType === 'oauth-token' ? 'OAuth token' : 'API key'}
                     </span>

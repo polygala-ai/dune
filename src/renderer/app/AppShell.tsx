@@ -108,11 +108,13 @@ export default function AppShell() {
     agents,
     appendTranscriptPage,
     clearAgentAssignments,
+    codingEngines,
   } = useAppStore(
     useShallow((state) => ({
       agents: state.agents,
       appendTranscriptPage: state.appendTranscriptPage,
       clearAgentAssignments: state.clearAgentAssignments,
+      codingEngines: state.codingEngines,
     })),
   );
   const showContextPanel = route === 'agent' && isContextPanelOpen && !!activeAgent;
@@ -538,6 +540,7 @@ export default function AppShell() {
             ) : (
               <SettingsWorkspace
                 agents={agents}
+                codingEngines={codingEngines}
                 externalChannels={externalChannels}
                 isCompactShell={isCompactShell}
                 isSidebarOpen={controller.isSidebarDrawerOpen}

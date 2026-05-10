@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
 
 import { itemTools } from '@/electron/main/agent-actions/handlers/items';
-import type { WorkflowSnapshot } from '@/electron/main/agent-actions/handlers/snapshot';
+import type {
+  WorkflowItemStatus,
+  WorkflowSnapshot,
+} from '@/electron/main/agent-actions/handlers/snapshot';
 import { taskTools } from '@/electron/main/agent-actions/handlers/tasks';
 import type { ToolServices } from '@/electron/main/agent-actions/handlers/types';
 import { workProductTools } from '@/electron/main/agent-actions/handlers/work-products';
 
-function createSnapshot(status: string = 'active'): WorkflowSnapshot {
+function createSnapshot(status: WorkflowItemStatus = 'active'): WorkflowSnapshot {
   return {
     items: [
       {
@@ -84,13 +87,13 @@ function createServices(snapshot: WorkflowSnapshot): ToolServices & { getSnapsho
     getSnapshot: () => currentSnapshot,
     onWorkflowChanged: () => undefined,
     workflowStore: {
-      delete: async () => undefined,
-      get: async <T,>(key: string) => (key === 'snapshot' ? structuredClone(currentSnapshot) as T : null),
-      keys: async () => ['snapshot'],
-      set: async <T,>(key: string, value: T) => {
-        if (key === 'snapshot') {
-          currentSnapshot = structuredClone(value as WorkflowSnapshot);
-        }
+      deleteActivityArchive: async () => undefined,
+      deleteActivityArchivesExcept: async () => undefined,
+      readActivityArchive: async () => ({ events: [], lastCompactedAt: null, rollingSummary: null }),
+      readSnapshot: async () => structuredClone(currentSnapshot),
+      writeActivityArchive: async () => undefined,
+      writeSnapshot: async (value: WorkflowSnapshot) => {
+        currentSnapshot = structuredClone(value);
       },
     },
   };

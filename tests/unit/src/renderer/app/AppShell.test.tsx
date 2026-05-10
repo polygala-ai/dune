@@ -164,6 +164,11 @@ async function createAgent(user: ReturnType<typeof userEvent.setup>, name: strin
   });
 }
 
+/** Opens the active agent popover into the full agent workspace. */
+async function openAgentPopoverFullWindow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: /^Open full window$/i }));
+}
+
 describe('AppShell', () => {
   beforeEach(() => {
     resetAppStore();
@@ -174,8 +179,8 @@ describe('AppShell', () => {
     window.duneDesktop = {
       ...window.duneDesktop,
       platform: window.duneDesktop?.platform ?? 'darwin',
-      storageGet: vi.fn(async () => createSeedWorkflowSnapshot(1_700_000_000_000)),
-      storageSet: vi.fn(async () => undefined),
+      getWorkflowSnapshot: vi.fn(async () => createSeedWorkflowSnapshot(1_700_000_000_000)),
+      saveWorkflowSnapshot: vi.fn(async () => undefined),
     };
   });
 
@@ -183,8 +188,8 @@ describe('AppShell', () => {
     window.duneDesktop = {
       ...window.duneDesktop,
       platform: window.duneDesktop?.platform ?? 'darwin',
-      storageGet: vi.fn(async () => null),
-      storageSet: vi.fn(async () => undefined),
+      getWorkflowSnapshot: vi.fn(async () => null),
+      saveWorkflowSnapshot: vi.fn(async () => undefined),
     };
 
     render(<AppShell />);
@@ -198,19 +203,19 @@ describe('AppShell', () => {
 
   it('repairs persisted work items with invalid statuses instead of clearing the workflow', async () => {
     const snapshot = createSeedWorkflowSnapshot(1_700_000_000_000);
-    const storageSet = vi.fn(async () => undefined);
+    const saveWorkflowSnapshot = vi.fn(async () => undefined);
     window.duneDesktop = {
       ...window.duneDesktop,
       platform: window.duneDesktop?.platform ?? 'darwin',
-      storageGet: vi.fn(async () => ({
+      getWorkflowSnapshot: vi.fn(async () => ({
         ...snapshot,
         items: snapshot.items.map((item, index) =>
           index === 0
             ? { ...item, status: 'archived' }
             : item,
         ),
-      })),
-      storageSet,
+      }) as any),
+      saveWorkflowSnapshot,
     };
 
     render(<AppShell />);
@@ -221,9 +226,7 @@ describe('AppShell', () => {
     expect(screen.getByRole('heading', { name: 'Research Platform' })).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(storageSet).toHaveBeenCalledWith(
-        'workflow',
-        'snapshot',
+      expect(saveWorkflowSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
           items: expect.arrayContaining([
             expect.objectContaining({
@@ -246,15 +249,15 @@ describe('AppShell', () => {
     window.duneDesktop = {
       ...window.duneDesktop,
       platform: window.duneDesktop?.platform ?? 'darwin',
-      storageGet: vi.fn(async () => ({
+      getWorkflowSnapshot: vi.fn(async () => ({
         ...snapshot,
         items: snapshot.items.map((item, index) =>
           index === 0
             ? { ...item, status: 'acceptance' }
             : item,
         ),
-      })),
-      storageSet: vi.fn(async () => undefined),
+      }) as any),
+      saveWorkflowSnapshot: vi.fn(async () => undefined),
     };
 
     render(<AppShell />);
@@ -300,6 +303,11 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('button', { name: /Models/i }));
     expect(
       screen.getByRole('heading', { name: 'Providers' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Backend/i }));
+    expect(
+      screen.getByRole('heading', { name: 'Agent backend' }),
     ).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
@@ -672,6 +680,7 @@ describe('AppShell', () => {
 
     await user.click(await screen.findByRole('tab', { name: /^Agents$/i }));
     await user.click(getOpenAgentButton('Navigator'));
+    await openAgentPopoverFullWindow(user);
 
     expect(await screen.findByLabelText('Agent composer')).toBeInTheDocument();
     expect(screen.queryByTestId('compact-shell-toolbar')).not.toBeInTheDocument();
@@ -794,6 +803,7 @@ describe('AppShell', () => {
     }
 
     await user.click(firstOpenAgentButton);
+    await openAgentPopoverFullWindow(user);
 
     const composer = screen.getByLabelText('Agent composer');
 
@@ -875,9 +885,12 @@ describe('AppShell', () => {
 
     await user.click(screen.getByRole('tab', { name: /^Agents$/i }));
     await user.click(getOpenAgentButton('QA triage'));
+    await openAgentPopoverFullWindow(user);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'QA triage' })).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('main')).getByRole('heading', { name: 'QA triage' }),
+      ).toBeInTheDocument();
     });
 
     expect(screen.getByLabelText('Agent composer')).toBeDisabled();
@@ -1467,10 +1480,11 @@ describe('AppShell', () => {
         name: /^Open agent$/i,
       }),
     );
+    await openAgentPopoverFullWindow(user);
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', {
+        within(screen.getByRole('main')).getByRole('heading', {
           name: 'Homepage copy rewrite agent',
         }),
       ).toBeInTheDocument();

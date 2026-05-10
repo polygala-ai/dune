@@ -1,6 +1,6 @@
 // Network settings UI.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { SettingsSectionComponentProps } from '@/renderer/features/settings/config/settings-sections';
 import { syncAgentRuntimeSnapshot } from '@/renderer/features/agents/runtime/agent-runtime';
@@ -8,14 +8,10 @@ import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
 import { Input } from '@/renderer/shared/ui/input';
 import {
-  loadNetworkSettings,
-  saveNetworkSettings,
   type NetworkProxyMode,
 } from '@/renderer/features/settings/model/network-settings';
 
 import { SettingsSectionIntro } from './SettingsSectionIntro';
-
-const STORE_NAME = 'settings';
 
 /** Feedback state. */
 type FeedbackState =
@@ -49,19 +45,6 @@ const networkModeOptions: Array<{
   },
 ];
 
-/** Creates settings store. */
-function createSettingsStore() {
-  return {
-    get: async <T,>(key: string): Promise<T | null> => {
-      const value = await window.duneDesktop?.storageGet?.(STORE_NAME, key);
-      return (value as T | null | undefined) ?? null;
-    },
-    set: async <T,>(key: string, value: T) => {
-      await window.duneDesktop?.storageSet?.(STORE_NAME, key, value);
-    },
-  };
-}
-
 /** Parses bypass rules. */
 function parseBypassRules(value: string) {
   return value
@@ -73,7 +56,6 @@ function parseBypassRules(value: string) {
 /** Renders the network settings UI. */
 export function NetworkSettings(props: SettingsSectionComponentProps) {
   void props;
-  const settingsStore = useMemo(() => createSettingsStore(), []);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isLoading, setLoading] = useState(true);
   const [isSaving, setSaving] = useState(false);
@@ -82,8 +64,11 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
   const [rawBypassRules, setRawBypassRules] = useState('');
 
   useEffect(() => {
-    loadNetworkSettings(settingsStore)
+    window.duneDesktop?.loadNetworkSettings?.()
       .then((settings) => {
+        if (!settings) {
+          throw new Error('Desktop settings API is unavailable.');
+        }
         setManualProxyUrl(settings.manualProxyUrl);
         setMode(settings.mode);
         setRawBypassRules(settings.bypassRules.join('\n'));
@@ -97,7 +82,7 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
       .finally(() => {
         setLoading(false);
       });
-  }, [settingsStore]);
+  }, []);
 
   const isManualMode = mode === 'manual';
   const canSave = !isLoading && !isSaving && (!isManualMode || Boolean(manualProxyUrl.trim()));
@@ -109,11 +94,14 @@ export function NetworkSettings(props: SettingsSectionComponentProps) {
     setFeedback(null);
 
     try {
-      const savedSettings = await saveNetworkSettings(settingsStore, {
+      const savedSettings = await window.duneDesktop?.saveNetworkSettings?.({
         bypassRules: parseBypassRules(rawBypassRules),
         manualProxyUrl,
         mode,
       });
+      if (!savedSettings) {
+        throw new Error('Desktop settings API is unavailable.');
+      }
 
       setManualProxyUrl(savedSettings.manualProxyUrl);
       setRawBypassRules(savedSettings.bypassRules.join('\n'));

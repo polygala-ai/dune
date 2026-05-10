@@ -45,11 +45,21 @@ describe('ipcChannels', () => {
     }
   });
 
-  it('storage channels use dune:storage: prefix', () => {
-    const storageKeys = ['storageDelete', 'storageGet', 'storageKeys', 'storageSet'];
+  it('settings channels use dune:settings: prefix', () => {
+    const settingsKeys = [
+      'deleteModelProviderSecret',
+      'loadCodingEngineSettings',
+      'loadModelProviders',
+      'loadNetworkSettings',
+      'readModelProviderSecret',
+      'saveCodingEngineSettings',
+      'saveModelProviders',
+      'saveNetworkSettings',
+      'writeModelProviderSecret',
+    ];
 
-    for (const key of storageKeys) {
-      expect(ipcChannels[key as keyof typeof ipcChannels]).toMatch(/^dune:storage:/);
+    for (const key of settingsKeys) {
+      expect(ipcChannels[key as keyof typeof ipcChannels]).toMatch(/^dune:settings:/);
     }
   });
 });

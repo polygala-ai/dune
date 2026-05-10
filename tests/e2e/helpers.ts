@@ -304,6 +304,7 @@ export async function addProvider(
     authType?: 'api-key' | 'oauth-token';
     baseUrl?: string;
     name: string;
+    providerKind?: 'anthropic' | 'openai';
     secret: string;
   },
 ) {
@@ -318,8 +319,11 @@ export async function addProvider(
     await page.getByLabel('Auth type').selectOption('oauth-token');
     await page.getByPlaceholder('Claude Code OAuth token').fill(input.secret);
   } else {
+    await page.getByLabel('Provider type').selectOption(input.providerKind ?? 'openai');
     await page.getByLabel('Auth type').selectOption('api-key');
-    await page.getByPlaceholder('Base URL').fill(input.baseUrl ?? '');
+    if (input.baseUrl) {
+      await page.getByPlaceholder('Base URL').fill(input.baseUrl);
+    }
     await page.getByPlaceholder('API key').fill(input.secret);
   }
 

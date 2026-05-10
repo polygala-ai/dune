@@ -14,7 +14,7 @@ describe('DesktopBridge', () => {
     expect(bridge.createAgent).toBeUndefined();
   });
 
-  it('accepts runtime and storage methods', async () => {
+  it('accepts runtime and typed persistence methods', async () => {
     const applyNetworkSettings = () => Promise.resolve(undefined);
     const copyText = () => Promise.resolve(undefined);
     const createAgent = () => Promise.resolve('agent-1');
@@ -22,7 +22,11 @@ describe('DesktopBridge', () => {
     const openExternal = () => Promise.resolve(undefined);
     const reloadExternalChannels = () => Promise.resolve(undefined);
     const restartApp = () => Promise.resolve(undefined);
-    const storageGet = () => Promise.resolve({ key: 'value' });
+    const loadNetworkSettings = () => Promise.resolve({
+      bypassRules: [],
+      manualProxyUrl: '',
+      mode: 'system' as const,
+    });
     const updateAgentChannel = () => Promise.resolve(undefined);
 
     const bridge: DesktopBridge = {
@@ -32,9 +36,9 @@ describe('DesktopBridge', () => {
       createAgent,
       deleteLocalData,
       openExternal,
+      loadNetworkSettings,
       reloadExternalChannels,
       restartApp,
-      storageGet,
       updateAgentChannel,
     };
 
@@ -45,7 +49,11 @@ describe('DesktopBridge', () => {
     await expect(bridge.openExternal?.('https://t.me/BotFather')).resolves.toBeUndefined();
     await expect(bridge.reloadExternalChannels?.()).resolves.toBeUndefined();
     await expect(bridge.restartApp?.()).resolves.toBeUndefined();
-    expect(await bridge.storageGet?.('settings', 'key')).toEqual({ key: 'value' });
+    await expect(bridge.loadNetworkSettings?.()).resolves.toEqual({
+      bypassRules: [],
+      manualProxyUrl: '',
+      mode: 'system',
+    });
     await expect(bridge.updateAgentChannel?.({ agentId: 'agent-1', channelId: 'dune-chat' })).resolves.toBeUndefined();
   });
 });

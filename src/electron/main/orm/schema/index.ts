@@ -23,6 +23,7 @@ import {
   workflowSnapshots,
 } from './compatibility';
 import {
+  codingEngineSettings,
   modelProviders,
   networkSettings,
   secretEntries,
@@ -48,6 +49,7 @@ export const duneSchema = {
   agentTranscriptArchives,
   agentUiState,
   codingEngines,
+  codingEngineSettings,
   modelProviders,
   networkSettings,
   runtimeState,

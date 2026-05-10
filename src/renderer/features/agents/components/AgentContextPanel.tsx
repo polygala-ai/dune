@@ -25,7 +25,6 @@ import {
   isChannelSelectable,
 } from '@/renderer/features/agents/model/channels';
 import type {
-  CodingEngineStatus,
   PresentedAgent,
   TelegramSetupSession,
   UpdateAgentChannelInput,
@@ -46,7 +45,6 @@ import type { AgentContextCard } from '@/renderer/features/agents/types';
 interface AgentContextPanelProps {
   agent: PresentedAgent;
   className?: string;
-  codingEngines?: CodingEngineStatus[];
   customization?: AgentCustomizationDraft | null;
   onClose: () => void;
   onDeleteAgent?: () => Promise<void> | void;
@@ -192,7 +190,6 @@ function CustomizationMetricRow({
 export function AgentContextPanel({
   agent,
   className,
-  codingEngines = [],
   customization = null,
   onClose,
   onDeleteAgent,
@@ -513,26 +510,6 @@ export function AgentContextPanel({
                   ) : null}
                 </InspectorCard>
               </section>
-
-              {codingEngines.length > 0 ? (
-                <section>
-                  <InspectorCard>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-app-muted">
-                      Coding Engines
-                    </div>
-
-                    <InspectorInset className="space-y-2.5">
-                      {codingEngines.map((engine) => (
-                        <CustomizationMetricRow
-                          key={engine.id}
-                          label={engine.label}
-                          value={engine.available ? (engine.version ?? 'found') : 'Not found'}
-                        />
-                      ))}
-                    </InspectorInset>
-                  </InspectorCard>
-                </section>
-              ) : null}
 
               {visibleContextCards.map((card) => (
                 <InspectorSection eyebrow={card.eyebrow} key={card.id}>

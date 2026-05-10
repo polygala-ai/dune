@@ -9,8 +9,9 @@ import {
 } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 
+import type { DrizzleSettingsRepository } from '@/electron/main/persistence/settings-repository';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
 import type { DesktopRuntimeController } from '@/electron/main/runtime/desktop-runtime-controller';
-import type { AppStorage } from '@/electron/main/storage';
 import {
   assertEmptyProjectRootDirectory,
   ensureProjectArtifactFolder,
@@ -21,6 +22,13 @@ import type {
   CreateAgentInput,
   StartTelegramSetupSessionInput,
 } from '@/renderer/features/agents/types';
+import type { ModelProvider } from '@/renderer/features/settings/model/model-providers';
+import {
+  getAgentLiteBackendOptions,
+  type CodingEngineSettings,
+} from '@/renderer/features/settings/model/coding-engine-settings';
+import type { NetworkSettings } from '@/renderer/features/settings/model/network-settings';
+import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
 import type { AgentServiceSnapshot } from '@/shared/agents/agent-runtime';
 import { ipcChannels } from '@/shared/electron/ipc-channels';
 import { getBootstrappedRuntimeSnapshot } from '@/electron/main/runtime/runtime-snapshot';
@@ -58,9 +66,10 @@ interface RegisterMainIpcHandlersOptions {
   getRuntimeController: () => DesktopRuntimeController | null;
   ipcMain?: IpcMainLike;
   requireRuntimeController: () => DesktopRuntimeController;
-  resolveStore: (name: string) => AppStorage;
-  restartApp: () => void;
+  restartApp: () => Promise<void> | void;
+  settingsRepository: DrizzleSettingsRepository;
   shell?: ShellLike;
+  workflowStore: WorkflowSnapshotStore;
 }
 
 /** Registers the Electron main-process IPC handlers. */
@@ -76,6 +85,13 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
   ) => {
     await options.ensureRuntime();
     return action(options.requireRuntimeController());
+  };
+  const refreshRuntimeModelCredentials = async () => {
+    const runtimeController = options.getRuntimeController();
+
+    if (runtimeController) {
+      await runtimeController.reloadModelCredentials();
+    }
   };
 
   // Runtime handlers.
@@ -172,7 +188,66 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
       withRuntime((runtimeController) => runtimeController.runIsolatedResearch(agentId, input)),
   );
 
-  // Workflow and storage handlers.
+  // Workflow and settings handlers.
+  ipcMain.handle(
+    ipcChannels.getWorkflowSnapshot,
+    async () => options.workflowStore.readSnapshot(),
+  );
+  ipcMain.handle(
+    ipcChannels.saveWorkflowSnapshot,
+    async (_event, snapshot: WorkflowSnapshot) => options.workflowStore.writeSnapshot(snapshot),
+  );
+  ipcMain.handle(
+    ipcChannels.loadModelProviders,
+    async () => options.settingsRepository.loadModelProviders(),
+  );
+  ipcMain.handle(
+    ipcChannels.saveModelProviders,
+    async (_event, providers: ModelProvider[]) => {
+      const savedProviders = await options.settingsRepository.saveModelProviders(providers);
+      await refreshRuntimeModelCredentials();
+      return savedProviders;
+    },
+  );
+  ipcMain.handle(
+    ipcChannels.readModelProviderSecret,
+    async (_event, providerId: string) => options.settingsRepository.readModelProviderSecret(providerId),
+  );
+  ipcMain.handle(
+    ipcChannels.writeModelProviderSecret,
+    async (_event, providerId: string, value: string) => {
+      await options.settingsRepository.writeModelProviderSecret(providerId, value);
+      await refreshRuntimeModelCredentials();
+    },
+  );
+  ipcMain.handle(
+    ipcChannels.deleteModelProviderSecret,
+    async (_event, providerId: string) => {
+      await options.settingsRepository.deleteModelProviderSecret(providerId);
+      await refreshRuntimeModelCredentials();
+    },
+  );
+  ipcMain.handle(
+    ipcChannels.loadNetworkSettings,
+    async () => options.settingsRepository.loadNetworkSettings(),
+  );
+  ipcMain.handle(
+    ipcChannels.saveNetworkSettings,
+    async (_event, settings: NetworkSettings) => options.settingsRepository.saveNetworkSettings(settings),
+  );
+  ipcMain.handle(
+    ipcChannels.loadCodingEngineSettings,
+    async () => options.settingsRepository.loadCodingEngineSettings(),
+  );
+  ipcMain.handle(
+    ipcChannels.saveCodingEngineSettings,
+    async (_event, settings: CodingEngineSettings) => {
+      const savedSettings = await options.settingsRepository.saveCodingEngineSettings(settings);
+      await withRuntime((runtimeController) =>
+        runtimeController.applyAgentBackendOptions(getAgentLiteBackendOptions(savedSettings)));
+      return savedSettings;
+    },
+  );
   ipcMain.handle(
     ipcChannels.ensureProjectArtifactFolder,
     async (_event, rootPath: string, artifactFolderName: string) =>
@@ -187,23 +262,6 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
     ipcChannels.listProjectArtifactEntries,
     async (_event, rootPath: string, artifactFolderName: string) =>
       listProjectArtifactEntries(rootPath, artifactFolderName),
-  );
-  ipcMain.handle(
-    ipcChannels.storageGet,
-    async (_event, store: string, key: string) => options.resolveStore(store).get(key),
-  );
-  ipcMain.handle(
-    ipcChannels.storageSet,
-    async (_event, store: string, key: string, value: unknown) =>
-      options.resolveStore(store).set(key, value),
-  );
-  ipcMain.handle(
-    ipcChannels.storageDelete,
-    async (_event, store: string, key: string) => options.resolveStore(store).delete(key),
-  );
-  ipcMain.handle(
-    ipcChannels.storageKeys,
-    async (_event, store: string) => options.resolveStore(store).keys(),
   );
 
   // Shell, dialog, and app handlers.
@@ -251,7 +309,5 @@ export function registerMainIpcHandlers(options: RegisterMainIpcHandlersOptions)
       return assertEmptyProjectRootDirectory(selectedPath);
     },
   );
-  ipcMain.handle(ipcChannels.restartApp, () => {
-    options.restartApp();
-  });
+  ipcMain.handle(ipcChannels.restartApp, async () => options.restartApp());
 }

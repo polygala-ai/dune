@@ -1,13 +1,12 @@
 // Agent panel UI.
 
-import { type KeyboardEvent, type RefObject, useState } from 'react';
-import { ArrowUpRight } from 'lucide-react';
-
-import { Wrench, Bot, Info } from 'lucide-react';
+import { type KeyboardEvent, type RefObject } from 'react';
+import { ArrowUpRight, Bot, Info, Wrench } from 'lucide-react';
 
 import { AgentMessageContent } from '@/renderer/features/agents/components/AgentMessageContent';
 import { CodingEngineCard, groupEngineRuns } from '@/renderer/features/agents/components/CodingEngineCard';
 import type { AgentActivityEvent, PresentedAgent } from '@/renderer/features/agents/types';
+import { formatMessageTimestamp } from '@/renderer/features/agents/model/time';
 import { useDesktopPlatform } from '@/renderer/shared/lib/use-desktop-platform';
 import { cn } from '@/renderer/shared/lib/utils';
 import { Button } from '@/renderer/shared/ui/button';
@@ -129,9 +128,36 @@ function buildTimeline(agent: PresentedAgent): TimelineItem[] {
     .map(({ item }) => item);
 }
 
-/** Renders the activity pill UI. */
-function ActivityPill({ event }: { event: AgentActivityEvent }) {
-  const [open, setOpen] = useState(false);
+function activityKindLabel(kind: AgentActivityEvent['kind']) {
+  switch (kind) {
+    case 'tool':
+      return 'Tool';
+    case 'subagent':
+      return 'Subagent';
+    case 'status':
+    default:
+      return 'Agent';
+  }
+}
+
+function activityTitle(event: AgentActivityEvent) {
+  if (event.kind === 'tool') {
+    return event.label.startsWith('result:')
+      ? `Tool result: ${event.label.replace(/^result:/, '')}`
+      : `Tool call: ${event.label}`;
+  }
+
+  if (event.kind === 'subagent') {
+    return `Subagent: ${event.label}`;
+  }
+
+  return (event.label === 'thinking' || event.label === 'response') && event.detail
+    ? 'Agent response'
+    : `Status: ${event.label}`;
+}
+
+/** Renders an activity event as a visible chat transcript entry. */
+function ActivityMessage({ event }: { event: AgentActivityEvent }) {
   const icon = event.kind === 'tool'
     ? <Wrench className="h-3 w-3" />
     : event.kind === 'subagent'
@@ -139,32 +165,24 @@ function ActivityPill({ event }: { event: AgentActivityEvent }) {
       : <Info className="h-3 w-3" />;
 
   return (
-    <div className="relative">
-      <button
-        className="flex items-center gap-1.5 rounded-full border border-app-border bg-app-card/60 px-2.5 py-1 font-mono text-[10px] text-app-muted transition-colors hover:border-app-border-strong hover:bg-app-card/80"
-        onClick={() => setOpen(!open)}
-        type="button"
-      >
-        {icon}
-        <span className="truncate">{event.label}</span>
-      </button>
-      {open ? (
-        <div className="mt-1.5 max-w-[32rem] overflow-hidden rounded-[14px] border border-app-border bg-app-card/90 shadow-sm">
-          <div className="flex items-center gap-2 border-b border-app-border bg-app-panel/40 px-3 py-2">
-            {icon}
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-app-muted">{event.kind}</span>
-            <span className="ml-auto font-mono text-[10px] text-app-muted">{event.label}</span>
-          </div>
-          {event.detail ? (
-            <pre className="max-h-[200px] overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-5 text-app-text">
-              {event.detail}
-            </pre>
-          ) : (
-            <div className="px-3 py-2 text-[11px] text-app-muted">No additional details</div>
-          )}
+    <article className="min-w-0 max-w-[44rem] px-1 py-1">
+      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-app-muted">
+        <span>{activityKindLabel(event.kind)}</span>
+        <span className="h-1 w-1 rounded-full bg-app-border-strong" />
+        <span>{formatMessageTimestamp(event.timestamp)}</span>
+      </div>
+      <div className="mt-2 min-w-0 rounded-[14px] border border-app-border bg-app-card/60 px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2 text-[13px] font-medium leading-6 text-app-text">
+          <span className="shrink-0 text-app-muted">{icon}</span>
+          <span className="min-w-0 break-words">{activityTitle(event)}</span>
         </div>
-      ) : null}
-    </div>
+        {event.detail ? (
+          <pre className="mt-2 max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-app-panel/70 px-2.5 py-2 font-mono text-[11px] leading-5 text-app-text">
+            {event.detail}
+          </pre>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -205,12 +223,19 @@ export function AgentPanel({
   transcriptRef,
 }: AgentPanelProps) {
   const { modifierLabel } = useDesktopPlatform();
-  const composerHint = `${modifierLabel} Enter to send · Shift Enter for a new line`;
+  const isComposerEnabled = agent.channel.canCompose && !agent.channel.target;
+  const composerHint = agent.channel.target
+    ? `This agent is attached to ${agent.channel.target.name}. Reply in the source channel.`
+    : `${modifierLabel} Enter to send · Shift Enter for a new line`;
 
   /** Handles key down composer. */
   const handleComposerKeyDown = async (
     event: KeyboardEvent<HTMLTextAreaElement>,
   ) => {
+    if (!isComposerEnabled) {
+      return;
+    }
+
     const isPrimaryModifier = modifierLabel === '⌘' ? event.metaKey : event.ctrlKey;
 
     if (event.key === 'Enter' && isPrimaryModifier) {
@@ -303,12 +328,10 @@ export function AgentPanel({
 
             if (item.type === 'activity') {
               return (
-                <div className="message-reveal flex min-w-0 justify-start" key={item.events[0]?.id}>
-                  <div className="flex min-w-0 max-w-[44rem] flex-wrap gap-1.5">
-                    {item.events.map((event) => (
-                      <ActivityPill event={event} key={event.id} />
-                    ))}
-                  </div>
+                <div className="message-reveal flex min-w-0 flex-col items-start" key={item.events[0]?.id}>
+                  {item.events.map((event) => (
+                    <ActivityMessage event={event} key={event.id} />
+                  ))}
                 </div>
               );
             }
@@ -328,6 +351,10 @@ export function AgentPanel({
         className="shrink-0 border-t border-app-border px-8 py-4"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!isComposerEnabled) {
+            return;
+          }
+
           void onSubmit(draft);
         }}
       >
@@ -335,6 +362,7 @@ export function AgentPanel({
           <textarea
             aria-label="Agent composer"
             className="min-h-[84px] w-full bg-transparent px-1 text-[14px] leading-7 text-app-text outline-none placeholder:text-app-muted"
+            disabled={!isComposerEnabled}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               void handleComposerKeyDown(event);
@@ -348,7 +376,7 @@ export function AgentPanel({
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-[12px] leading-5 text-app-muted">{composerHint}</p>
 
-            <Button disabled={!draft.trim()} size="sm" type="submit">
+            <Button disabled={!isComposerEnabled || !draft.trim()} size="sm" type="submit">
               Send
               <ArrowUpRight className="h-4 w-4" />
             </Button>

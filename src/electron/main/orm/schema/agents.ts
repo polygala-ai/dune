@@ -1,6 +1,6 @@
 // Agent runtime ORM schema.
 
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import type {
   AgentAttachment,
@@ -101,11 +101,12 @@ export const agentContextCards = sqliteTable(
       .references(() => agents.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
     eyebrow: text('eyebrow').notNull(),
-    id: text('id').primaryKey(),
+    id: text('id').notNull(),
     title: text('title').notNull(),
   },
   (table) => ({
     agentIdx: index('agent_context_cards_agent_idx').on(table.agentId),
+    pk: primaryKey({ columns: [table.agentId, table.id] }),
   }),
 );
 

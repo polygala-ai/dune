@@ -43,6 +43,12 @@ test.describe('Settings', () => {
       await clickSettingsNav(page, 'Models');
       await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
 
+      await clickSettingsNav(page, 'Engines');
+      await expect(page.getByRole('heading', { name: 'Coding engines' })).toBeVisible();
+
+      await clickSettingsNav(page, 'Artifacts');
+      await expect(page.getByRole('heading', { name: 'Agent templates' })).toBeVisible();
+
       await clickSettingsNav(page, 'Shortcuts');
       await expect(page.getByRole('heading', { name: 'Keyboard-first reference' })).toBeVisible();
 

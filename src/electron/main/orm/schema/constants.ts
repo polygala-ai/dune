@@ -6,6 +6,7 @@ export const messageFormats = ['markdown', 'plain'] as const;
 export const messageRoles = ['assistant', 'system', 'user'] as const;
 export const messageStatuses = ['complete', 'streaming'] as const;
 export const modelAuthTypes = ['api-key', 'oauth-token'] as const;
+export const modelProviderKinds = ['anthropic', 'openai'] as const;
 export const networkProxyModes = ['direct', 'manual', 'system'] as const;
 export const workflowEventKinds = ['assignment', 'feedback', 'item', 'note', 'task'] as const;
 export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;

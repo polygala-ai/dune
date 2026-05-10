@@ -4,6 +4,8 @@
 export type SettingsRoute =
   | 'appearance'
   | 'artifacts'
+  | 'backend'
+  | 'engines'
   | 'models'
   | 'network'
   | 'shortcuts'
@@ -13,6 +15,7 @@ export type ThemePreference = 'dark' | 'light' | 'system';
 export type {
   ModelAuthType,
   ModelProvider,
+  ModelProviderKind,
 } from '@/renderer/features/settings/model/model-providers';
 
 /** Settings section shape. */

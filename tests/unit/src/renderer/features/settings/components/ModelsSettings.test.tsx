@@ -13,14 +13,20 @@ type StoreName = 'secrets' | 'settings';
 /** Creates desktop bridge. */
 function createDesktopBridge(stores: Record<StoreName, Record<string, unknown>>) {
   return {
-    platform: 'darwin' as const,
-    restartApp: vi.fn(async () => undefined),
-    storageDelete: vi.fn(async (store: string, key: string) => {
-      delete stores[store as StoreName][key];
+    deleteModelProviderSecret: vi.fn(async (providerId: string) => {
+      delete stores.secrets[`model-provider:${providerId}`];
     }),
-    storageGet: vi.fn(async (store: string, key: string) => stores[store as StoreName][key] ?? null),
-    storageSet: vi.fn(async (store: string, key: string, value: unknown) => {
-      stores[store as StoreName][key] = value;
+    loadModelProviders: vi.fn(async () => (stores.settings.modelProviders as any[] | undefined) ?? []),
+    platform: 'darwin' as const,
+    readModelProviderSecret: vi.fn(async (providerId: string) =>
+      stores.secrets[`model-provider:${providerId}`] as string ?? ''),
+    restartApp: vi.fn(async () => undefined),
+    saveModelProviders: vi.fn(async (providers: any[]) => {
+      stores.settings.modelProviders = providers;
+      return providers;
+    }),
+    writeModelProviderSecret: vi.fn(async (providerId: string, value: string) => {
+      stores.secrets[`model-provider:${providerId}`] = value;
     }),
   };
 }
@@ -30,6 +36,7 @@ function renderModelsSettings() {
   render(
     <ModelsSettings
       agents={[]}
+      codingEngines={[]}
       externalChannels={createDefaultExternalChannelsState()}
       onThemeChange={vi.fn()}
       runtimeInfo={{ mode: 'real', status: 'ready' }}
@@ -54,6 +61,7 @@ describe('ModelsSettings', () => {
             id: 'provider-1',
             isDefault: false,
             name: 'First',
+            providerKind: 'openai',
           },
           {
             authType: 'oauth-token',
@@ -61,6 +69,7 @@ describe('ModelsSettings', () => {
             id: 'provider-2',
             isDefault: false,
             name: 'Second',
+            providerKind: 'anthropic',
           },
         ],
       },
@@ -98,6 +107,7 @@ describe('ModelsSettings', () => {
         id: 'provider-1',
         isDefault: true,
         name: 'First',
+        providerKind: 'openai',
       },
       {
         authType: 'oauth-token',
@@ -105,6 +115,7 @@ describe('ModelsSettings', () => {
         id: 'provider-2',
         isDefault: false,
         name: 'Second',
+        providerKind: 'anthropic',
       },
     ]);
   });
@@ -123,6 +134,7 @@ describe('ModelsSettings', () => {
             id: 'provider-1',
             isDefault: false,
             name: 'First',
+            providerKind: 'openai',
           },
         ],
       },
@@ -159,6 +171,7 @@ describe('ModelsSettings', () => {
             id: 'provider-1',
             isDefault: false,
             name: 'First',
+            providerKind: 'openai',
           },
         ],
       },

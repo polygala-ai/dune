@@ -42,11 +42,24 @@ function createTempHome() {
 }
 
 /** Creates memory store. */
-function createMemoryStore(initialData: Record<string, unknown> = {}): AgentStore {
+function createMemoryStore(initialData: Record<string, unknown> = {}): AgentStore & {
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
+} {
   const data = new Map<string, unknown>(Object.entries(initialData));
   return {
     async get<T>(key: string) {
       return (data.get(key) as T) ?? null;
+    },
+    async load() {
+      return {
+        agents: (data.get('agents') as any[]) ?? [],
+        selectedAgentId: (data.get('selectedAgentId') as string | null | undefined) ?? null,
+      };
+    },
+    async save(state) {
+      data.set('agents', state.agents);
+      data.set('selectedAgentId', state.selectedAgentId);
     },
     async set<T>(key: string, value: T) {
       data.set(key, value);
@@ -103,6 +116,7 @@ interface MockAgent {
   action: ReturnType<typeof vi.fn>;
   addChannel: ReturnType<typeof vi.fn>;
   channelDrivers: Map<string, ChannelDriver>;
+  getBackend: ReturnType<typeof vi.fn>;
   getGroup: ReturnType<typeof vi.fn>;
   getTask: ReturnType<typeof vi.fn>;
   name: string;
@@ -113,6 +127,7 @@ interface MockAgent {
   registeredGroups: Record<string, unknown>;
   removeChannel: ReturnType<typeof vi.fn>;
   scheduleTask: ReturnType<typeof vi.fn>;
+  setBackend: ReturnType<typeof vi.fn>;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
@@ -187,6 +202,7 @@ function createAgentLiteModuleHarness(
       addChannel: vi.fn(),
       channelDrivers,
       name,
+      getBackend: vi.fn(() => mockAgent._options.backend ?? { type: 'claudeCode' }),
       off: vi.fn(offImpl),
       on: vi.fn(onImpl),
       once: vi.fn((event: string, handler: EventHandler) => {
@@ -202,6 +218,19 @@ function createAgentLiteModuleHarness(
       }),
       registeredGroups,
       removeChannel: vi.fn(),
+      setBackend: vi.fn(async (backend: AgentOptions['backend']) => {
+        const previous = mockAgent._options.backend ?? { type: 'claudeCode' };
+        mockAgent._options = {
+          ...mockAgent._options,
+          ...(backend ? { backend } : {}),
+        };
+        return {
+          previous,
+          current: backend ?? previous,
+          applies: 'nextTurn' as const,
+          handoff: 'skipped' as const,
+        };
+      }),
       getTask: vi.fn((taskId: string) => {
         const task = tasks.get(taskId);
 
@@ -678,6 +707,117 @@ describe('AgentRuntime', () => {
     );
   });
 
+  it('refreshes credentials used by running AgentLite agents', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    let credentials: Record<string, string> = {
+      OPENAI_API_KEY: 'old-openai-key',
+    };
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: async () => credentials,
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Credential Agent',
+      projectId: 'project-1',
+    });
+
+    credentials = {
+      OPENAI_API_KEY: 'new-openai-key',
+    };
+    await host.reloadModelCredentials();
+
+    await expect(harness.mockAgent()._options.credentials?.()).resolves.toEqual({
+      OPENAI_API_KEY: 'new-openai-key',
+    });
+  });
+
+  it('seeds host Codex auth into the isolated agent Codex home', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+    const authDir = path.join(homeDir, '.codex');
+    const authJson = '{ "OPENAI_API_KEY": "test-token" }\n';
+
+    fs.mkdirSync(authDir, { recursive: true });
+    fs.writeFileSync(path.join(authDir, 'auth.json'), authJson);
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: () => Promise.resolve({}),
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Codex Auth Agent',
+      projectId: 'project-1',
+    });
+
+    const agentsDir = path.join(resolveAgentLiteRuntimeRoot(homeDir), 'agents');
+    const [agentFolder] = fs.readdirSync(agentsDir);
+    const copiedAuthPath = path.join(
+      agentsDir,
+      agentFolder ?? '',
+      'data',
+      'sessions',
+      'main',
+      '.codex',
+      'auth.json',
+    );
+
+    expect(fs.readFileSync(copiedAuthPath, 'utf-8')).toBe(authJson);
+  });
+
+  it('applies the configured AgentLite backend to agent runtimes', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentBackendOptions: async () => ({ model: 'gpt-5.4', type: 'codex' }),
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: () => Promise.resolve({}),
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Backend Agent',
+      projectId: 'project-1',
+    });
+
+    expect(harness.mockAgent().setBackend).toHaveBeenCalledWith(
+      { model: 'gpt-5.4', type: 'codex' },
+      { context: 'fresh' },
+    );
+    expect(harness.mockAgent()._options.backend).toEqual({ model: 'gpt-5.4', type: 'codex' });
+
+    await host.applyAgentBackendOptions({ model: 'claude-sonnet-4-6', type: 'claudeCode' });
+
+    expect(harness.mockAgent().setBackend).toHaveBeenLastCalledWith(
+      { model: 'claude-sonnet-4-6', type: 'claudeCode' },
+      { context: 'handoff' },
+    );
+    expect(harness.mockAgent()._options.backend).toEqual({
+      model: 'claude-sonnet-4-6',
+      type: 'claudeCode',
+    });
+  });
+
   it('configures ACP peers via auto-discovery with credentials merged', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -717,6 +857,34 @@ describe('AgentRuntime', () => {
       expect(peer.name).toBeTruthy();
       expect(peer.args.length).toBeGreaterThan(0);
     }
+  });
+
+  it('omits ACP peers when all coding engines are disabled in settings', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      loadEnabledCodingEngineIds: async () => [],
+      resolveModelCredentials: async () => ({
+        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token',
+      }),
+    });
+
+    await host.start();
+    await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'ACP Agent',
+      projectId: 'project-1',
+    });
+
+    const acpConfig = (harness.mockAgent()._options as AgentOptions & { acp?: DuneAcpOptions }).acp;
+
+    expect(acpConfig).toBeUndefined();
   });
 
   it('starts without saved credentials and reports that replies will fail', async () => {
@@ -2670,6 +2838,171 @@ describe('AgentRuntime', () => {
     expect(host.service.isItemTaskKnown(agentId, taskId!)).toBe(false);
   });
 
+  it('responds locally instead of starting a blank chat stream while an item task is running', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: () => Promise.resolve({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Assignment Agent',
+      projectId: 'project-1',
+    });
+
+    harness.mockAgent()._emit('task.run.started', {
+      agentId: 'mock-agent',
+      contextMode: 'isolated',
+      groupFolder: 'main',
+      jid: toAgentChatJid(agentId),
+      taskId: 'task-running',
+      timestamp: new Date().toISOString(),
+    });
+
+    await host.service.sendMessage(agentId, 'are you working?');
+
+    const agent = host.getSnapshot().agents.find((candidate) => candidate.id === agentId);
+
+    expect(host.getSnapshot().isStreaming).toBe(false);
+    expect(agent?.messages).toEqual([
+      expect.objectContaining({
+        content: 'are you working?',
+        role: 'user',
+        status: 'complete',
+      }),
+      expect.objectContaining({
+        content: expect.stringContaining('currently working on an assigned item'),
+        role: 'assistant',
+        status: 'complete',
+      }),
+    ]);
+  });
+
+  it('renders primary task stream text as one live activity message', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness();
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: () => Promise.resolve({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Assignment Agent',
+      projectId: 'project-1',
+    });
+
+    harness.mockAgent()._emit('task.run.started', {
+      agentId: 'mock-agent',
+      contextMode: 'isolated',
+      groupFolder: 'main',
+      jid: toAgentChatJid(agentId),
+      taskId: 'task-running',
+      timestamp: new Date().toISOString(),
+    });
+    harness.mockAgent()._emit('run.sdk_message', {
+      agentId: 'mock-agent',
+      jid: toAgentChatJid(agentId),
+      message: {
+        event: {
+          delta: {
+            text: 'First update. ',
+            type: 'text_delta',
+          },
+          type: 'content_block_delta',
+        },
+        type: 'stream_event',
+      },
+      sdkType: 'stream_event',
+      timestamp: new Date().toISOString(),
+    });
+    harness.mockAgent()._emit('run.sdk_message', {
+      agentId: 'mock-agent',
+      jid: toAgentChatJid(agentId),
+      message: {
+        event: {
+          delta: {
+            text: 'Second update.',
+            type: 'text_delta',
+          },
+          type: 'content_block_delta',
+        },
+        type: 'stream_event',
+      },
+      sdkType: 'stream_event',
+      timestamp: new Date().toISOString(),
+    });
+
+    const agent = host.getSnapshot().agents.find((candidate) => candidate.id === agentId);
+    const responseActivities = agent?.activityEvents.filter((event) => event.label === 'response');
+
+    expect(responseActivities).toEqual([
+      expect.objectContaining({
+        detail: 'First update. Second update.',
+        kind: 'status',
+      }),
+    ]);
+  });
+
+  it('adds primary scheduled task output to the agent chat transcript', async () => {
+    const homeDir = createTempHome();
+    const harness = createAgentLiteModuleHarness({
+      resolveTaskResult: () => ({ result: 'Implemented the assigned item.' }),
+    });
+
+    tempDirs.push(homeDir);
+
+    const host = new AgentRuntime({
+      agentStore: createMemoryStore(),
+      homeDir,
+      loadAgentLiteModule: harness.loadAgentLiteModule,
+      resolveModelCredentials: () => Promise.resolve({}),
+    });
+
+    await host.start();
+    const agentId = await host.service.createAgent({
+      channelId: 'dune-chat',
+      name: 'Assignment Agent',
+      projectId: 'project-1',
+    });
+
+    const taskId = await host.service.scheduleItemAssignment(agentId, 'item-1');
+
+    expect(taskId).toBeTruthy();
+
+    await flushMicrotasks();
+
+    const agent = host.getSnapshot().agents.find((candidate) => candidate.id === agentId);
+
+    expect(agent?.activityEvents).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        label: 'working on item',
+      }),
+    ]);
+    expect(agent?.messages).toEqual([
+      expect.objectContaining({
+        content: 'Implemented the assigned item.',
+        role: 'assistant',
+        status: 'complete',
+      }),
+    ]);
+  });
+
   it('records workflow activity when a scheduled task starts', async () => {
     const homeDir = createTempHome();
     const harness = createAgentLiteModuleHarness();
@@ -2710,13 +3043,13 @@ describe('AgentRuntime', () => {
       selectedProjectView: 'activity',
     };
     const workflowStore = {
-      delete: async () => undefined,
-      get: async <T,>(key: string) => (key === 'snapshot' ? structuredClone(workflowSnapshot) as T : null),
-      keys: async () => ['snapshot'],
-      set: async <T,>(key: string, value: T) => {
-        if (key === 'snapshot') {
-          workflowSnapshot = structuredClone(value as WorkflowSnapshot);
-        }
+      deleteActivityArchive: async () => undefined,
+      deleteActivityArchivesExcept: async () => undefined,
+      readActivityArchive: async () => ({ events: [], lastCompactedAt: null, rollingSummary: null }),
+      readSnapshot: async () => structuredClone(workflowSnapshot),
+      writeActivityArchive: async () => undefined,
+      writeSnapshot: async (value: WorkflowSnapshot) => {
+        workflowSnapshot = structuredClone(value);
       },
     };
     const onWorkflowChanged = vi.fn();
@@ -2835,5 +3168,6 @@ describe('AgentRuntime', () => {
     expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Alpha'))).toBe(true);
     expect(scheduledTasks.some((task) => task.prompt.includes('Target title: Beta'))).toBe(true);
     expect(scheduledTasks.some((task) => task.prompt.includes('You are merging isolated research results.'))).toBe(true);
+    expect(host.getSnapshot().agents.find((agent) => agent.id === agentId)?.messages).toEqual([]);
   });
 });

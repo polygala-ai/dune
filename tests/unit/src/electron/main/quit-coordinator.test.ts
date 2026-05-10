@@ -77,6 +77,25 @@ describe('createQuitCoordinator', () => {
     );
   });
 
+  it('only schedules one relaunch when restart is requested repeatedly', async () => {
+    const quit = vi.fn();
+    const relaunch = vi.fn();
+    const coordinator = createQuitCoordinator({
+      app: {
+        quit,
+        relaunch,
+      },
+      shutdownRuntime: async () => {},
+    });
+
+    coordinator.restart();
+    coordinator.restart();
+    await flushMicrotasks();
+
+    expect(relaunch).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(1);
+  });
+
   it('continues quitting even if runtime shutdown fails', async () => {
     const error = new Error('shutdown failed');
     const onShutdownError = vi.fn();

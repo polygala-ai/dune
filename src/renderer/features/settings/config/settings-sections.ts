@@ -4,6 +4,8 @@ import type { JSX } from 'react';
 
 import { AppearanceSettings } from '@/renderer/features/settings/components/AppearanceSettings';
 import { ArtifactsSettings } from '@/renderer/features/settings/components/ArtifactsSettings';
+import { AgentBackendSettings } from '@/renderer/features/settings/components/AgentBackendSettings';
+import { CodingEnginesSettings } from '@/renderer/features/settings/components/CodingEnginesSettings';
 import { ModelsSettings } from '@/renderer/features/settings/components/ModelsSettings';
 import { NuclearSettings } from '@/renderer/features/settings/components/NuclearSettings';
 import { NetworkSettings } from '@/renderer/features/settings/components/NetworkSettings';
@@ -16,6 +18,7 @@ import type {
 } from '@/renderer/features/settings/types';
 import type {
   Agent,
+  CodingEngineStatus,
   AgentRuntimeInfo,
   ExternalChannelsState,
 } from '@/renderer/features/agents/types';
@@ -23,6 +26,7 @@ import type {
 /** Settings section component props. */
 export interface SettingsSectionComponentProps {
   agents: Agent[];
+  codingEngines: CodingEngineStatus[];
   externalChannels: ExternalChannelsState;
   onThemeChange: (preference: ThemePreference) => void;
   runtimeInfo: AgentRuntimeInfo;
@@ -47,6 +51,18 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Models',
     description: 'LLM provider catalog',
     Component: ModelsSettings,
+  },
+  {
+    id: 'backend',
+    title: 'Backend',
+    description: 'Primary agent runtime',
+    Component: AgentBackendSettings,
+  },
+  {
+    id: 'engines',
+    title: 'Engines',
+    description: 'Delegated coding peers',
+    Component: CodingEnginesSettings,
   },
   {
     id: 'network',

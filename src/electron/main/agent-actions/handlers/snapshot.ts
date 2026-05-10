@@ -6,83 +6,38 @@ import {
   normalizeProjectRootPath,
 } from '@/shared/workflow/project-artifacts';
 import { createWorkflowItemActivitySummary } from '@/shared/workflow/activity';
-import type { AppStorage } from '@/electron/main/storage/app-storage';
+import type { WorkflowSnapshotStore } from '@/electron/main/persistence/workflow-repository';
+import {
+  workflowItemStatuses,
+  type WorkflowEvent,
+  type WorkflowItem,
+  type WorkflowItemStatus,
+  type WorkflowProject,
+  type WorkflowSnapshot,
+  type WorkflowTask,
+  type WorkflowWorkProduct,
+} from '@/renderer/features/workflow/types';
 
 import { ToolHandlerError } from './types';
 
-/** Workflow item statuses constant. */
-export const workflowItemStatuses = ['inbox', 'ready', 'active', 'review', 'acceptance', 'done'] as const;
-/** Workflow item status. */
-export type WorkflowItemStatus = (typeof workflowItemStatuses)[number];
-
-/** Workflow snapshot. */
-export interface WorkflowSnapshot {
-  items: WorkflowItem[];
-  projects: WorkflowProject[];
-  selectedItemId: string | null;
-  selectedProjectFilter: string;
-  selectedProjectId: string | null;
-  selectedProjectView: string;
-}
-
-/** Workflow item shape. */
-export interface WorkflowItem {
-  activity: {
-    archivedEventCount: number;
-    hasOlderEvents: boolean;
-    rollingSummary: string | null;
-    totalEventCount: number;
-  };
-  artifactFolderName: string;
-  brief: string;
-  createdAt: number;
-  id: string;
-  primaryAgentId: string | null;
-  projectId: string;
-  scheduledTaskId: string | null;
-  sortOrder: number;
-  status: string;
-  tasks: WorkflowTask[];
-  title: string;
-  updatedAt: number;
-  workProducts: WorkflowWorkProduct[];
-  workflowEvents: WorkflowEvent[];
-}
-
-/** Workflow task shape. */
-export interface WorkflowTask {
-  createdAt: number;
-  id: string;
-  notes: string;
-  status: string;
-  title: string;
-  updatedAt: number;
-}
-
-/** Workflow work product shape. */
-export interface WorkflowWorkProduct {
-  body: string;
-  createdAt: number;
-  id: string;
-  title: string;
-}
-
-/** Workflow event shape. */
-export interface WorkflowEvent {
-  actor?: string;
-  createdAt: number;
-  description: string;
-  id: string;
-  kind: string;
-}
+export { workflowItemStatuses };
+export type {
+  WorkflowEvent,
+  WorkflowItem,
+  WorkflowItemStatus,
+  WorkflowProject,
+  WorkflowSnapshot,
+  WorkflowTask,
+  WorkflowWorkProduct,
+};
 
 /** Prepends workflow events while preserving the input order. */
 export function prependWorkflowEvents(
   item: Pick<WorkflowItem, 'workflowEvents'>,
   events: WorkflowEvent[],
 ): void {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    item.workflowEvents.unshift(events[index]!);
+  for (const event of [...events].reverse()) {
+    item.workflowEvents.unshift(event);
   }
 }
 
@@ -109,17 +64,6 @@ export function recordWorkflowItemEvents(
   touchProject(snapshot, item.projectId, nextUpdatedAt);
 }
 
-/** Workflow project shape. */
-export interface WorkflowProject {
-  color: string;
-  createdAt: number;
-  description: string;
-  id: string;
-  name: string;
-  rootPath: string | null;
-  updatedAt: number;
-}
-
 /** Creates empty workflow snapshot. */
 export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
   return {
@@ -133,20 +77,20 @@ export function createEmptyWorkflowSnapshot(): WorkflowSnapshot {
 }
 
 /** Reads workflow snapshot. */
-export async function readWorkflowSnapshot(store: AppStorage): Promise<WorkflowSnapshot> {
-  const snapshot = await store.get<WorkflowSnapshot>('snapshot');
+export async function readWorkflowSnapshot(store: WorkflowSnapshotStore): Promise<WorkflowSnapshot> {
+  const snapshot = await store.readSnapshot();
 
   return snapshot ? cloneWorkflowSnapshot(snapshot) : createEmptyWorkflowSnapshot();
 }
 
 /** Writes workflow snapshot. */
 export async function writeWorkflowSnapshot(
-  store: AppStorage,
+  store: WorkflowSnapshotStore,
   snapshot: WorkflowSnapshot,
   onWorkflowChanged: () => void,
 ): Promise<void> {
   normalizeWorkflowSnapshot(snapshot);
-  await store.set('snapshot', snapshot);
+  await store.writeSnapshot(snapshot);
   onWorkflowChanged();
 }
 
@@ -257,7 +201,7 @@ export function reindexProjectStatusGroup(
 
 /** Creates workflow event. */
 export function createWorkflowEvent(
-  kind: string,
+  kind: WorkflowEvent['kind'],
   description: string,
   createdAt: number,
   actor?: string,

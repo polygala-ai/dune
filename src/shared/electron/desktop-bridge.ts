@@ -12,6 +12,12 @@ import type {
   UpdateAgentChannelInput,
 } from '@/renderer/features/agents/types';
 import type { WorkflowProjectActivityPage } from '@/renderer/features/workflow/types';
+import type { WorkflowSnapshot } from '@/renderer/features/workflow/types';
+import type {
+  ModelProvider,
+} from '@/renderer/features/settings/model/model-providers';
+import type { NetworkSettings } from '@/renderer/features/settings/model/network-settings';
+import type { CodingEngineSettings } from '@/renderer/features/settings/model/coding-engine-settings';
 import type { ProjectArtifactEntry } from '@/shared/workflow/project-artifacts';
 
 /** Methods are optional to support browser-only fallback (no Electron preload). */
@@ -33,6 +39,7 @@ export interface DesktopBridge {
     projectId: string,
     options?: { beforeEntryId?: string | null; limit?: number },
   ) => Promise<WorkflowProjectActivityPage>;
+  getWorkflowSnapshot?: () => Promise<WorkflowSnapshot | null>;
   getAgentTranscriptPage?: (
     agentId: string,
     options?: { beforeMessageId?: string | null; limit?: number },
@@ -53,13 +60,19 @@ export interface DesktopBridge {
     agentId: string,
     input: RunIsolatedResearchInput,
   ) => Promise<RunIsolatedResearchResult>;
+  deleteModelProviderSecret?: (providerId: string) => Promise<void>;
+  loadCodingEngineSettings?: () => Promise<CodingEngineSettings>;
+  loadModelProviders?: () => Promise<ModelProvider[]>;
+  loadNetworkSettings?: () => Promise<NetworkSettings>;
+  readModelProviderSecret?: (providerId: string) => Promise<string>;
+  saveCodingEngineSettings?: (settings: CodingEngineSettings) => Promise<CodingEngineSettings>;
+  saveModelProviders?: (providers: ModelProvider[]) => Promise<ModelProvider[]>;
+  saveNetworkSettings?: (settings: NetworkSettings) => Promise<NetworkSettings>;
+  saveWorkflowSnapshot?: (snapshot: WorkflowSnapshot) => Promise<void>;
   selectAgent?: (agentId: string) => Promise<void>;
   sendAgentMessage?: (agentId: string, text: string) => Promise<void>;
   startTelegramSetupSession?: (input: StartTelegramSetupSessionInput) => Promise<string>;
-  storageDelete?: (store: string, key: string) => Promise<void>;
-  storageGet?: (store: string, key: string) => Promise<unknown>;
-  storageKeys?: (store: string) => Promise<string[]>;
-  storageSet?: (store: string, key: string, value: unknown) => Promise<void>;
+  writeModelProviderSecret?: (providerId: string, value: string) => Promise<void>;
   selectProjectDirectory?: () => Promise<string | null>;
   subscribe?: (listener: (snapshot: AgentServiceSnapshot) => void) => () => void;
   subscribeWorkflowChanged?: (listener: () => void) => () => void;

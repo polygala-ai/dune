@@ -28,6 +28,7 @@ const bridge: DesktopBridge = {
     ),
   getProjectActivityPage: (projectId, options) =>
     ipcRenderer.invoke(ipcChannels.getProjectActivityPage, projectId, options),
+  getWorkflowSnapshot: () => ipcRenderer.invoke(ipcChannels.getWorkflowSnapshot),
   getAgentTranscriptPage: (agentId, options) =>
     ipcRenderer.invoke(ipcChannels.getAgentTranscriptPage, agentId, options),
   getRuntimeSnapshot: () => ipcRenderer.invoke(ipcChannels.getRuntimeSnapshot),
@@ -44,6 +45,21 @@ const bridge: DesktopBridge = {
   restartApp: () => ipcRenderer.invoke(ipcChannels.restartApp),
   runIsolatedResearch: (agentId, input) =>
     ipcRenderer.invoke(ipcChannels.runIsolatedResearch, agentId, input),
+  deleteModelProviderSecret: (providerId) =>
+    ipcRenderer.invoke(ipcChannels.deleteModelProviderSecret, providerId),
+  loadCodingEngineSettings: () => ipcRenderer.invoke(ipcChannels.loadCodingEngineSettings),
+  loadModelProviders: () => ipcRenderer.invoke(ipcChannels.loadModelProviders),
+  loadNetworkSettings: () => ipcRenderer.invoke(ipcChannels.loadNetworkSettings),
+  readModelProviderSecret: (providerId) =>
+    ipcRenderer.invoke(ipcChannels.readModelProviderSecret, providerId),
+  saveCodingEngineSettings: (settings) =>
+    ipcRenderer.invoke(ipcChannels.saveCodingEngineSettings, settings),
+  saveModelProviders: (providers) =>
+    ipcRenderer.invoke(ipcChannels.saveModelProviders, providers),
+  saveNetworkSettings: (settings) =>
+    ipcRenderer.invoke(ipcChannels.saveNetworkSettings, settings),
+  saveWorkflowSnapshot: (snapshot) =>
+    ipcRenderer.invoke(ipcChannels.saveWorkflowSnapshot, snapshot),
   selectAgent: (agentId) => ipcRenderer.invoke(ipcChannels.selectAgent, agentId),
   updateAgentChannel: (input) => ipcRenderer.invoke(ipcChannels.updateAgentChannel, input),
   updateAgentDefinition: (agentId, definition) =>
@@ -52,10 +68,8 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(ipcChannels.sendAgentMessage, agentId, text),
   startTelegramSetupSession: (input) =>
     ipcRenderer.invoke(ipcChannels.startTelegramSetupSession, input),
-  storageDelete: (store, key) => ipcRenderer.invoke(ipcChannels.storageDelete, store, key),
-  storageGet: (store, key) => ipcRenderer.invoke(ipcChannels.storageGet, store, key),
-  storageKeys: (store) => ipcRenderer.invoke(ipcChannels.storageKeys, store),
-  storageSet: (store, key, value) => ipcRenderer.invoke(ipcChannels.storageSet, store, key, value),
+  writeModelProviderSecret: (providerId, value) =>
+    ipcRenderer.invoke(ipcChannels.writeModelProviderSecret, providerId, value),
   selectProjectDirectory: () => ipcRenderer.invoke(ipcChannels.selectProjectDirectory),
   subscribe: (listener) => {
     /** Handles snapshot. */
